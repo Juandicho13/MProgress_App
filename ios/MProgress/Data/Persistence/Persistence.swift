@@ -28,12 +28,28 @@ enum Persistence {
         if inMemory {
             configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         } else if let group = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) {
-            configuration = ModelConfiguration(schema: schema, url: group.appending(path: "MProgress.store"), cloudKitDatabase: .none)
+            let url = group.appending(path: "MProgress.store")
+            moveLocalStoreIfNeeded(to: url)
+            configuration = ModelConfiguration(schema: schema, url: url, cloudKitDatabase: .none)
         } else {
             // Sin App Group (todavía sin firma): carpeta normal de la app.
             configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
         }
         return try ModelContainer(for: schema, configurations: [configuration])
+    }
+
+    /// El día que la app tiene App Group (cuenta paga), la base pasa de la carpeta de la app al grupo,
+    /// para que los widgets la vean y no se pierda nada de lo que había.
+    private static func moveLocalStoreIfNeeded(to target: URL) {
+        let manager = FileManager.default
+        guard !manager.fileExists(atPath: target.path()) else { return }
+        let local = URL.applicationSupportDirectory.appending(path: "default.store")
+        guard manager.fileExists(atPath: local.path()) else { return }
+        for suffix in ["", "-shm", "-wal"] {
+            let from = URL(filePath: local.path() + suffix)
+            let to = URL(filePath: target.path() + suffix)
+            if manager.fileExists(atPath: from.path()) { try? manager.copyItem(at: from, to: to) }
+        }
     }
 }
 

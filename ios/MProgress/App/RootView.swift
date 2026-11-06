@@ -68,6 +68,17 @@ struct RootView: View {
         }
         .environment(\.glassLevel, glassLevel)
         .environment(undo)
+        .onOpenURL { url in
+            // Enlaces de los widgets: mprogress://rapido, fijos, calendario, inicio.
+            switch url.host() {
+            case "rapido": router.pending = true
+            case "calendario": tab = .calendario
+            case "fijos":
+                tab = .inicio
+                router.openFixed = true
+            default: tab = .inicio
+            }
+        }
         .sheet(isPresented: $router.pending) {
             QuickAddView()
                 .environment(undo)

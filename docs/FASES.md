@@ -127,9 +127,9 @@ Parada: Juan crea el proyecto en Supabase.
 
 ## F12 · Widgets, Apple Watch y asistente
 
-- [ ] F12-01 Widgets pequeño, mediano y grande (pantalla 6).
-- [ ] F12-02 Pantalla bloqueada y StandBy.
-- [ ] F12-03 Widgets interactivos: + Gasto y marcar pagado.
+- [~] F12-01 Widgets pequeño, mediano y grande (pantalla 6). Hecho: Próximo cargo, Te quedan con + Gasto y 4 cargos, Calendario de cobros, con la app escribiendo el resumen (`WidgetPublisher`). Falta: App Group, que pide la cuenta paga de Apple; sin él los widgets muestran "Abre MProgress".
+- [~] F12-02 Pantalla bloqueada y StandBy. Hecho: anillo, rectangular e inline. Falta: datos con App Group.
+- [~] F12-03 Widgets interactivos: + Gasto y marcar pagado. Hecho: + Gasto abre el registro rápido y el botón "Registro rápido" en el Centro de control. Falta: marcar pagado desde el widget (necesita App Group y la base compartida).
 - [ ] F12-04 Widget del hogar.
 - [ ] F12-05 Apple Watch: resumen, registrar gasto y complicación.
 - [ ] F12-06 Asistente: preguntas sobre tus datos y registrar con una frase, con confirmación antes de guardar (pantalla 21). Decidir en el ticket si corre en el iPhone o en un servidor.

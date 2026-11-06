@@ -2,6 +2,13 @@
 
 Una entrada por ticket, la más nueva arriba. Plantilla en `HANDOFF.md` 11.3.
 
+## 2026-11-06 · F12 Widgets · en curso
+
+- Qué: extensión MProgressWidgets con Próximo cargo (pequeño), Te quedan (mediano, + Gasto y 4 cargos), Calendario de cobros (grande), pantalla bloqueada (anillo, rectangular e inline) y botón "Registro rápido" para el Centro de control. La app escribe un resumen ya calculado (`Shared/WidgetSnapshot.swift`) al volver y al salir, y los widgets lo leen; los enlaces `mprogress://rapido`, `fijos`, `calendario` e `inicio` abren la app donde toca.
+- Archivos: ios/MProgressWidgets/*, ios/Shared/WidgetSnapshot.swift, ios/MProgress/Data/Widgets/WidgetPublisher.swift, ios/MProgress-Info.plist (esquema de enlaces), ios/MProgressWidgets-Info.plist, MProgress.xcodeproj (objetivo nuevo y carpeta compartida), Persistence.swift (pasa la base al App Group el día que exista, sin perder nada), App/RootView.swift, App/MProgressApp.swift.
+- Verificado: compila para el iPhone de Juan con la extensión.
+- Pendiente: con la cuenta gratuita de Apple no hay App Group, así que los widgets no ven datos y muestran "Abre MProgress"; + Gasto y el Centro de control sí funcionan. Con la cuenta paga: en Xcode, Signing & Capabilities › + Capability › App Groups › `group.com.olarte.mprogress` en MProgress y en MProgressWidgets (los archivos `*.entitlements.listo-para-cuenta-paga` ya traen ese valor). Marcar pagado desde el widget y Apple Watch quedan para después.
+
 ## 2026-11-06 · Cambios pedidos por Juan al probar en el iPhone
 
 - Qué:

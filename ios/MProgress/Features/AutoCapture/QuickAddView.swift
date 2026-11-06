@@ -8,6 +8,8 @@ import Observation
 final class QuickAddRouter {
     static let shared = QuickAddRouter()
     var pending = false
+    /// Pedido desde un widget: abrir Pagos fijos en Inicio.
+    var openFixed = false
 }
 
 /// Registro rápido: 1) monto y si es gasto o ingreso, 2) de dónde sale o a dónde entra, y guardar.

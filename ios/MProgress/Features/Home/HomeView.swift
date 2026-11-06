@@ -116,6 +116,11 @@ struct HomeView: View {
             .presentationDetents([.height(650), .large])
             .presentationCornerRadius(Radius.hoja)
         }
+        .onChange(of: QuickAddRouter.shared.openFixed, initial: true) { _, open in
+            guard open else { return }
+            route = .fijos
+            QuickAddRouter.shared.openFixed = false
+        }
         .navigationDestination(item: $route) { target in
             switch target {
             case .avisos: AlertsView()

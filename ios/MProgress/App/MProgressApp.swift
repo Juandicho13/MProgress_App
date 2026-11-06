@@ -33,8 +33,12 @@ struct MProgressApp: App {
         .modelContainer(container)
         .onChange(of: scenePhase) { _, phase in
             // Al volver a la app se rehacen los avisos: las fechas de los pagos fijos pudieron moverse.
-            guard phase == .active else { return }
             let container = container
+            // Al salir o al volver se actualizan los widgets.
+            if phase == .background || phase == .active {
+                WidgetPublisher.publish(context: container.mainContext)
+            }
+            guard phase == .active else { return }
             Task { @MainActor in
                 await NotificationScheduler.reschedule(context: container.mainContext)
                 // Un respaldo cifrado al día, al volver a la app (F09-06).
