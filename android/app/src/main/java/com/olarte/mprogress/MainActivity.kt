@@ -91,7 +91,7 @@ enum class AppTab(val title: String, val glyph: String) {
     Inicio("Inicio", "⌂"), Resumen("Resumen", "▥"), Dinero("Dinero", "▤"), Calendario("Calendario", "▦"), Ajustes("Ajustes", "⚙")
 }
 
-private enum class Route { FIJOS }
+private enum class Route { FIJOS, HISTORIAL }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,7 +112,8 @@ fun RootScreen(store: Store) {
             QuickActionKind.SUELDO -> adding = AddRequest(EntryKind.INGRESO, Cycle.Mensual)
             QuickActionKind.ANUAL -> adding = AddRequest(EntryKind.GASTO, Cycle.Anual)
             QuickActionKind.FIJOS -> route = Route.FIJOS
-            else -> android.widget.Toast.makeText(context, "${kind.title} llega en la siguiente fase de Android.", android.widget.Toast.LENGTH_SHORT).show()
+            QuickActionKind.HISTORIAL -> route = Route.HISTORIAL
+            else -> android.widget.Toast.makeText(context, "${kind.title} llega pronto a Android.", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -122,8 +123,11 @@ fun RootScreen(store: Store) {
         when {
             route == Route.FIJOS -> FixedScreen(store, onBack = { route = null }, onAdd = { adding = AddRequest(EntryKind.GASTO, Cycle.Mensual) })
             tab == AppTab.Inicio -> HomeScreen(store, ::perform) { more = true }
-            tab == AppTab.Ajustes -> SettingsScreen(store)
-            else -> Soon(tab.title)
+            route == Route.HISTORIAL -> com.olarte.mprogress.ui.history.HistoryScreen(store) { route = null }
+            tab == AppTab.Resumen -> com.olarte.mprogress.ui.summary.SummaryScreen(store)
+            tab == AppTab.Dinero -> com.olarte.mprogress.ui.money.MoneyScreen(store)
+            tab == AppTab.Calendario -> com.olarte.mprogress.ui.calendar.CalendarScreen(store)
+            else -> SettingsScreen(store)
         }
         GlassTabBar(
             selected = tab, tint = GlassLevel.from(glass).tint,
@@ -142,14 +146,6 @@ fun RootScreen(store: Store) {
         ModalBottomSheet({ more = false }, containerColor = Palette.superficie2, shape = RoundedCornerShape(topStart = Radius.hoja, topEnd = Radius.hoja)) {
             MoreContent(store) { kind -> more = false; perform(kind) }
         }
-    }
-}
-
-@Composable
-private fun Soon(title: String) {
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(Spacing.margen), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-        T(title, Type.titulo1)
-        T("Esta pantalla llega en la siguiente fase de Android. En el iPhone ya está lista.", Type.cuerpo, Palette.texto2)
     }
 }
 

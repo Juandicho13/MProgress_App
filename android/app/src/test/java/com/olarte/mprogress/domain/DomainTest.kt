@@ -112,3 +112,55 @@ class QuickActionsTest {
         assertEquals(QuickActionKind.AHORRO, QuickActionLayout.parse("ahorro,gasto|ahorro").pinned.first())
     }
 }
+
+class InsightsTest {
+    private val hoy = d(2026, 11, 6)
+
+    @Test fun historialYBusqueda() {
+        val e = listOf(
+            EntryRecord(kind = EntryKind.GASTO, amountMinor = pesos(84_300), occurredAt = hoy, name = "Éxito"),
+            EntryRecord(kind = EntryKind.INGRESO, amountMinor = pesos(100_000), occurredAt = hoy, name = "Venta"),
+            EntryRecord(kind = EntryKind.GASTO, amountMinor = pesos(10_000), occurredAt = d(2026, 11, 2), name = "Café"),
+        )
+        val days = HistoryMath.days(e)
+        assertEquals(hoy, days.first().day)
+        assertEquals(pesos(15_700), days.first().netMinor)
+        assertEquals(listOf("Éxito"), HistoryMath.filter(e, "exito").map { it.name })
+        assertEquals(listOf("Éxito"), HistoryMath.filter(e, "84300").map { it.name })
+    }
+
+    @Test fun resumen() {
+        val e = listOf(
+            EntryRecord(kind = EntryKind.GASTO, amountMinor = pesos(300), occurredAt = d(2026, 11, 3)),
+            EntryRecord(kind = EntryKind.GASTO, amountMinor = pesos(200), occurredAt = d(2026, 10, 5)),
+            EntryRecord(kind = EntryKind.GASTO, amountMinor = pesos(900), occurredAt = d(2026, 10, 20)),
+            EntryRecord(kind = EntryKind.GASTO, amountMinor = pesos(500), occurredAt = d(2026, 9, 1)),
+        )
+        assertEquals(pesos(300) to pesos(200), SummaryMath.versusLastMonth(e, hoy))
+        assertEquals(pesos(800), SummaryMath.normalMonth(e, hoy))
+        assertEquals(6, SummaryMath.flows(e, hoy).size)
+        assertEquals(pesos(1_100), SummaryMath.flows(e, hoy)[4].spentMinor)
+    }
+
+    @Test fun calendario() {
+        val grid = CalendarMath.grid(java.time.YearMonth.of(2026, 11))
+        assertEquals(6, grid.count { it == null }) // 1 nov 2026 es domingo
+        val renta = RecurringRecord(kind = EntryKind.GASTO, name = "Renta", amountMinor = pesos(1_000), cycle = Cycle.Semanal, nextDate = d(2026, 11, 9))
+        val days = CalendarMath.days(java.time.YearMonth.of(2026, 11), emptyList(), listOf(renta), hoy)
+        assertEquals(setOf(9, 16, 23, 30), days.keys.map { it.dayOfMonth }.toSet())
+    }
+
+    @Test fun saldos() {
+        val cuenta = ProductRecord("c", ProductKind.CUENTA, pesos(1_000_000), d(2026, 11, 1))
+        val debito = ProductRecord("d", ProductKind.DEBITO, 0, d(2026, 11, 1), parentProductId = "c")
+        val credito = ProductRecord("t", ProductKind.CREDITO, pesos(200_000), d(2026, 11, 1))
+        val e = listOf(
+            EntryRecord(kind = EntryKind.GASTO, amountMinor = pesos(50_000), occurredAt = hoy, productId = "d"),
+            EntryRecord(kind = EntryKind.GASTO, amountMinor = pesos(30_000), occurredAt = hoy, productId = "t"),
+        )
+        val all = listOf(cuenta, debito, credito)
+        assertEquals(pesos(950_000), MoneyCalculator.currentBalance(cuenta, all, e))
+        assertEquals(pesos(230_000), MoneyCalculator.currentBalance(credito, all, e))
+        assertEquals(Triple(pesos(950_000), pesos(230_000), pesos(720_000)), MoneyCalculator.netWorth(all, e))
+    }
+}

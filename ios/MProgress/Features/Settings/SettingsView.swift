@@ -55,7 +55,7 @@ struct SettingsView: View {
     @AppStorage(GlassLevel.storageKey) private var glassRaw = GlassLevel.normal.rawValue
     @AppStorage(AlertSettings.daysBeforeKey) private var daysBefore = 3
     @AppStorage(BackupService.lastBackupKey) private var lastBackup: Double = 0
-    @AppStorage(AppIconChoice.storageKey) private var iconRaw = AppIconChoice.brasa.rawValue
+    @AppStorage(AppIconChoice.storageKey) private var iconRaw = AppIconChoice.trazo.rawValue
     @AppStorage(OnboardingModel.doneKey) private var onboardingDone = true
     @State private var showsBackTap = false
     @State private var confirmsErase = false
@@ -93,7 +93,7 @@ struct SettingsView: View {
                         divider
                         link("Apariencia", value: "\(AppTheme(rawValue: themeRaw)?.title ?? "Oscuro") · vidrio \((GlassLevel(rawValue: glassRaw) ?? .normal).title.lowercased())", route: .apariencia)
                         divider
-                        link("Ícono de la app", value: AppIconChoice(rawValue: iconRaw)?.title ?? "Brasa", route: .icono)
+                        link("Ícono de la app", value: AppIconChoice(rawValue: iconRaw)?.title ?? "Trazo · negro", route: .icono)
                         divider
                         Button { showsBackTap = true } label: { rowContent("Doble toque atrás", value: backTapAt > 0 ? "Configurado" : "Sin configurar") }
                             .buttonStyle(.plain)

@@ -47,7 +47,11 @@ import com.olarte.mprogress.ui.theme.Spacing
 @Composable
 fun SettingsScreen(store: Store) {
     var appearance by remember { mutableStateOf(false) }
+    var icon by remember { mutableStateOf(false) }
     if (appearance) { AppearanceScreen(store) { appearance = false }; return }
+    if (icon) { AppIconScreen { icon = false }; return }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val (iconSymbol, iconWhite) = AppIcons.current(context)
 
     val theme by store.theme.collectAsState()
     val glass by store.glass.collectAsState()
@@ -67,6 +71,8 @@ fun SettingsScreen(store: Store) {
             Row("Moneda", "COP $", enabled = false)
             Divider()
             Row("Apariencia", "${AppTheme.from(theme).title} · vidrio ${GlassLevel.from(glass).title.lowercase()}") { appearance = true }
+            Divider()
+            Row("Ícono de la app", "${iconSymbol.title} · ${if (iconWhite) "blanco" else "negro"}") { icon = true }
         }
         SectionLabel("Datos")
         Card(padding = Spacing.s2) {

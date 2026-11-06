@@ -29,7 +29,14 @@ data class Product(
     val name: String,
     val last4: String? = null,
     val dueDay: Int? = null,
-)
+    /** Saldo de referencia en `balanceAt`. Crédito: lo que se debe. */
+    val balanceMinor: Long = 0,
+    val balanceAt: LocalDate = LocalDate.now(),
+    val hidden: Boolean = false,
+    val parentProductId: String? = null,
+) {
+    val record get() = com.olarte.mprogress.domain.ProductRecord(id, kind, balanceMinor, balanceAt, hidden, parentProductId)
+}
 
 data class Ledger(
     val institutions: List<Institution> = emptyList(),
@@ -93,6 +100,29 @@ class Store private constructor(private val file: File, val prefs: SharedPrefere
         l.copy(entries = l.entries + entry, recurring = updated)
     }
 
+    fun addInstitution(name: String): String {
+        val inst = Institution(name = name)
+        update { it.copy(institutions = it.institutions + inst) }
+        return inst.id
+    }
+
+    fun addProduct(institutionId: String, kind: ProductKind, name: String, last4: String?, balanceMinor: Long, dueDay: Int?) = update { l ->
+        val parent = if (kind == ProductKind.DEBITO) l.products.firstOrNull { it.institutionId == institutionId && it.kind == ProductKind.CUENTA }?.id else null
+        l.copy(products = l.products + Product(institutionId = institutionId, kind = kind, name = name, last4 = last4?.filter(Char::isDigit)?.takeLast(4)?.ifBlank { null },
+            dueDay = dueDay, balanceMinor = balanceMinor, parentProductId = parent))
+    }
+
+    /** Ajusta el saldo a lo que dice el banco hoy. */
+    fun setBalance(productId: String, balanceMinor: Long) = update { l ->
+        l.copy(products = l.products.map { if (it.id == productId) it.copy(balanceMinor = balanceMinor, balanceAt = LocalDate.now().plusDays(1)) else it })
+    }
+
+    fun deleteProduct(id: String) = update { l -> l.copy(products = l.products.filter { it.id != id }) }
+
+    fun deleteInstitution(id: String) = update { l ->
+        l.copy(institutions = l.institutions.filter { it.id != id }, products = l.products.filter { it.institutionId != id })
+    }
+
     fun deleteEntry(id: String) = update { l -> l.copy(entries = l.entries.filter { it.id != id }) }
 
     fun setRecurringDate(id: String, day: Int?, productId: String?, today: LocalDate = LocalDate.now()) = update { l ->
@@ -116,7 +146,12 @@ class Store private constructor(private val file: File, val prefs: SharedPrefere
             for (bank in plan.banks) {
                 val inst = Institution(name = bank.name)
                 institutions += inst
-                bank.products.forEach { products += Product(institutionId = inst.id, kind = it.kind, name = it.name, last4 = it.last4?.takeLast(4)) }
+                val account = bank.products.firstOrNull { it.kind == ProductKind.CUENTA }?.let { Product(institutionId = inst.id, kind = it.kind, name = it.name) }
+                account?.let { products += it }
+                bank.products.filter { it.kind != ProductKind.CUENTA }.forEach {
+                    products += Product(institutionId = inst.id, kind = it.kind, name = it.name, last4 = it.last4?.takeLast(4),
+                        parentProductId = if (it.kind == ProductKind.DEBITO) account?.id else null)
+                }
             }
             val recurring = l.recurring.toMutableList()
             fun nextFor(day: Int): LocalDate {
@@ -168,6 +203,8 @@ class Store private constructor(private val file: File, val prefs: SharedPrefere
         put("products", JSONArray(l.products.map {
             JSONObject().put("id", it.id).put("institutionId", it.institutionId).put("kind", it.kind.name).put("name", it.name)
                 .put("last4", it.last4 ?: JSONObject.NULL).put("dueDay", it.dueDay ?: JSONObject.NULL)
+                .put("balanceMinor", it.balanceMinor).put("balanceAt", it.balanceAt.toString()).put("hidden", it.hidden)
+                .put("parentProductId", it.parentProductId ?: JSONObject.NULL)
         }))
         put("recurring", JSONArray(l.recurring.map {
             JSONObject().put("id", it.id).put("kind", it.kind.name).put("name", it.name).put("amountMinor", it.amountMinor)
@@ -188,7 +225,8 @@ class Store private constructor(private val file: File, val prefs: SharedPrefere
     private fun decode(o: JSONObject) = Ledger(
         institutions = o.optJSONArray("institutions").list { Institution(it.getString("id"), it.getString("name")) },
         products = o.optJSONArray("products").list {
-            Product(it.getString("id"), it.getString("institutionId"), ProductKind.valueOf(it.getString("kind")), it.getString("name"), it.str("last4"), it.int("dueDay"))
+            Product(it.getString("id"), it.getString("institutionId"), ProductKind.valueOf(it.getString("kind")), it.getString("name"), it.str("last4"), it.int("dueDay"),
+                it.optLong("balanceMinor", 0), it.str("balanceAt")?.let(LocalDate::parse) ?: LocalDate.now(), it.optBoolean("hidden", false), it.str("parentProductId"))
         },
         recurring = o.optJSONArray("recurring").list {
             RecurringRecord(id = it.getString("id"), kind = EntryKind.valueOf(it.getString("kind")), name = it.getString("name"),
@@ -223,7 +261,7 @@ data class OnboardingDraft(
     val fixed: List<FixedDraft> = emptyList(),
 ) {
     /** Productos en el orden en que se crean, para elegir con qué se paga. */
-    val allProducts: List<Pair<String, ProductDraft>> get() = banks.flatMap { b -> b.products.map { b.name to it } }
+    val allProducts: List<Pair<String, ProductDraft>> get() = banks.flatMap { b -> b.products.sortedBy { it.kind != ProductKind.CUENTA }.map { b.name to it } }
 }
 
 data class BankDraft(val name: String, val products: List<ProductDraft>)
