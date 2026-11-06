@@ -172,6 +172,8 @@ final class Recurring: SyncTracked {
     var productId: UUID?
     var responsibleId: UUID?
     var active: Bool = true
+    /// Se creó sin fecha ("Más tarde" en el onboarding). No avisa ni sale en próximos hasta que tenga fecha.
+    var dateUnset: Bool = false
     var createdBy: UUID?
     var createdAt: Date = Date.now
     var updatedAt: Date = Date.now
@@ -208,7 +210,7 @@ final class Recurring: SyncTracked {
     }
 
     var record: RecurringRecord {
-        RecurringRecord(id: id, kind: kind, name: name, amountMinor: amountMinor, cycle: cycle, nextDate: nextDate, anchor: anchor, active: active && deletedAt == nil, categoryId: categoryId, productId: productId)
+        RecurringRecord(id: id, kind: kind, name: name, amountMinor: amountMinor, cycle: cycle, nextDate: nextDate, anchor: anchor, active: active && !dateUnset && deletedAt == nil, categoryId: categoryId, productId: productId)
     }
 }
 
@@ -396,5 +398,43 @@ final class GoalContribution: SyncTracked {
         self.userId = userId
         self.amountMinor = amountMinor
         self.occurredAt = occurredAt
+    }
+}
+
+/// Programa de puntos o millas: Puntos Colombia, LifeMiles y otros. El saldo lo pone la persona.
+@Model
+final class RewardProgram: SyncTracked {
+    var id: UUID = UUID()
+    var spaceId: UUID = UUID()
+    var name: String = ""
+    var kindRaw: String = RewardKind.puntos.rawValue
+    var balance: Int64 = 0
+    /// Lo que vale cada punto en la moneda del espacio, si la persona lo sabe.
+    var valuePerPoint: Decimal?
+    var expiresAt: Date?
+    /// Tarjeta con la que se acumula, si alguna.
+    var productId: UUID?
+    var colorHex: String?
+    var balanceAt: Date = Date.now
+    var createdAt: Date = Date.now
+    var updatedAt: Date = Date.now
+    var deletedAt: Date?
+    var syncStateRaw: String = SyncState.local.rawValue
+
+    var kind: RewardKind {
+        get { RewardKind(rawValue: kindRaw) ?? .puntos }
+        set { kindRaw = newValue.rawValue }
+    }
+
+    init(id: UUID = UUID(), spaceId: UUID, name: String, kind: RewardKind, balance: Int64) {
+        self.id = id
+        self.spaceId = spaceId
+        self.name = name
+        self.kindRaw = kind.rawValue
+        self.balance = balance
+    }
+
+    var record: RewardRecord {
+        RewardRecord(id: id, name: name, kind: kind, balance: balance, valuePerPoint: valuePerPoint, expiresAt: expiresAt)
     }
 }

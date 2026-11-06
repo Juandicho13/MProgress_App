@@ -49,13 +49,14 @@ struct AddEntryView: View {
                     SegmentedPill(options: [(value: EntryKind.gasto, title: "Gasto"), (value: EntryKind.ingreso, title: "Ingreso")],
                                   selection: $model.kind)
                     VStack(spacing: Spacing.s1) {
-                        AmountDisplay(input: model.amount)
+                        AmountDisplay(input: model.amount, active: focus == nil)
                         if !model.isEditing {
                             Text(model.cycleSummary(calendar: calendar))
                                 .appFont(.cuerpo2)
                                 .foregroundStyle(Palette.texto2)
                         }
                     }
+                    .contentShape(Rectangle())
                     .onTapGesture { focus = nil }
                     if !model.isEditing {
                         SectionLabel(text: "Ciclo de cobro")

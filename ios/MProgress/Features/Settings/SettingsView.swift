@@ -38,6 +38,7 @@ struct SettingsView: View {
     @AppStorage(BackupService.lastBackupKey) private var lastBackup: Double = 0
     @AppStorage(AppIconChoice.storageKey) private var iconRaw = AppIconChoice.brasa.rawValue
     @AppStorage(OnboardingModel.doneKey) private var onboardingDone = true
+    @State private var showsBackTap = false
     @Environment(\.calendar) private var calendar
 
     private var space: Space? { spaces.first { $0.kindRaw == "personal" } ?? spaces.first }
@@ -70,6 +71,9 @@ struct SettingsView: View {
                         link("Apariencia", value: "\(AppTheme(rawValue: themeRaw)?.title ?? "Oscuro") · vidrio \((GlassLevel(rawValue: glassRaw) ?? .normal).title.lowercased())", route: .apariencia)
                         divider
                         link("Ícono de la app", value: AppIconChoice(rawValue: iconRaw)?.title ?? "Brasa", route: .icono)
+                        divider
+                        Button { showsBackTap = true } label: { rowContent("Doble toque atrás", value: "Registro rápido") }
+                            .buttonStyle(.plain)
                     }
 
                     SectionLabel(text: "Datos")
@@ -105,6 +109,7 @@ struct SettingsView: View {
             .scrollIndicators(.hidden)
             .background(Palette.fondo.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showsBackTap) { BackTapGuideView() }
             .navigationDestination(for: SettingsRoute.self) { route in
                 switch route {
                 case .apariencia: AppearanceView()

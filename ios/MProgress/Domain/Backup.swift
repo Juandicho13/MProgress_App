@@ -19,6 +19,8 @@ struct BackupSnapshot: Codable, Equatable, Sendable {
     var budgets: [BudgetRow] = []
     var goals: [GoalRow] = []
     var contributions: [ContributionRow] = []
+    /// Opcional: los respaldos de antes no lo traen.
+    var rewards: [RewardRow]? = nil
 
     struct SpaceRow: Codable, Equatable, Sendable {
         var id: UUID; var ownerId: UUID; var name: String; var kindRaw: String; var currencyCode: String
@@ -48,6 +50,8 @@ struct BackupSnapshot: Codable, Equatable, Sendable {
         var cycleRaw: String; var intervalDays: Int?; var nextDate: Date; var anchorDay: Int; var anchorMonth: Int
         var categoryId: UUID?; var productId: UUID?; var responsibleId: UUID?; var active: Bool; var createdBy: UUID?
         var createdAt: Date; var updatedAt: Date; var deletedAt: Date?
+        /// Opcional para abrir respaldos hechos antes de que existiera.
+        var dateUnset: Bool? = nil
     }
 
     struct EntryRow: Codable, Equatable, Sendable {
@@ -79,6 +83,12 @@ struct BackupSnapshot: Codable, Equatable, Sendable {
 
     struct ContributionRow: Codable, Equatable, Sendable {
         var id: UUID; var spaceId: UUID; var goalId: UUID; var userId: UUID?; var amountMinor: Int64; var occurredAt: Date
+        var createdAt: Date; var updatedAt: Date; var deletedAt: Date?
+    }
+
+    struct RewardRow: Codable, Equatable, Sendable {
+        var id: UUID; var spaceId: UUID; var name: String; var kindRaw: String; var balance: Int64; var valuePerPoint: Decimal?
+        var expiresAt: Date?; var productId: UUID?; var colorHex: String?; var balanceAt: Date
         var createdAt: Date; var updatedAt: Date; var deletedAt: Date?
     }
 

@@ -27,6 +27,9 @@ struct BackupServiceTests {
         try planning.setBudget(spaceId: space.id, categoryId: nil, limitMinor: pesos(1_500_000))
         let meta = try planning.addGoal(spaceId: space.id, name: "Viaje", targetMinor: pesos(5_000_000), targetDate: fecha(2027, 6, 1))
         try planning.contribute(to: meta, amountMinor: pesos(300_000))
+        try money.saveReward(nil, spaceId: space.id, name: "Puntos Colombia", kind: .puntos, balance: 12_450,
+                             valuePerPoint: Decimal(7), expiresAt: fecha(2027, 1, 31), productId: nil, colorHex: "FF6B2C")
+        renta.dateUnset = true
 
         let data = try BackupCodec.encode(BackupService.snapshot(context: context))
 
@@ -49,6 +52,10 @@ struct BackupServiceTests {
         #expect(try PlanningStore(context: restored).budgets(spaceId: space.id).count == 1)
         #expect(try PlanningStore(context: restored).contributions(spaceId: space.id).first?.amountMinor == pesos(300_000))
         #expect(try restored.fetch(FetchDescriptor<SpendCategory>()).count == 15)
+        let puntos = try MoneyStore(context: restored).rewards(spaceId: space.id)
+        #expect(puntos.first?.balance == 12_450)
+        #expect(puntos.first?.valuePerPoint == Decimal(7))
+        #expect(fijos.first?.dateUnset == true)
 
         let again = try BackupCodec.encode(BackupService.snapshot(context: restored, now: BackupCodec.decode(data).createdAt))
         let first = try BackupCodec.decode(data)

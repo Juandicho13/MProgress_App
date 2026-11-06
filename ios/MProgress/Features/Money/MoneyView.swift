@@ -103,6 +103,7 @@ private struct MoneyContent: View {
                     }
                     SectionLabel(text: "Bancos y billeteras")
                     banksCard
+                    RewardsSection(wallet: wallet, hideBalances: hideBalances)
                     mostUsedSection
                 }
             }

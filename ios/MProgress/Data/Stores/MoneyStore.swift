@@ -156,4 +156,41 @@ final class MoneyStore {
         let digits = text.filter(\.isNumber)
         return digits.count == 4 ? digits : nil
     }
+
+    // MARK: Puntos y millas
+
+    func rewards(spaceId: UUID) throws -> [RewardProgram] {
+        try context.fetch(FetchDescriptor<RewardProgram>(
+            predicate: #Predicate<RewardProgram> { $0.spaceId == spaceId && $0.deletedAt == nil },
+            sortBy: [SortDescriptor(\.createdAt)]
+        ))
+    }
+
+    /// Crea o cambia un programa de puntos o millas.
+    @discardableResult
+    func saveReward(_ existing: RewardProgram?, spaceId: UUID, name: String, kind: RewardKind, balance: Int64,
+                    valuePerPoint: Decimal?, expiresAt: Date?, productId: UUID?, colorHex: String?, now: Date = .now) throws -> RewardProgram {
+        let reward = existing ?? {
+            let created = RewardProgram(spaceId: spaceId, name: name, kind: kind, balance: balance)
+            context.insert(created)
+            return created
+        }()
+        if reward.balance != max(0, balance) { reward.balanceAt = now }
+        reward.name = name.trimmingCharacters(in: .whitespaces)
+        reward.kind = kind
+        reward.balance = max(0, balance)
+        reward.valuePerPoint = valuePerPoint.flatMap { $0 > 0 ? $0 : nil }
+        reward.expiresAt = expiresAt
+        reward.productId = productId
+        reward.colorHex = colorHex
+        reward.touch(now)
+        try context.save()
+        return reward
+    }
+
+    func softDelete(_ reward: RewardProgram, now: Date = .now) throws {
+        reward.deletedAt = now
+        reward.touch(now)
+        try context.save()
+    }
 }

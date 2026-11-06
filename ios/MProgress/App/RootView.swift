@@ -28,6 +28,7 @@ enum AppTab: String, CaseIterable, Identifiable {
 struct RootView: View {
     @State private var tab: AppTab = .inicio
     @State private var undo = UndoCenter()
+    @State private var router = QuickAddRouter.shared
     @AppStorage(GlassLevel.storageKey) private var glassRaw = GlassLevel.normal.rawValue
 
     private var glassLevel: GlassLevel { GlassLevel(rawValue: glassRaw) ?? .normal }
@@ -67,6 +68,11 @@ struct RootView: View {
         }
         .environment(\.glassLevel, glassLevel)
         .environment(undo)
+        .sheet(isPresented: $router.pending) {
+            QuickAddView()
+                .environment(undo)
+                .presentationCornerRadius(Radius.hoja)
+        }
     }
 }
 

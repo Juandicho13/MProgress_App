@@ -240,7 +240,7 @@ private struct ContributeView: View {
             }
             .pickerStyle(.menu)
             .tint(Palette.texto1)
-            AmountDisplay(input: amount)
+            AmountDisplay(input: amount, active: true)
             Spacer()
             NumericKeypad(input: $amount)
         }

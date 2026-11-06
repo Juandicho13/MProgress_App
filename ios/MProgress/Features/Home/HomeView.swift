@@ -68,7 +68,11 @@ struct HomeView: View {
                 if isEmpty {
                     emptyCard
                 } else {
-                    if !upcoming.isEmpty { upcomingCard }
+                    if !upcoming.isEmpty {
+                        upcomingCard
+                    } else if !recurring.isEmpty {
+                        fixedShortcut
+                    }
                     if !cardDues.isEmpty { cardDuesCard }
                     if !entries.isEmpty { recentCard }
                 }
@@ -99,11 +103,17 @@ struct HomeView: View {
                 showsMore = false
                 if target == .recibo {
                     scanning = true
+                } else if target == .rapido {
+                    // Espera a que se cierre Más antes de abrir el registro rápido.
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(450))
+                        QuickAddRouter.shared.pending = true
+                    }
                 } else {
                     route = target
                 }
             }
-            .presentationDetents([.height(580)])
+            .presentationDetents([.height(650), .large])
             .presentationCornerRadius(Radius.hoja)
         }
         .navigationDestination(item: $route) { target in
@@ -113,7 +123,8 @@ struct HomeView: View {
             case .ahorro: SavingsView()
             case .historial: HistoryView()
             case .automatico: AutoCaptureView()
-            case .recibo: EmptyView()
+            case .fijos: FixedView()
+            case .recibo, .rapido: EmptyView()
             }
         }
         .sheet(isPresented: $scanning) {
@@ -209,7 +220,14 @@ struct HomeView: View {
     private var upcomingCard: some View {
         Card {
             VStack(alignment: .leading, spacing: Spacing.s2) {
-                Text("Próximos cargos").appFont(.titulo3).foregroundStyle(Palette.texto1).accessibilityAddTraits(.isHeader)
+                HStack {
+                    Text("Próximos cargos").appFont(.titulo3).foregroundStyle(Palette.texto1).accessibilityAddTraits(.isHeader)
+                    Spacer()
+                    Button("Pagos fijos") { route = .fijos }
+                        .appFont(.etiqueta)
+                        .foregroundStyle(Palette.brasaTinta)
+                        .frame(minHeight: Size.toqueMinimo)
+                }
                 ForEach(upcoming, id: \.recurringId) { charge in
                     let item = recurring.first { $0.id == charge.recurringId }
                     Button {
@@ -233,6 +251,19 @@ struct HomeView: View {
                 }
             }
         }
+    }
+
+    /// Cuando no hay cobros cerca, igual se llega a la zona de pagos fijos.
+    private var fixedShortcut: some View {
+        Button { route = .fijos } label: {
+            Card {
+                ListRow(tile: IconTile(content: .symbol("repeat"), tint: Palette.brasaVelo, foreground: Palette.brasaTinta),
+                        title: "Pagos fijos", subtitle: "\(recurring.count) \(recurring.count == 1 ? "pago" : "pagos") · nada por cobrar pronto") {
+                    Image(systemName: "chevron.right").foregroundStyle(Palette.texto2)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     /// Tarjetas de crédito con pago cerca (F06-07). Tocar abre Pagar tarjeta.
@@ -382,7 +413,7 @@ private struct EmptyArt: View {
 
 /// Menú Más (pantalla 20): solo las acciones de fases ya hechas.
 enum HomeRoute: Hashable, Identifiable {
-    case avisos, limites, ahorro, historial, automatico, recibo
+    case avisos, limites, ahorro, historial, automatico, recibo, fijos, rapido
     var id: Self { self }
 }
 
@@ -397,6 +428,8 @@ private struct MoreSheet: View {
                 tile("Ingreso extra", "arrow.down.circle") { onAdd(.ingreso, .puntual) }
                 tile("Sueldo o fijo", "repeat") { onAdd(.ingreso, .mensual) }
                 tile("Pago anual", "calendar") { onAdd(.gasto, .anual) }
+                tile("Pagos fijos", "repeat") { onOpen(.fijos) }
+                tile("Registro rápido", "hand.tap") { onOpen(.rapido) }
                 tile("Límites", "gauge.with.dots.needle.33percent") { onOpen(.limites) }
                 tile("Ahorro", "target") { onOpen(.ahorro) }
                 tile("Historial", "clock.arrow.circlepath") { onOpen(.historial) }

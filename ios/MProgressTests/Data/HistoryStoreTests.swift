@@ -86,3 +86,23 @@ struct HistoryStoreTests {
         #expect(fijo.active)
     }
 }
+
+@MainActor
+struct FixedStoreTests {
+    @Test("Poner fecha a un fijo sin fecha lo vuelve a avisar")
+    func ponerFecha() throws {
+        let container = try Persistence.makeContainer(inMemory: true)
+        let space = try Seed.runIfNeeded(context: container.mainContext, localUser: UUID())
+        let ledger = LedgerStore(context: container.mainContext, calendar: bogota)
+        let item = try ledger.addRecurring(spaceId: space.id, kind: .gasto, name: "Internet", amountMinor: pesos(95_000), cycle: .mensual, nextDate: fecha(2026, 12, 1))
+        item.dateUnset = true
+        #expect(BalanceCalculator.upcoming(recurring: [item.record], now: fecha(2026, 11, 20), calendar: bogota, kind: nil, limit: 10).isEmpty)
+
+        try ledger.updateRecurring(item, kind: .gasto, name: "Internet Claro", amountMinor: pesos(99_000), cycle: .mensual,
+                                   nextDate: fecha(2026, 11, 25), productId: nil, categoryId: nil, active: true)
+        #expect(!item.dateUnset)
+        #expect(item.anchorDay == 25)
+        #expect(item.name == "Internet Claro")
+        #expect(BalanceCalculator.upcoming(recurring: [item.record], now: fecha(2026, 11, 20), calendar: bogota, kind: nil, limit: 10).count == 1)
+    }
+}

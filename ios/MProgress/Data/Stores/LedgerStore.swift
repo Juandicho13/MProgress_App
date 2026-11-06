@@ -100,6 +100,29 @@ final class LedgerStore {
         return item
     }
 
+    /// Cambia un pago fijo desde la zona de pagos fijos. Poner fecha le quita el "sin fecha".
+    func updateRecurring(_ item: Recurring, kind: EntryKind, name: String, amountMinor: Int64, cycle: Cycle,
+                         nextDate: Date?, productId: UUID?, categoryId: UUID?, active: Bool, now: Date = .now) throws {
+        precondition(amountMinor > 0, "El monto va siempre positivo")
+        item.kind = kind
+        item.name = name.trimmingCharacters(in: .whitespaces)
+        item.amountMinor = amountMinor
+        item.cycle = cycle
+        if let nextDate {
+            item.nextDate = calendar.startOfDay(for: nextDate)
+            let anchor = CycleAnchor(date: nextDate, calendar: calendar)
+            item.anchorDay = anchor.day
+            item.anchorMonth = anchor.month
+            item.dateUnset = false
+        }
+        item.productId = productId
+        if item.categoryId != categoryId, let categoryId { markCategoryUsed(categoryId) }
+        item.categoryId = categoryId
+        item.active = active
+        item.touch(now)
+        try context.save()
+    }
+
     func recurring(spaceId: UUID) throws -> [Recurring] {
         try context.fetch(FetchDescriptor<Recurring>(
             predicate: #Predicate<Recurring> { $0.spaceId == spaceId && $0.deletedAt == nil },

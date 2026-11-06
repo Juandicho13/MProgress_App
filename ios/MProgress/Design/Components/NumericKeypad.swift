@@ -54,22 +54,56 @@ struct NumericKeypad: View {
 /// Monto grande que se está escribiendo: "$ 45.500".
 struct AmountDisplay: View {
     let input: AmountInput
+    /// Seleccionado: el teclado escribe aquí. Se ve con borde brasa y cursor.
+    var active = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var caretOn = true
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.s2) {
             Text(input.currency.symbol)
                 .appFont(.cifraGrande)
-                .foregroundStyle(Palette.texto2)
+                .foregroundStyle(active ? Palette.brasaTinta : Palette.texto2)
             Text(input.display)
                 .appFont(.cifraHeroe)
                 .foregroundStyle(input.text.isEmpty ? Palette.texto2 : Palette.texto1)
                 .contentTransition(.numericText())
                 .animation(.snappy, value: input.text)
+            if active {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(Palette.brasa)
+                    .frame(width: 3, height: 44)
+                    .opacity(caretOn ? 1 : 0)
+                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 6 }
+                    .accessibilityHidden(true)
+            }
         }
         .lineLimit(1)
         .minimumScaleFactor(0.5)
+        .padding(.vertical, Spacing.s3)
+        .padding(.horizontal, Spacing.s4)
         .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: Radius.tarjeta, style: .continuous)
+                .fill(active ? Palette.brasaVelo : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.tarjeta, style: .continuous)
+                .stroke(active ? Palette.brasa : Palette.linea, lineWidth: active ? 2 : 1)
+        )
+        .animation(.snappy, value: active)
+        .task(id: active) {
+            caretOn = true
+            guard active, !reduceMotion else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(550))
+                caretOn.toggle()
+            }
+        }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(input.money.formatted())
+        .accessibilityLabel("Monto, \(input.money.formatted())")
+        .accessibilityAddTraits(active ? [.isSelected] : [])
+        .accessibilityHint(active ? "" : "Toca para escribir el monto")
     }
 }

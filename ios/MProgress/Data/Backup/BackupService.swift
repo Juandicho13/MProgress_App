@@ -34,7 +34,7 @@ enum BackupService {
             .init(id: $0.id, spaceId: $0.spaceId, kindRaw: $0.kindRaw, name: $0.name, icon: $0.icon, amountMinor: $0.amountMinor,
                   cycleRaw: $0.cycleRaw, intervalDays: $0.intervalDays, nextDate: $0.nextDate, anchorDay: $0.anchorDay, anchorMonth: $0.anchorMonth,
                   categoryId: $0.categoryId, productId: $0.productId, responsibleId: $0.responsibleId, active: $0.active, createdBy: $0.createdBy,
-                  createdAt: $0.createdAt, updatedAt: $0.updatedAt, deletedAt: $0.deletedAt)
+                  createdAt: $0.createdAt, updatedAt: $0.updatedAt, deletedAt: $0.deletedAt, dateUnset: $0.dateUnset)
         }
         s.entries = try context.fetch(FetchDescriptor<Entry>()).map {
             .init(id: $0.id, spaceId: $0.spaceId, kindRaw: $0.kindRaw, amountMinor: $0.amountMinor, occurredAt: $0.occurredAt, name: $0.name,
@@ -63,6 +63,11 @@ enum BackupService {
             .init(id: $0.id, spaceId: $0.spaceId, goalId: $0.goalId, userId: $0.userId, amountMinor: $0.amountMinor, occurredAt: $0.occurredAt,
                   createdAt: $0.createdAt, updatedAt: $0.updatedAt, deletedAt: $0.deletedAt)
         }
+        s.rewards = try context.fetch(FetchDescriptor<RewardProgram>()).map {
+            .init(id: $0.id, spaceId: $0.spaceId, name: $0.name, kindRaw: $0.kindRaw, balance: $0.balance, valuePerPoint: $0.valuePerPoint,
+                  expiresAt: $0.expiresAt, productId: $0.productId, colorHex: $0.colorHex, balanceAt: $0.balanceAt,
+                  createdAt: $0.createdAt, updatedAt: $0.updatedAt, deletedAt: $0.deletedAt)
+        }
         return s
     }
 
@@ -80,6 +85,7 @@ enum BackupService {
         try context.delete(model: Budget.self)
         try context.delete(model: SavingsGoal.self)
         try context.delete(model: GoalContribution.self)
+        try context.delete(model: RewardProgram.self)
 
         for r in s.spaces {
             let m = Space(id: r.id, ownerId: r.ownerId, name: r.name, kindRaw: r.kindRaw, currencyCode: r.currencyCode)
@@ -132,6 +138,7 @@ enum BackupService {
             m.productId = r.productId
             m.responsibleId = r.responsibleId
             m.active = r.active
+            m.dateUnset = r.dateUnset ?? false
             m.createdBy = r.createdBy
             stamp(m, r.createdAt, r.updatedAt, r.deletedAt)
             context.insert(m)
@@ -188,6 +195,16 @@ enum BackupService {
         for r in s.contributions {
             let m = GoalContribution(spaceId: r.spaceId, goalId: r.goalId, userId: r.userId, amountMinor: r.amountMinor, occurredAt: r.occurredAt)
             m.id = r.id
+            stamp(m, r.createdAt, r.updatedAt, r.deletedAt)
+            context.insert(m)
+        }
+        for r in s.rewards ?? [] {
+            let m = RewardProgram(id: r.id, spaceId: r.spaceId, name: r.name, kind: RewardKind(rawValue: r.kindRaw) ?? .puntos, balance: r.balance)
+            m.valuePerPoint = r.valuePerPoint
+            m.expiresAt = r.expiresAt
+            m.productId = r.productId
+            m.colorHex = r.colorHex
+            m.balanceAt = r.balanceAt
             stamp(m, r.createdAt, r.updatedAt, r.deletedAt)
             context.insert(m)
         }

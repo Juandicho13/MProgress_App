@@ -200,12 +200,15 @@ create table public.recurring (
   product_id uuid references public.products (id) on delete set null,
   responsible_id uuid references public.profiles (id) on delete set null,
   active boolean not null default true,
+  date_unset boolean not null default false,
   created_by uuid references public.profiles (id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   deleted_at timestamptz,
   check (cycle <> 'otra' or interval_days is not null)
 );
+
+comment on column public.recurring.date_unset is 'true = creado con "Más tarde"; no avisa hasta tener fecha';
 
 create index recurring_space_next_idx on public.recurring (space_id, next_date);
 
@@ -311,6 +314,24 @@ create table public.goal_contributions (
   deleted_at timestamptz
 );
 
+-- Puntos y millas (Puntos Colombia, LifeMiles…). El saldo lo pone la persona.
+
+create table public.reward_programs (
+  id uuid primary key default gen_random_uuid(),
+  space_id uuid not null references public.spaces (id) on delete cascade,
+  name text not null check (char_length(name) between 1 and 60),
+  kind text not null default 'puntos' check (kind in ('puntos', 'millas')),
+  balance bigint not null default 0 check (balance >= 0),
+  value_per_point numeric(12, 4) check (value_per_point is null or value_per_point > 0),
+  expires_at date,
+  product_id uuid references public.products (id) on delete set null,
+  color_hex text,
+  balance_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+
 -- Dispositivos para push
 
 create table public.devices (
@@ -344,7 +365,7 @@ begin
   foreach t in array array[
     'profiles', 'spaces', 'space_members', 'categories', 'institutions', 'products',
     'recurring', 'entries', 'splits', 'transfers', 'reminders', 'budgets',
-    'savings_goals', 'goal_contributions', 'devices', 'detection_rules'
+    'savings_goals', 'goal_contributions', 'devices', 'detection_rules', 'reward_programs'
   ] loop
     execute format(
       'create trigger %I before update on public.%I for each row execute function public.set_updated_at()',
@@ -455,6 +476,7 @@ alter table public.reminders enable row level security;
 alter table public.budgets enable row level security;
 alter table public.savings_goals enable row level security;
 alter table public.goal_contributions enable row level security;
+alter table public.reward_programs enable row level security;
 alter table public.devices enable row level security;
 alter table public.detection_rules enable row level security;
 
@@ -537,7 +559,7 @@ do $$
 declare t text;
 begin
   foreach t in array array[
-    'institutions', 'products', 'recurring', 'entries', 'transfers', 'budgets', 'savings_goals'
+    'institutions', 'products', 'recurring', 'entries', 'transfers', 'budgets', 'savings_goals', 'reward_programs'
   ] loop
     execute format(
       'create policy %I on public.%I for select to authenticated using (public.is_member(space_id))',

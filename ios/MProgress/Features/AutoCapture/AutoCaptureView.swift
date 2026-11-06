@@ -10,6 +10,7 @@ struct AutoCaptureView: View {
 
     @State private var reviewing: Entry?
     @State private var guide: Guide?
+    @State private var showsBackTap = false
     @State private var sample = "Bancolombia: Compraste $84.300 en EXITO con tu T.Cred *4417. 05/11 13:22"
 
     enum Guide: String, Identifiable {
@@ -33,6 +34,14 @@ struct AutoCaptureView: View {
                     VStack(spacing: Spacing.s2) {
                         sourceRow("Apple Pay", "Atajo de Wallet · comercio, monto y tarjeta", "creditcard.fill", Palette.brasa, source: .applePay) { guide = .applePay }
                         sourceRow("Mensajes del banco", "Atajo de Mensajes lee el SMS y lo envía", "message", Palette.superficie3, source: .sms) { guide = .sms }
+                        Button { showsBackTap = true } label: {
+                            ListRow(tile: IconTile(content: .symbol("hand.tap")), title: "Doble toque atrás",
+                                    subtitle: "Toca dos veces el iPhone y anotas al instante") {
+                                Text("Configurar").appFont(.etiqueta).foregroundStyle(Palette.brasaTinta)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                         ListRow(tile: IconTile(content: .symbol("envelope")), title: "Correos de compra", subtitle: "Próximamente") { EmptyView() }
                             .opacity(0.6)
                     }
@@ -63,6 +72,7 @@ struct AutoCaptureView: View {
         .sheet(item: $reviewing) { entry in
             AddEntryView(editing: entry)
         }
+        .sheet(isPresented: $showsBackTap) { BackTapGuideView() }
         .sheet(item: $guide) { guide in
             ShortcutGuideView(guide: guide)
         }

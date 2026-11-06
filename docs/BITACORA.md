@@ -2,6 +2,18 @@
 
 Una entrada por ticket, la más nueva arriba. Plantilla en `HANDOFF.md` 11.3.
 
+## 2026-11-06 · Cambios pedidos por Juan al probar en el iPhone
+
+- Qué:
+  - Onboarding nuevo: ingreso › bancos y tarjetas (sugerencias, + Crédito, + Débito, + Cajita, 4 dígitos) › gastos fijos con "Agregar otro" › día y con qué se paga cada uno, con "Más tarde" por gasto y "Todo más tarde" › intereses. El sueldo pregunta a dónde llega.
+  - Zona de Pagos fijos: total al mes, "Falta la fecha", gastos e ingresos, editar (nombre, monto, ciclo, fecha, con qué se paga, activo, aviso, borrar). Se entra desde Inicio (Próximos cargos › Pagos fijos) y desde Más. Un fijo sin fecha no avisa ni sale en próximos hasta tener fecha (`Recurring.dateUnset`).
+  - Monto seleccionado en Agregar: borde brasa, fondo suave y cursor que parpadea (quieto con Reducir movimiento).
+  - Registro rápido para el doble toque atrás: intent "Registro rápido" que abre la app en monto › gasto o ingreso › de dónde sale o a dónde entra › categoría opcional. Guía paso a paso en Ajustes y en Registro automático, y entrada en Más.
+  - Puntos y millas en Dinero (Puntos Colombia, LifeMiles, LATAM Pass…): saldo, valor por punto opcional, valor aproximado, vencimiento y tarjeta con la que se acumulan. Tabla `reward_programs` con RLS y columna `recurring.date_unset` en la migración; respaldo incluido.
+- Archivos: ios/MProgress/Features/Onboarding/*, Features/Fixed/*, Features/AutoCapture/QuickAddView.swift, Features/Money/RewardsSection.swift, Domain/Fixed.swift, Domain/Rewards.swift, Data/Models/Models.swift (RewardProgram, dateUnset), Data/Stores/*, Data/Backup/BackupService.swift, Domain/Backup.swift, Design/Components/NumericKeypad.swift, Intents/LogExpenseIntents.swift, supabase/migrations/20261106000000_init.sql; pruebas FixedTests, RewardsTests, OnboardingTests nuevas, FixedStoreTests y respaldo con puntos.
+- Verificado: 98 pruebas de dominio en Linux y 141 en Xcode (simulador iPhone 17), todas en verde; migración aplicada en Postgres 16 y `rls_smoke.sql` en verde; compila e instala en el iPhone de Juan.
+- Pendiente: el valor de cada punto lo pone la persona (no encontramos un valor oficial que no cambie).
+
 ## 2026-11-06 · F10-03 Motor de sincronización · en curso
 
 - Qué: `SyncEngine` en el dominio con dos protocolos, `LocalSyncStore` (SwiftData) y `RemoteSyncStore` (Supabase). Sube los pendientes en lotes y en el orden en que se hicieron, baja cada tabla desde su cursor (borrados incluidos), gana el `updatedAt` más reciente (empate: servidor) y tras 3 intentos fallidos el cambio queda con error. Estado y texto de la pastilla "Sin conexión · 3 cambios sin sincronizar".

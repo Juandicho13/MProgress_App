@@ -42,7 +42,7 @@ struct TransferView: View {
 
             ScrollView {
                 VStack(spacing: Spacing.s5) {
-                    AmountDisplay(input: amount)
+                    AmountDisplay(input: amount, active: true)
                     Card(padding: Spacing.s2) {
                         VStack(spacing: 0) {
                             productPicker("Desde", selection: $fromId)

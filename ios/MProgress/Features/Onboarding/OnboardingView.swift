@@ -18,7 +18,9 @@ struct OnboardingView: View {
                 switch model.step {
                 case .bienvenida: WelcomeStep(model: model)
                 case .ingreso: IncomeStep(model: model)
+                case .bancos: BanksStep(model: model)
                 case .fijos: FixedStep(model: model)
+                case .fechas: DatesStep(model: model)
                 case .intereses: InterestsStep(model: model)
                 case .funciones: FeatureStep(model: model, onFinish: finish)
                 }
@@ -223,7 +225,7 @@ private struct IncomeStep: View {
             StepHeader(title: "¿Cuánto entra al mes?",
                        message: "Tu sueldo o lo que ganes en promedio. Con eso te digo cuánto te queda.")
                 .padding(.top, Spacing.s6)
-            AmountDisplay(input: model.income)
+            AmountDisplay(input: model.income, active: true)
             HStack(spacing: Spacing.s2) {
                 Text("Me pagan el día").appFont(.cuerpo2).foregroundStyle(Palette.texto2)
                 ForEach(paydays, id: \.self) { day in
@@ -279,11 +281,12 @@ private struct DayChip: View {
 
 private struct DayPicker: View {
     @Binding var selection: Int
+    var title = "¿Qué día te pagan?"
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(spacing: Spacing.s4) {
-            Text("¿Qué día te pagan?").appFont(.titulo2).foregroundStyle(Palette.texto1).padding(.top, Spacing.s6)
+            Text(title).appFont(.titulo2).foregroundStyle(Palette.texto1).padding(.top, Spacing.s6)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.s2), count: 7), spacing: Spacing.s2) {
                 ForEach(1...31, id: \.self) { day in
                     Button("\(day)") {
@@ -305,48 +308,188 @@ private struct DayPicker: View {
     }
 }
 
-// MARK: Paso 2 · Gastos fijos
+// MARK: Paso 2 · Bancos y tarjetas
+
+private struct BanksStep: View {
+    @Bindable var model: OnboardingModel
+    @State private var addingTo: CardRequest?
+
+    struct CardRequest: Identifiable {
+        let id = UUID()
+        let bankId: UUID
+        let kind: ProductKind
+    }
+
+    var body: some View {
+        VStack(spacing: Spacing.s5) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.s5) {
+                    StepHeader(title: "¿Dónde tienes tu plata?",
+                               message: "Agrega tus bancos y tarjetas para decir con qué pagas cada cosa. De las tarjetas solo los 4 últimos dígitos.")
+                        .padding(.top, Spacing.s6)
+                    FlowChips(items: InstitutionStyle.suggestions.map(\.name).filter { name in !model.banks.contains { $0.name == name } }) { pick in
+                        let hex = InstitutionStyle.suggestions.first { $0.name == pick }?.hex ?? InstitutionStyle.palette[0]
+                        withAnimation(.snappy) { model.addBank(name: pick, colorHex: hex) }
+                    }
+                    ForEach(model.banks) { bank in
+                        bankCard(bank)
+                    }
+                    if model.banks.isEmpty {
+                        Text("Toca tu banco arriba. Si no está, lo agregas después en Dinero.")
+                            .appFont(.cuerpo2)
+                            .foregroundStyle(Palette.texto2)
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+            StepFooter(back: "Atrás", next: model.banks.isEmpty ? "Lo hago después" : "Siguiente",
+                       onBack: { model.back() }, onNext: { model.next() })
+        }
+        .padding(.horizontal, Spacing.margen)
+        .padding(.bottom, Spacing.s4)
+        .sheet(item: $addingTo) { request in
+            PlannedCardSheet(kind: request.kind) { product in
+                model.addProduct(product, to: request.bankId)
+            }
+            .presentationDetents([.medium])
+        }
+    }
+
+    private func bankCard(_ bank: PlannedBank) -> some View {
+        Card(padding: Spacing.s3) {
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                HStack(spacing: Spacing.s3) {
+                    InstitutionStyle.tile(name: bank.name, hex: bank.colorHex)
+                    Text(bank.name).appFont(.titulo3).foregroundStyle(Palette.texto1)
+                    Spacer()
+                    Button { withAnimation(.snappy) { model.removeBank(bank.id) } } label: {
+                        Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.texto2)
+                            .frame(width: Size.toqueMinimo, height: Size.toqueMinimo)
+                    }
+                    .accessibilityLabel("Quitar \(bank.name)")
+                }
+                ForEach(bank.products) { product in
+                    HStack(spacing: Spacing.s3) {
+                        Image(systemName: InstitutionStyle.symbol(product.kind)).foregroundStyle(Palette.texto2).frame(width: 24)
+                        Text(product.label).appFont(.cuerpo).foregroundStyle(Palette.texto1)
+                        Spacer()
+                        Button { model.removeProduct(product.id) } label: {
+                            Image(systemName: "minus.circle").foregroundStyle(Palette.texto2)
+                                .frame(width: Size.toqueMinimo, height: 36)
+                        }
+                        .accessibilityLabel("Quitar \(product.label)")
+                    }
+                }
+                if bank.name != "Efectivo" {
+                    HStack(spacing: Spacing.s2) {
+                        Chip(title: "+ Crédito") { addingTo = CardRequest(bankId: bank.id, kind: .credito) }
+                        Chip(title: "+ Débito") { addingTo = CardRequest(bankId: bank.id, kind: .debito) }
+                        Chip(title: "+ Cajita") { addingTo = CardRequest(bankId: bank.id, kind: .bolsillo) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Nombre y 4 últimos dígitos de una tarjeta, o nombre de una cajita.
+private struct PlannedCardSheet: View {
+    let kind: ProductKind
+    let onAdd: @MainActor (PlannedProduct) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @State private var last4 = ""
+
+    init(kind: ProductKind, onAdd: @escaping @MainActor (PlannedProduct) -> Void) {
+        self.kind = kind
+        self.onAdd = onAdd
+        _name = State(initialValue: kind == .credito ? "Crédito" : kind == .debito ? "Débito" : "Cajita")
+    }
+
+    private var isCard: Bool { kind == .credito || kind == .debito }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Nombre", text: $name)
+                if isCard {
+                    TextField("Últimos 4 dígitos", text: $last4)
+                        .keyboardType(.numberPad)
+                        .onChange(of: last4) { _, value in
+                            let digits = String(value.filter(\.isNumber).prefix(4))
+                            if digits != value { last4 = digits }
+                        }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Palette.superficie2.ignoresSafeArea())
+            .navigationTitle(isCard ? "Nueva tarjeta" : "Nueva cajita")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Agregar") {
+                        onAdd(PlannedProduct(kind: kind, name: name.trimmingCharacters(in: .whitespaces), last4: last4.isEmpty ? nil : last4))
+                        dismiss()
+                    }
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || (!last4.isEmpty && last4.count != 4))
+                }
+            }
+        }
+    }
+}
+
+// MARK: Paso 3 · Gastos fijos
 
 private struct FixedStep: View {
     @Bindable var model: OnboardingModel
-    @State private var editing: FixedSuggestion?
+    @State private var editing: PlannedFixed?
+    @State private var addingCustom = false
 
     var body: some View {
         VStack(spacing: Spacing.s5) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
                     StepHeader(title: "¿Qué pagas cada mes?",
-                               message: "Marca los tuyos y ajusta el monto. Luego puedes cambiarlos.")
+                               message: "Marca los tuyos y ajusta el monto. En el siguiente paso eliges el día y con qué los pagas.")
                         .padding(.top, Spacing.s6)
                     Card(padding: Spacing.s2) {
                         VStack(spacing: 0) {
-                            ForEach(FixedSuggestion.defaults) { item in
-                                let selected = model.fixedSelected.contains(item.id)
+                            ForEach(model.fixed) { item in
                                 HStack(spacing: Spacing.s3) {
-                                    IconTile(content: .symbol(item.symbol))
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.name).appFont(.titulo3).foregroundStyle(Palette.texto1)
-                                        Text("Día \(item.day)").appFont(.cuerpo2).foregroundStyle(Palette.texto2)
-                                    }
+                                    IconTile(content: item.symbol.map { IconTile.Content.symbol($0) } ?? .initials(item.name))
+                                    Text(item.name).appFont(.titulo3).foregroundStyle(Palette.texto1)
                                     Spacer()
                                     Button {
                                         editing = item
                                     } label: {
-                                        Text(Money(units: model.fixedUnits[item.id] ?? item.units).formatted())
+                                        Text(Money(units: item.units).formatted())
                                             .appFont(.cifraPequena)
-                                            .foregroundStyle(selected ? Palette.texto1 : Palette.texto2)
+                                            .foregroundStyle(item.selected ? Palette.texto1 : Palette.texto2)
                                             .frame(minHeight: Size.toqueMinimo)
                                     }
                                     .buttonStyle(.plain)
                                     .accessibilityLabel("Cambiar monto de \(item.name)")
-                                    CheckCircle(on: selected)
+                                    CheckCircle(on: item.selected)
                                 }
                                 .padding(.horizontal, Spacing.s2)
                                 .frame(minHeight: 64)
                                 .contentShape(Rectangle())
                                 .onTapGesture { model.toggleFixed(item.id) }
-                                .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+                                .accessibilityAddTraits(item.selected ? [.isButton, .isSelected] : .isButton)
+                                Divider().overlay(Palette.linea)
                             }
+                            Button { addingCustom = true } label: {
+                                HStack(spacing: Spacing.s3) {
+                                    IconTile(content: .symbol("plus"), tint: Palette.brasaVelo, foreground: Palette.brasaTinta)
+                                    Text("Agregar otro").appFont(.titulo3).foregroundStyle(Palette.brasaTinta)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, Spacing.s2)
+                                .frame(minHeight: 64)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -357,12 +500,122 @@ private struct FixedStep: View {
         .padding(.horizontal, Spacing.margen)
         .padding(.bottom, Spacing.s4)
         .sheet(item: $editing) { item in
-            FixedAmountSheet(item: item, units: model.fixedUnits[item.id] ?? item.units) { units in
-                model.fixedUnits[item.id] = units
-                model.fixedSelected.insert(item.id)
+            FixedAmountSheet(title: item.name, units: item.units) { _, units in
+                model.setUnits(units, for: item.id)
             }
             .presentationDetents([.large])
         }
+        .sheet(isPresented: $addingCustom) {
+            FixedAmountSheet(title: nil, units: 0) { name, units in
+                model.addCustomFixed(name: name ?? "", units: units)
+            }
+            .presentationDetents([.large])
+        }
+    }
+}
+
+// MARK: Paso 4 · Fechas y con qué se paga
+
+private struct DatesStep: View {
+    @Bindable var model: OnboardingModel
+    @State private var pickingDay: PlannedFixed?
+
+    var body: some View {
+        VStack(spacing: Spacing.s5) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.s5) {
+                    StepHeader(title: "¿Cuándo y con qué pagas cada uno?",
+                               message: "Elige el día del mes y de dónde sale. Si no lo sabes ahora, toca Más tarde y lo pones en Pagos fijos.")
+                        .padding(.top, Spacing.s6)
+                    if !model.income.money.isZero {
+                        Card(padding: Spacing.s3) {
+                            HStack(spacing: Spacing.s3) {
+                                IconTile(content: .symbol("banknote"), tint: Palette.hieloVelo, foreground: Palette.hielo)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Sueldo · día \(model.payday)").appFont(.titulo3).foregroundStyle(Palette.texto1)
+                                    Text("¿A dónde te llega?").appFont(.cuerpo2).foregroundStyle(Palette.texto2)
+                                }
+                                Spacer()
+                                productMenu(selection: model.incomeProductId) { model.incomeProductId = $0 }
+                            }
+                        }
+                    }
+                    ForEach(model.selectedFixed) { item in
+                        fixedCard(item)
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+            HStack(spacing: Spacing.s3) {
+                Button("Todo más tarde") { model.allLater() }
+                    .buttonStyle(SecondaryButtonStyle())
+                Button("Siguiente") { model.next() }
+                    .buttonStyle(.primary)
+            }
+            Button("Atrás") { model.back() }
+                .appFont(.cuerpo2)
+                .foregroundStyle(Palette.texto2)
+                .frame(minHeight: Size.toqueMinimo)
+        }
+        .padding(.horizontal, Spacing.margen)
+        .padding(.bottom, Spacing.s2)
+        .sheet(item: $pickingDay) { item in
+            DayPicker(selection: Binding(get: { item.day ?? 1 }, set: { model.setDay($0, for: item.id) }),
+                      title: "¿Qué día se paga \(item.name)?")
+                .presentationDetents([.medium])
+        }
+    }
+
+    private func fixedCard(_ item: PlannedFixed) -> some View {
+        Card(padding: Spacing.s3) {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                HStack(spacing: Spacing.s3) {
+                    IconTile(content: item.symbol.map { IconTile.Content.symbol($0) } ?? .initials(item.name))
+                    Text(item.name).appFont(.titulo3).foregroundStyle(Palette.texto1)
+                    Spacer()
+                    Text(Money(units: item.units).formatted()).appFont(.cifraPequena).foregroundStyle(Palette.texto1)
+                }
+                .opacity(item.later ? 0.55 : 1)
+                HStack(spacing: Spacing.s2) {
+                    Chip(title: item.day.map { "Día \($0)" } ?? "Elegir día", selected: item.day != nil) { pickingDay = item }
+                        .disabled(item.later)
+                    productMenu(selection: item.productId) { model.setProduct($0, for: item.id) }
+                        .disabled(item.later)
+                    Spacer(minLength: 0)
+                    Chip(title: "Más tarde", selected: item.later) { model.setLater(!item.later, for: item.id) }
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    /// Menú de productos planeados: tarjetas, cuentas, cajitas y efectivo.
+    private func productMenu(selection: UUID?, onPick: @escaping (UUID?) -> Void) -> some View {
+        let products = model.plannedProducts
+        let current = products.first { $0.id == selection }
+        return Menu {
+            Button("Sin elegir") { onPick(nil) }
+            ForEach(model.banks) { bank in
+                Section(bank.name) {
+                    ForEach(bank.products) { product in
+                        Button(product.label) { onPick(product.id) }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: Spacing.s1) {
+                Image(systemName: current.map { InstitutionStyle.symbol($0.kind) } ?? "creditcard")
+                Text(current?.label ?? (products.isEmpty ? "Sin bancos" : "Con qué"))
+                    .lineLimit(1)
+            }
+            .appFont(.etiqueta)
+            .foregroundStyle(current == nil ? Palette.texto1 : Palette.sobreBrasa)
+            .padding(.horizontal, Spacing.s3)
+            .frame(minHeight: 36)
+            .background(Capsule().fill(current == nil ? Palette.superficie3 : Palette.brasa))
+        }
+        .disabled(products.isEmpty)
+        .accessibilityLabel(current.map { "Se paga con \($0.label)" } ?? "Elegir con qué se paga")
     }
 }
 
@@ -382,38 +635,60 @@ private struct CheckCircle: View {
     }
 }
 
+/// Monto de un fijo. Sin título pide también el nombre (Agregar otro).
 private struct FixedAmountSheet: View {
-    let item: FixedSuggestion
-    let onSave: @MainActor (Int64) -> Void
+    let title: String?
+    let onSave: @MainActor (String?, Int64) -> Void
     @State private var input: AmountInput
+    @State private var name = ""
+    @FocusState private var nameFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
-    init(item: FixedSuggestion, units: Int64, onSave: @escaping @MainActor (Int64) -> Void) {
-        self.item = item
+    init(title: String?, units: Int64, onSave: @escaping @MainActor (String?, Int64) -> Void) {
+        self.title = title
         self.onSave = onSave
-        _input = State(initialValue: AmountInput(text: String(units)))
+        _input = State(initialValue: AmountInput(text: units > 0 ? String(units) : ""))
     }
+
+    private var canSave: Bool { !input.money.isZero && (title != nil || !name.trimmingCharacters(in: .whitespaces).isEmpty) }
 
     var body: some View {
         VStack(spacing: Spacing.s5) {
-            Text(item.name).appFont(.titulo2).foregroundStyle(Palette.texto1).padding(.top, Spacing.s6)
-            AmountDisplay(input: input)
+            if let title {
+                Text(title).appFont(.titulo2).foregroundStyle(Palette.texto1).padding(.top, Spacing.s6)
+            } else {
+                TextField("Nombre: internet, colegio, celular…", text: $name)
+                    .appFont(.titulo2)
+                    .foregroundStyle(Palette.texto1)
+                    .multilineTextAlignment(.center)
+                    .focused($nameFocused)
+                    .submitLabel(.done)
+                    .onSubmit { nameFocused = false }
+                    .padding(.top, Spacing.s6)
+            }
+            AmountDisplay(input: input, active: !nameFocused)
+                .contentShape(Rectangle())
+                .onTapGesture { nameFocused = false }
             Spacer()
-            Button("Listo") {
-                onSave(input.money.minor / input.currency.minorPerUnit)
+            Button(title == nil ? "Agregar" : "Listo") {
+                onSave(title == nil ? name : nil, input.money.minor / input.currency.minorPerUnit)
                 dismiss()
             }
             .buttonStyle(.primary)
-            .disabled(input.money.isZero)
-            NumericKeypad(input: $input)
+            .disabled(!canSave)
+            if !nameFocused {
+                NumericKeypad(input: $input)
+            }
         }
         .padding(.horizontal, Spacing.margen)
         .padding(.bottom, Spacing.s4)
         .background(Palette.superficie2.ignoresSafeArea())
+        .animation(.snappy, value: nameFocused)
+        .onAppear { if title == nil { nameFocused = true } }
     }
 }
 
-// MARK: Paso 3 · Intereses
+// MARK: Paso 5 · Intereses
 
 private struct InterestsStep: View {
     @Bindable var model: OnboardingModel
@@ -478,7 +753,7 @@ private struct InterestCard: View {
     }
 }
 
-// MARK: Paso 4 · Funciones elegidas
+// MARK: Paso 6 · Funciones elegidas
 
 private struct FeatureStep: View {
     @Bindable var model: OnboardingModel
