@@ -2,8 +2,8 @@ import SwiftUI
 import SwiftData
 import Charts
 
-/// Resumen (pantalla 10): periodo, chips de categoría, ingresos y gastos, cómo va tu gasto,
-/// en qué gastas, tu mes normal y el mes que viene (F05).
+/// Resumen (pantalla 10): periodo, chips de categoría, así vas a terminar (predicción del mes), ingresos y gastos,
+/// cómo va tu gasto, en qué gastas, tu mes normal, el mes que viene y los próximos 3 meses (F05, PLAN_F12B Paso 4).
 struct SummaryView: View {
     @Environment(\.calendar) private var calendar
     @Query(filter: #Predicate<Space> { $0.deletedAt == nil }, sort: \Space.createdAt) private var spaces: [Space]
@@ -38,6 +38,7 @@ struct SummaryView: View {
                 if records.isEmpty {
                     emptyCard
                 } else {
+                    forecastCard(records, now: now)
                     flowsCard(flows)
                     paceCard(records, now: now)
                     categoriesCard(visible, interval: interval)
@@ -45,6 +46,7 @@ struct SummaryView: View {
                         normalCard(records, now: now)
                         nextMonthCard(now: now)
                     }
+                    nextMonthsSection(records, now: now)
                 }
             }
             .padding(.horizontal, Spacing.margen)
@@ -218,6 +220,96 @@ struct SummaryView: View {
                     legendDot(Palette.brasa, "Este mes")
                     legendDot(Palette.texto2, "Mes pasado")
                 }
+            }
+        }
+    }
+
+    // MARK: Predicciones (PLAN_F12B Paso 4). No dependen del periodo ni del filtro de categoría.
+
+    /// "Así vas a terminar": te quedan menos el ritmo del gasto variable por los días que faltan.
+    private func forecastCard(_ records: [EntryRecord], now: Date) -> some View {
+        let result = Forecast.endOfMonth(entries: records, recurring: recurring, now: now, calendar: calendar)
+        let negative = result.isNegative
+        return Card {
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                HStack {
+                    Text("Así vas a terminar \(DueText.monthName(now, calendar: calendar))").appFont(.cuerpo2).foregroundStyle(Palette.texto2)
+                    Spacer()
+                    if negative { Badge(text: "Ojo", tone: .peligro) }
+                }
+                Text(money(result.projectedMinor))
+                    .appFont(.cifraGrande)
+                    .foregroundStyle(negative ? Palette.peligro : Palette.texto1)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Text(Forecast.projectionText(projectedMinor: result.projectedMinor, currency: currency))
+                    .appFont(.cuerpo2)
+                    .foregroundStyle(negative ? Palette.peligro : Palette.texto2)
+                Text("\(Forecast.paceText(paceMinor: result.paceMinor, currency: currency)) · faltan \(result.summary.daysLeft) días")
+                    .appFont(.leyenda)
+                    .foregroundStyle(Palette.texto2)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// "Los próximos 3 meses": ingresos fijos, gastos fijos y variable estimado, con lo que quedaría.
+    private func nextMonthsSection(_ records: [EntryRecord], now: Date) -> some View {
+        let months = Forecast.nextMonths(3, entries: records, recurring: recurring, now: now, calendar: calendar)
+        let fromHistory = months.first?.variableFromHistory ?? false
+        return Card {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                Text("Los próximos 3 meses").appFont(.cuerpo2).foregroundStyle(Palette.texto2)
+                Chart {
+                    ForEach(months) { month in
+                        BarMark(x: .value("Mes", monthLabel(month.month)), y: .value("Monto", Double(month.fixedIncomeMinor) / 100))
+                            .foregroundStyle(Palette.hielo)
+                            .position(by: .value("Tipo", "Ingresos"))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                            .accessibilityLabel(monthLabel(month.month))
+                            .accessibilityValue("Ingresos fijos \(money(month.fixedIncomeMinor))")
+                        BarMark(x: .value("Mes", monthLabel(month.month)), y: .value("Monto", Double(month.fixedExpenseMinor) / 100))
+                            .foregroundStyle(Palette.brasa)
+                            .position(by: .value("Tipo", "Fijos"))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                            .accessibilityLabel(monthLabel(month.month))
+                            .accessibilityValue("Gastos fijos \(money(month.fixedExpenseMinor))")
+                        BarMark(x: .value("Mes", monthLabel(month.month)), y: .value("Monto", Double(month.variableMinor) / 100))
+                            .foregroundStyle(Palette.oro)
+                            .position(by: .value("Tipo", "Variable"))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                            .accessibilityLabel(monthLabel(month.month))
+                            .accessibilityValue("Variable estimado \(money(month.variableMinor))")
+                    }
+                }
+                .chartYAxis(.hidden)
+                .chartXAxis {
+                    AxisMarks { _ in
+                        AxisValueLabel().font(AppFont.font(.leyenda)).foregroundStyle(Palette.texto2)
+                    }
+                }
+                .frame(height: 140)
+                HStack(spacing: Spacing.s3) {
+                    legendDot(Palette.hielo, "Ingresos")
+                    legendDot(Palette.brasa, "Fijos")
+                    legendDot(Palette.oro, "Variable")
+                }
+                ForEach(months) { month in
+                    HStack {
+                        Text(DueText.monthName(month.month, calendar: calendar).capitalizedFirst).appFont(.cuerpo).foregroundStyle(Palette.texto1)
+                        Spacer()
+                        Text(month.netMinor < 0 ? "faltarían \(money(-month.netMinor))" : "quedarían \(money(month.netMinor))")
+                            .appFont(.cifraPequena)
+                            .foregroundStyle(month.netMinor < 0 ? Palette.peligro : Palette.texto1)
+                    }
+                    .frame(minHeight: 32)
+                    .accessibilityElement(children: .combine)
+                }
+                Text(fromHistory
+                     ? "El variable es el promedio de lo que gastaste sin contar los fijos en tus últimos meses."
+                     : "El variable sale de lo que llevas gastando este mes, sin contar los fijos.")
+                    .appFont(.leyenda)
+                    .foregroundStyle(Palette.texto2)
             }
         }
     }

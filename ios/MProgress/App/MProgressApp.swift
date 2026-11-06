@@ -16,6 +16,8 @@ struct MProgressApp: App {
         } catch {
             fatalError("No se pudo abrir la base local: \(error)")
         }
+        // El Deshacer de la isla dinámica corre en este proceso aunque la app no esté abierta.
+        QuickAddRunner.installUndo()
     }
 
     var body: some Scene {
@@ -44,6 +46,8 @@ struct MProgressApp: App {
             }
             guard phase == .active else { return }
             Task { @MainActor in
+                // Si la app se suspendió antes de cerrar la isla del registro rápido, se cierra ahora.
+                await QuickAddActivityController.endStale()
                 await NotificationScheduler.reschedule(context: container.mainContext)
                 // Un respaldo cifrado al día, al volver a la app (F09-06).
                 _ = try? BackupService.autoBackupIfNeeded(context: container.mainContext)

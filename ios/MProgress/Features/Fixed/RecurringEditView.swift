@@ -1,7 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// Editar un pago fijo: nombre, monto, ciclo, fecha, con qué se paga, pausar, aviso y borrar.
+/// Editar un pago fijo: nombre, monto, ciclo, fecha (día del mes en los mensuales), cómo termina,
+/// con qué se paga, pausar, aviso y borrar.
 struct RecurringEditView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -22,6 +23,11 @@ struct RecurringEditView: View {
     @State private var productId: UUID?
     @State private var method: PayMethod?
     @State private var active: Bool
+    @State private var dayOfMonth: Int
+    @State private var endChoice: RecurringEndChoice
+    @State private var endDate: Date
+    @State private var totalCount: Int
+    @State private var reminderText = ""
     @State private var showsPayWith = false
     @State private var showsReminder = false
     @State private var confirmsDelete = false
@@ -45,6 +51,10 @@ struct RecurringEditView: View {
         _date = State(initialValue: item.nextDate)
         _productId = State(initialValue: item.productId)
         _active = State(initialValue: item.active)
+        _dayOfMonth = State(initialValue: item.anchorDay)
+        _endChoice = State(initialValue: item.endChoice)
+        _endDate = State(initialValue: item.endDate ?? Calendar.current.date(byAdding: .year, value: 1, to: item.nextDate) ?? item.nextDate)
+        _totalCount = State(initialValue: max(item.totalCount ?? 12, max(1, item.paidCount)))
     }
 
     private var resolvedCycle: Cycle {
@@ -85,7 +95,26 @@ struct RecurringEditView: View {
                     }
                     Toggle("Ya sé la fecha", isOn: $hasDate).tint(Palette.brasa)
                     if hasDate {
-                        DatePicker("Próximo cobro", selection: $date, displayedComponents: .date).tint(Palette.brasa)
+                        if cycle == .mensual {
+                            VStack(alignment: .leading, spacing: Spacing.s2) {
+                                Text("Día del mes").foregroundStyle(Palette.texto1)
+                                DayOfMonthGrid(day: $dayOfMonth)
+                                Text("Próximo \(kind == .ingreso ? "pago" : "cobro"): \(DueText.shortDate(resolvedDate, calendar: calendar))")
+                                    .appFont(.leyenda)
+                                    .foregroundStyle(Palette.texto2)
+                            }
+                            .padding(.vertical, Spacing.s1)
+                        } else {
+                            DatePicker("Próximo cobro", selection: $date, displayedComponents: .date).tint(Palette.brasa)
+                        }
+                    }
+                }
+                if cycle != .puntual {
+                    Section {
+                        EndRuleEditor(choice: $endChoice, endDate: $endDate, count: $totalCount, paidCount: item.paidCount)
+                            .padding(.vertical, Spacing.s1)
+                    } footer: {
+                        if let text = item.endText(calendar: calendar) { Text("Ahora: \(text)") }
                     }
                 }
                 Section {
@@ -97,8 +126,14 @@ struct RecurringEditView: View {
                         }
                     }
                     Toggle("Activo", isOn: $active).tint(Palette.brasa)
-                    Button("Configurar aviso") { showsReminder = true }
-                        .disabled(!hasDate || !active)
+                    Button { showsReminder = true } label: {
+                        HStack {
+                            Text("Aviso").foregroundStyle(Palette.texto1)
+                            Spacer()
+                            Text(reminderText).foregroundStyle(Palette.texto2)
+                        }
+                    }
+                    .disabled(!hasDate || !active)
                 }
                 Section {
                     Button("Borrar pago fijo", role: .destructive) { confirmsDelete = true }
@@ -118,9 +153,10 @@ struct RecurringEditView: View {
                 PayWithSheet(productId: $productId, method: $method, kind: kind)
                     .presentationDetents([.medium, .large])
             }
-            .sheet(isPresented: $showsReminder) {
+            .sheet(isPresented: $showsReminder, onDismiss: loadReminder) {
                 ReminderEditView(recurring: item, currency: currency)
             }
+            .onAppear(perform: loadReminder)
             .confirmationDialog("¿Borrar \(item.name)?", isPresented: $confirmsDelete, titleVisibility: .visible) {
                 Button("Borrar", role: .destructive) { delete() }
             }
@@ -132,11 +168,36 @@ struct RecurringEditView: View {
         }
     }
 
+    /// Mensual: si se cambió el día, el próximo cobro con ese día desde hoy; si no, la fecha que ya tenía
+    /// (así un cobro vencido sin pagar no se salta).
+    private var resolvedDate: Date {
+        guard cycle == .mensual else { return date }
+        if dayOfMonth == item.anchorDay && !item.dateUnset && item.cycle == .mensual { return item.nextDate }
+        return OnboardingPlan.nextDate(day: dayOfMonth, from: .now, calendar: calendar)
+    }
+
+    private func loadReminder() {
+        let own = try? PlanningStore(context: context).reminder(for: item.id)
+        let mode = own?.mode ?? .general
+        switch mode {
+        case .general:
+            reminderText = "Como el general"
+        case .personalizado:
+            reminderText = AlertSettings.summary(enabled: true, daysBefore: own?.daysBefore ?? 3, atMinutes: own?.atMinutes ?? 540)
+        case .ninguno:
+            reminderText = "Sin aviso"
+        }
+    }
+
     private func save() {
+        let repeats = resolvedCycle.repeats
         do {
             try LedgerStore(context: context, calendar: calendar).updateRecurring(
                 item, kind: kind, name: name, amountMinor: amount, cycle: resolvedCycle,
-                nextDate: hasDate ? date : nil, productId: productId, categoryId: item.categoryId, active: active)
+                nextDate: hasDate ? resolvedDate : nil, productId: productId, categoryId: item.categoryId, active: active,
+                endDate: repeats && endChoice == .fecha ? endDate : nil,
+                totalCount: repeats && endChoice == .cuotas ? totalCount : nil,
+                anchorDay: cycle == .mensual && hasDate ? dayOfMonth : nil)
             Task { await NotificationScheduler.reschedule(context: context) }
             dismiss()
         } catch {

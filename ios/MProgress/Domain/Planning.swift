@@ -2,6 +2,26 @@ import Foundation
 
 // MARK: Avisos (F07-02)
 
+/// Qué aviso tiene un pago fijo (PLAN_F12B "Avisos en dos niveles").
+enum ReminderMode: String, Codable, CaseIterable, Identifiable, Sendable {
+    /// Usa los días y la hora de Ajustes › Avisos. Es lo que tiene un pago fijo sin aviso propio.
+    case general
+    /// Días y hora propios.
+    case personalizado
+    /// Nunca avisa.
+    case ninguno
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: "Como el general"
+        case .personalizado: "Personalizado"
+        case .ninguno: "Sin aviso"
+        }
+    }
+}
+
 /// Ajustes de un aviso de pago fijo, ya sin SwiftData.
 struct ReminderRule: Hashable, Sendable {
     var recurringId: UUID
@@ -11,6 +31,16 @@ struct ReminderRule: Hashable, Sendable {
     var atMinutes: Int
     /// Además, avisar el mismo día del cobro.
     var sameDay: Bool
+    var mode: ReminderMode = .personalizado
+}
+
+/// Aviso general (Ajustes › Avisos): activado, días antes (0 = el mismo día) y hora.
+struct GeneralReminder: Hashable, Sendable {
+    var enabled: Bool
+    var daysBefore: Int
+    var atMinutes: Int
+
+    static let standard = GeneralReminder(enabled: true, daysBefore: 3, atMinutes: 540)
 }
 
 /// Una notificación local lista para programar.
@@ -26,8 +56,19 @@ enum ReminderPlanner {
     /// iOS guarda hasta 64 notificaciones pendientes por app; dejamos espacio para las de límites.
     static let maxPending = 60
 
+    /// La regla que manda para un pago fijo: la suya si es personalizada, la general si no tiene
+    /// o si pidió "Como el general" (y el general está activado), y nada si pidió "Sin aviso".
+    static func effectiveRule(for recurringId: UUID, own: ReminderRule?, general: GeneralReminder?) -> ReminderRule? {
+        if let own, own.mode == .personalizado { return own }
+        if own?.mode == .ninguno { return nil }
+        guard let general, general.enabled else { return nil }
+        return ReminderRule(recurringId: recurringId, daysBefore: min(14, max(0, general.daysBefore)),
+                            atMinutes: general.atMinutes, sameDay: false, mode: .general)
+    }
+
     /// Notificaciones de los pagos fijos con aviso y de las tarjetas con día de pago, desde `now` hasta `horizonDays`.
-    static func plan(recurring: [RecurringRecord], rules: [ReminderRule], cards: [ProductRecord] = [],
+    /// Sin `general`, solo avisan los pagos con regla personalizada.
+    static func plan(recurring: [RecurringRecord], rules: [ReminderRule], general: GeneralReminder? = nil, cards: [ProductRecord] = [],
                      cardRule: (daysBefore: Int, atMinutes: Int)? = nil, currency: Currency,
                      now: Date, calendar: Calendar, horizonDays: Int = 60) -> [PlannedNotification] {
         let horizon = calendar.date(byAdding: .day, value: horizonDays, to: now) ?? now
@@ -35,9 +76,9 @@ enum ReminderPlanner {
         let rulesById = Dictionary(rules.map { ($0.recurringId, $0) }, uniquingKeysWith: { first, _ in first })
 
         for item in recurring where item.active {
-            guard let rule = rulesById[item.id] else { continue }
+            guard let rule = effectiveRule(for: item.id, own: rulesById[item.id], general: general) else { continue }
             let last = calendar.date(byAdding: .day, value: max(0, rule.daysBefore), to: horizon) ?? horizon
-            for due in CycleMath.occurrences(from: item.nextDate, through: last, cycle: item.cycle, anchor: item.anchor, calendar: calendar, limit: 30) {
+            for due in RecurringEnd.dates(of: item, through: last, calendar: calendar, limit: 30) {
                 let amount = Money(minor: item.amountMinor, currency: currency).formatted()
                 var offsets = [max(0, min(14, rule.daysBefore))]
                 if rule.sameDay && !offsets.contains(0) { offsets.append(0) }

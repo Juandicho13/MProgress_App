@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// Avisos (pantalla 22): lo de hoy y mañana con ícono por tipo, y los ajustes de avisos.
 struct AlertsView: View {
@@ -11,12 +12,15 @@ struct AlertsView: View {
     @Query(filter: #Predicate<Budget> { $0.deletedAt == nil }) private var allBudgets: [Budget]
     @Query(filter: #Predicate<SpendCategory> { $0.deletedAt == nil }) private var categories: [SpendCategory]
 
+    @AppStorage(AlertSettings.enabledKey) private var generalEnabled = true
     @AppStorage(AlertSettings.daysBeforeKey) private var daysBefore = 3
     @AppStorage(AlertSettings.atMinutesKey) private var atMinutes = 540
     @AppStorage(AlertSettings.budgetsKey) private var budgetAlerts = true
     @AppStorage(AlertSettings.cardsKey) private var cardAlerts = true
     @AppStorage(AlertSettings.weeklyKey) private var weekly = false
     @State private var authorized = true
+    @State private var denied = false
+    @Environment(\.openURL) private var openURL
 
     private var space: Space? { spaces.first { $0.kindRaw == "personal" } ?? spaces.first }
     private var currency: Currency { space?.currency ?? .cop }
@@ -73,28 +77,22 @@ struct AlertsView: View {
                     }
                 }
                 if !authorized {
-                    Card {
-                        VStack(alignment: .leading, spacing: Spacing.s2) {
-                            Text("Las notificaciones están apagadas").appFont(.titulo3).foregroundStyle(Palette.texto1)
-                            Text("Actívalas para que te avisemos antes de cada pago.").appFont(.cuerpo2).foregroundStyle(Palette.texto2)
-                            Button("Activar") {
-                                Task { authorized = await NotificationScheduler.requestIfNeeded() }
-                            }
-                            .buttonStyle(.secondary)
-                        }
-                    }
+                    permissionCard
                 }
-                SectionLabel(text: "Ajustes de avisos")
+                SectionLabel(text: "Aviso general de pagos fijos")
                 Card(padding: Spacing.s2) {
                     VStack(spacing: 0) {
+                        toggle("Avisarme antes de cada pago", $generalEnabled)
+                        Divider().overlay(Palette.linea)
                         Picker(selection: $daysBefore) {
                             ForEach(0...14, id: \.self) { day in Text(day == 0 ? "El mismo día" : "\(day)").tag(day) }
                         } label: {
-                            Text("Días antes por defecto").appFont(.cuerpo).foregroundStyle(Palette.texto1)
+                            Text("Días antes").appFont(.cuerpo).foregroundStyle(Palette.texto1)
                         }
                         .tint(Palette.texto2)
                         .padding(.horizontal, Spacing.s2)
                         .frame(minHeight: 56)
+                        .disabled(!generalEnabled)
                         Divider().overlay(Palette.linea)
                         Picker(selection: $atMinutes) {
                             ForEach(Array(stride(from: 360, through: 1320, by: 30)), id: \.self) { minutes in
@@ -106,7 +104,14 @@ struct AlertsView: View {
                         .tint(Palette.texto2)
                         .padding(.horizontal, Spacing.s2)
                         .frame(minHeight: 56)
-                        Divider().overlay(Palette.linea)
+                    }
+                }
+                Text("Cada pago fijo usa este aviso, uno propio o ninguno: en Pagos fijos tócalo y elige Aviso.")
+                    .appFont(.leyenda)
+                    .foregroundStyle(Palette.texto2)
+                SectionLabel(text: "Otros avisos")
+                Card(padding: Spacing.s2) {
+                    VStack(spacing: 0) {
                         toggle("Avisar al acercarme a un límite", $budgetAlerts)
                         Divider().overlay(Palette.linea)
                         toggle("Avisar el pago de mis tarjetas", $cardAlerts)
@@ -114,7 +119,7 @@ struct AlertsView: View {
                         toggle("Resumen semanal", $weekly)
                     }
                 }
-                Text("Cada pago fijo puede tener su propio aviso: tócalo en Inicio y elige Configurar aviso.")
+                Text("Los límites avisan al 80 % y al 100 %. Las tarjetas usan los días y la hora del aviso general.")
                     .appFont(.leyenda)
                     .foregroundStyle(Palette.texto2)
             }
@@ -126,7 +131,14 @@ struct AlertsView: View {
         .background(Palette.fondo.ignoresSafeArea())
         .toolbarBackground(.hidden, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
-        .task { authorized = await NotificationScheduler.isAuthorized() }
+        .task { await refreshPermission() }
+        .onChange(of: generalEnabled) {
+            Task {
+                if generalEnabled { authorized = await NotificationScheduler.requestIfNeeded() }
+                await NotificationScheduler.reschedule(context: context)
+                await refreshPermission()
+            }
+        }
         .onChange(of: daysBefore) { reschedule() }
         .onChange(of: atMinutes) { reschedule() }
         .onChange(of: cardAlerts) { reschedule() }
@@ -136,6 +148,40 @@ struct AlertsView: View {
                 await NotificationScheduler.reschedule(context: context)
             }
         }
+    }
+
+    /// Sin permiso. Si nunca se pidió, se pide aquí; si la persona dijo que no, solo se activa desde Ajustes del iPhone.
+    private var permissionCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Spacing.s2) {
+                Text("Las notificaciones están apagadas").appFont(.titulo3).foregroundStyle(Palette.texto1)
+                if denied {
+                    Text("Para que te avisemos antes de cada pago: abre Ajustes del iPhone › Notificaciones › MProgress y activa Permitir notificaciones.")
+                        .appFont(.cuerpo2)
+                        .foregroundStyle(Palette.texto2)
+                    Button("Abrir Ajustes del iPhone") {
+                        if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
+                    }
+                    .buttonStyle(.secondary)
+                } else {
+                    Text("Actívalas para que te avisemos antes de cada pago.").appFont(.cuerpo2).foregroundStyle(Palette.texto2)
+                    Button("Activar") {
+                        Task {
+                            UserDefaults.standard.set(true, forKey: AlertSettings.askedKey)
+                            _ = await NotificationScheduler.requestIfNeeded()
+                            await NotificationScheduler.reschedule(context: context)
+                            await refreshPermission()
+                        }
+                    }
+                    .buttonStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func refreshPermission() async {
+        authorized = await NotificationScheduler.isAuthorized()
+        denied = await NotificationScheduler.isDenied()
     }
 
     private func toggle(_ title: String, _ value: Binding<Bool>) -> some View {

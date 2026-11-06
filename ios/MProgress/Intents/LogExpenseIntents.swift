@@ -95,31 +95,6 @@ struct LogSmsIntent: AppIntent {
     }
 }
 
-/// "Registro rápido": abre la app lista para escribir el monto. Es el que se pone en el doble toque atrás.
-struct QuickAddIntent: AppIntent {
-    static let title: LocalizedStringResource = "Registro rápido"
-    static let description = IntentDescription("Abre MProgress para anotar un gasto o un ingreso: monto, si entra o sale y de dónde.")
-    static let openAppWhenRun = true
-
-    @MainActor
-    func perform() async throws -> some IntentResult {
-        AutoSetup.dobleToque.mark()
-        QuickAddRouter.shared.pending = true
-        return .result()
-    }
-}
-
-struct MProgressShortcuts: AppShortcutsProvider {
-    static var appShortcuts: [AppShortcut] {
-        AppShortcut(intent: QuickAddIntent(), phrases: ["Registro rápido en \(.applicationName)", "Anotar en \(.applicationName)"],
-                    shortTitle: "Registro rápido", systemImageName: "hand.tap")
-        AppShortcut(intent: LogExpenseIntent(), phrases: ["Registrar gasto en \(.applicationName)", "Anotar gasto en \(.applicationName)"],
-                    shortTitle: "Registrar gasto", systemImageName: "plus.circle")
-        AppShortcut(intent: LogSmsIntent(), phrases: ["Leer SMS del banco con \(.applicationName)"],
-                    shortTitle: "Leer SMS", systemImageName: "message")
-    }
-}
-
 extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }

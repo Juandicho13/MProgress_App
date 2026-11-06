@@ -8,11 +8,11 @@ enum BalanceCalculator {
         return DateInterval(start: start, end: end)
     }
 
-    /// Fechas de un pago fijo que todavía no se han pagado dentro del mes.
+    /// Fechas de un pago fijo que todavía no se han pagado dentro del mes. Respeta la fecha final y las cuotas.
     static func pendingOccurrences(of item: RecurringRecord, in month: DateInterval, calendar: Calendar) -> [Date] {
         guard item.active else { return [] }
         let last = month.end.addingTimeInterval(-1)
-        let dates = CycleMath.occurrences(from: item.nextDate, through: last, cycle: item.cycle, anchor: item.anchor, calendar: calendar)
+        let dates = RecurringEnd.dates(of: item, through: last, calendar: calendar)
         return dates.filter { $0 >= month.start }
     }
 
@@ -53,7 +53,7 @@ enum BalanceCalculator {
     /// Próximos cobros ordenados por fecha, con su urgencia.
     static func upcoming(recurring: [RecurringRecord], now: Date, calendar: Calendar, kind: EntryKind? = .gasto, limit: Int = 20) -> [UpcomingCharge] {
         recurring
-            .filter { $0.active && (kind == nil || $0.kind == kind) }
+            .filter { $0.active && (kind == nil || $0.kind == kind) && !RecurringEnd.isFinished($0, calendar: calendar) }
             .map { item in
                 UpcomingCharge(
                     recurringId: item.id,

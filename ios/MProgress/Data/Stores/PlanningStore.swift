@@ -19,8 +19,10 @@ final class PlanningStore {
     }
 
     /// Crea o cambia el aviso de un pago fijo. Solo hay uno por pago fijo.
+    /// `mode`: Como el general, Personalizado (con estos días y hora) o Sin aviso.
     @discardableResult
-    func setReminder(spaceId: UUID, recurringId: UUID, daysBefore: Int, atMinutes: Int, sameDay: Bool, now: Date = .now) throws -> Reminder {
+    func setReminder(spaceId: UUID, recurringId: UUID, daysBefore: Int, atMinutes: Int, sameDay: Bool,
+                     mode: ReminderMode = .personalizado, now: Date = .now) throws -> Reminder {
         let reminder = try reminder(for: recurringId) ?? {
             let created = Reminder(spaceId: spaceId, recurringId: recurringId)
             context.insert(created)
@@ -29,6 +31,7 @@ final class PlanningStore {
         reminder.daysBefore = min(14, max(0, daysBefore))
         reminder.atMinutes = min(1439, max(0, atMinutes))
         reminder.sameDay = sameDay
+        reminder.mode = mode
         reminder.touch(now)
         try context.save()
         return reminder

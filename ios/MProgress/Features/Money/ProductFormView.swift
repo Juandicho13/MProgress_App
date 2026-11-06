@@ -1,12 +1,14 @@
 import SwiftUI
 import SwiftData
 
-/// Agregar a un banco (pantalla 33): cuenta, débito, crédito o bolsillo. También edita.
+/// Agregar a un banco (pantalla 33): cuenta, débito, crédito o bolsillo; en el grupo Efectivo, un efectivo con
+/// nombre propio. También edita. Las tarjetas pueden acumular puntos o millas en un programa.
 /// Solo guarda los últimos 4 dígitos de las tarjetas, nunca el número completo.
 struct ProductFormView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(UndoCenter.self) private var undo
+    @Query(filter: #Predicate<RewardProgram> { $0.deletedAt == nil }, sort: \RewardProgram.createdAt) private var allRewards: [RewardProgram]
 
     let spaceId: UUID
     let institution: Institution
@@ -18,6 +20,7 @@ struct ProductFormView: View {
     @State private var limit: Int64
     @State private var last4: String
     @State private var rateText: String
+    @State private var pointsText: String
     @State private var confirmsDelete = false
     @State private var errorText: String?
 
@@ -32,11 +35,15 @@ struct ProductFormView: View {
         draft.kind = kind
         draft.inWallet = kind == .credito || kind == .debito
         draft.parentProductId = wallet.products(of: institution).first { $0.kind == .cuenta }?.id
+        if kind == .efectivo {
+            draft.name = WalletMath.nextCashName(existing: wallet.products.filter { $0.kind == .efectivo }.map(\.name))
+        }
         _draft = State(initialValue: draft)
         _balance = State(initialValue: 0)
         _limit = State(initialValue: 0)
         _last4 = State(initialValue: "")
         _rateText = State(initialValue: "")
+        _pointsText = State(initialValue: "")
         startBalance = 0
     }
 
@@ -55,11 +62,14 @@ struct ProductFormView: View {
         draft.parentProductId = product.parentProductId
         draft.inWallet = product.inWallet
         draft.hidden = product.hidden
+        draft.rewardProgramId = product.rewardProgramId
+        draft.pointsPerThousand = product.pointsPerThousand
         _draft = State(initialValue: draft)
         _balance = State(initialValue: current)
         _limit = State(initialValue: product.creditLimitMinor ?? 0)
         _last4 = State(initialValue: product.last4 ?? "")
         _rateText = State(initialValue: product.rateEA.map { "\($0)".replacingOccurrences(of: ".", with: ",") } ?? "")
+        _pointsText = State(initialValue: product.pointsPerThousand.map { "\($0)".replacingOccurrences(of: ".", with: ",") } ?? "")
         startBalance = current
     }
 
@@ -67,6 +77,8 @@ struct ProductFormView: View {
     private var last4Valid: Bool { last4.isEmpty || MoneyStore.cleanLast4(last4) != nil }
     private var canSave: Bool { !draft.name.trimmingCharacters(in: .whitespaces).isEmpty && last4Valid }
     private var accounts: [Product] { wallet.products.filter { $0.kind == .cuenta } }
+    private var rewards: [RewardProgram] { allRewards.filter { $0.spaceId == spaceId } }
+    private var pointsPerThousand: Decimal? { Decimal(string: pointsText.replacingOccurrences(of: ",", with: ".")) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -84,7 +96,7 @@ struct ProductFormView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s5) {
-                    if editing == nil { kindPicker }
+                    if editing == nil && draft.kind != .efectivo { kindPicker }
                     field("Nombre") {
                         TextField(placeholder, text: $draft.name)
                             .appFont(.cuerpo)
@@ -93,6 +105,7 @@ struct ProductFormView: View {
                     }
                     amounts
                     options
+                    if isCard { rewardsCard }
                     Text("Solo guardamos los últimos 4 dígitos para reconocer la tarjeta. Nunca el número completo.")
                         .appFont(.leyenda)
                         .foregroundStyle(Palette.texto2)
@@ -231,6 +244,58 @@ struct ProductFormView: View {
         }
     }
 
+    /// Puntos o millas que da la tarjeta: en qué programa y cuántos por cada 1.000 gastados.
+    @ViewBuilder
+    private var rewardsCard: some View {
+        SectionLabel(text: "Puntos o millas")
+        if rewards.isEmpty {
+            Text("Agrega tu programa en Dinero › Puntos y millas para que esta tarjeta sume puntos sola con cada gasto.")
+                .appFont(.leyenda)
+                .foregroundStyle(Palette.texto2)
+        } else {
+            Card(padding: Spacing.s2) {
+                VStack(spacing: 0) {
+                    Picker(selection: $draft.rewardProgramId) {
+                        Text("Ninguno").tag(UUID?.none)
+                        ForEach(rewards) { reward in
+                            Text(reward.name).tag(UUID?.some(reward.id))
+                        }
+                    } label: {
+                        Text("Acumula en").appFont(.cuerpo).foregroundStyle(Palette.texto1)
+                    }
+                    .tint(Palette.texto2)
+                    .padding(.horizontal, Spacing.s2)
+                    .frame(minHeight: 56)
+                    if draft.rewardProgramId != nil {
+                        Divider().overlay(Palette.linea)
+                        HStack {
+                            Text("Por cada \(Money(units: 1000, currency: wallet.currency).formatted())").appFont(.cuerpo).foregroundStyle(Palette.texto1)
+                            Spacer()
+                            TextField("0", text: $pointsText)
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .appFont(.cifraPequena)
+                                .foregroundStyle(Palette.texto1)
+                                .frame(maxWidth: 90)
+                            Text(selectedRewardUnit).appFont(.cuerpo2).foregroundStyle(Palette.texto2)
+                        }
+                        .padding(.horizontal, Spacing.s2)
+                        .frame(minHeight: 56)
+                    }
+                }
+            }
+            if draft.rewardProgramId != nil {
+                Text("Cada gasto con esta tarjeta suma sus puntos al programa y al borrarlo se restan. Lo encuentras en el reglamento de tu tarjeta.")
+                    .appFont(.leyenda)
+                    .foregroundStyle(Palette.texto2)
+            }
+        }
+    }
+
+    private var selectedRewardUnit: String {
+        rewards.first { $0.id == draft.rewardProgramId }?.kind.unit ?? "puntos"
+    }
+
     private func dayPicker(_ title: String, selection: Binding<Int?>) -> some View {
         Picker(selection: selection) {
             Text("Sin definir").tag(Int?.none)
@@ -268,7 +333,7 @@ struct ProductFormView: View {
         case .debito: "Débito"
         case .credito: "Crédito Oro"
         case .bolsillo: "Emergencias"
-        case .efectivo: "Efectivo"
+        case .efectivo: "Billetera, Casa, Alcancía"
         }
     }
 
@@ -277,7 +342,7 @@ struct ProductFormView: View {
         case .cuenta: "Cuenta"
         case .debito, .credito: "Tarjeta"
         case .bolsillo: "Cajita"
-        case .efectivo: "Billetera"
+        case .efectivo: "Efectivo"
         }
     }
 
@@ -289,6 +354,7 @@ struct ProductFormView: View {
         final.last4 = last4.isEmpty ? nil : last4
         final.creditLimitMinor = limit > 0 ? limit : nil
         final.rateEA = Decimal(string: rateText.replacingOccurrences(of: ",", with: "."))
+        final.pointsPerThousand = pointsPerThousand
         let store = MoneyStore(context: context)
         do {
             if let editing {

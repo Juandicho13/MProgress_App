@@ -65,8 +65,21 @@ enum WalletMath {
         if debit == 1 { parts.append("débito") } else if debit > 1 { parts.append("\(debit) débito") }
         let credit = count(.credito)
         if credit == 1 { parts.append("tarjeta de crédito") } else if credit > 1 { parts.append("\(credit) tarjetas de crédito") }
-        if count(.efectivo) > 0 { parts.append("Billetera física") }
+        let cash = count(.efectivo)
+        if cash == 1 { parts.append("Billetera física") } else if cash > 1 { parts.append("Efectivo en \(cash) lugares") }
         return parts.joined(separator: " · ")
+    }
+
+    /// Nombres sugeridos para un efectivo nuevo (varios efectivos con nombre propio).
+    static let cashSuggestions = ["Billetera", "Casa", "Alcancía", "Sobre", "Caja menor"]
+
+    /// Nombre para un efectivo nuevo: la primera sugerencia que no se usa, o "Efectivo 2", "Efectivo 3"…
+    static func nextCashName(existing: [String]) -> String {
+        let used = Set(existing.map { $0.lowercased() })
+        if let free = cashSuggestions.first(where: { !used.contains($0.lowercased()) }) { return free }
+        var number = 2
+        while used.contains("efectivo \(number)") { number += 1 }
+        return "Efectivo \(number)"
     }
 
     /// Próximo día de pago de una tarjeta: hoy si cae hoy, si no el siguiente; el 31 cae el último día en meses cortos.

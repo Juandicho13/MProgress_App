@@ -17,7 +17,10 @@ struct FixedView: View {
     private var items: [Recurring] { allRecurring.filter { $0.spaceId == space?.id && $0.cycle != .puntual } }
 
     var body: some View {
-        let items = self.items
+        let all = self.items
+        // Los que terminaron sus cuotas o pasaron su fecha final van aparte y no suman.
+        let finished = all.filter { isFinishedByEnd($0) }
+        let items = all.filter { !isFinishedByEnd($0) }
         let totals = FixedMath.totals(items.map { (kind: $0.kind, amountMinor: $0.amountMinor, cycle: $0.cycle, active: $0.active, dateUnset: $0.dateUnset) })
         let withoutDate = items.filter { $0.dateUnset && $0.active }
         let expenses = items.filter { $0.kind == .gasto && !($0.dateUnset && $0.active) }
@@ -57,7 +60,7 @@ struct FixedView: View {
                 }
                 .accessibilityElement(children: .combine)
 
-                if items.isEmpty {
+                if all.isEmpty {
                     Card {
                         EmptyStateView(title: "Sin pagos fijos", message: "Arriendo, servicios, suscripciones o tu sueldo. Los agregas una vez y la app te avisa cada mes.") {
                             IconTile(content: .symbol("repeat"), tint: Palette.brasaVelo, foreground: Palette.brasaTinta, size: 64)
@@ -77,6 +80,10 @@ struct FixedView: View {
                 if !incomes.isEmpty {
                     SectionLabel(text: "Ingresos")
                     list(incomes)
+                }
+                if !finished.isEmpty {
+                    SectionLabel(text: "Terminados")
+                    list(finished)
                 }
             }
             .padding(.horizontal, Spacing.margen)
@@ -109,14 +116,18 @@ struct FixedView: View {
     private func row(_ item: Recurring, highlight: Bool) -> some View {
         let product = products.first { $0.id == item.productId }
         let paidWith = product.map { p in p.last4.map { "\(p.name) ·· \($0)" } ?? p.name }
-        let subtitle = [FixedMath.scheduleText(cycle: item.cycle, nextDate: item.nextDate, dateUnset: item.dateUnset, calendar: calendar), paidWith]
+        let finished = isFinishedByEnd(item)
+        let schedule = finished ? nil : FixedMath.scheduleText(cycle: item.cycle, nextDate: item.nextDate, dateUnset: item.dateUnset, calendar: calendar)
+        let subtitle = [schedule, item.endText(calendar: calendar), paidWith]
             .compactMap { $0 }.joined(separator: " · ")
         return ListRow(tile: entryTile(icon: item.icon, name: item.name, kind: item.kind), title: item.name, subtitle: subtitle) {
             VStack(alignment: .trailing, spacing: 4) {
                 Text(signedAmount(item.amountMinor, item.kind, currency))
                     .appFont(.cifra)
                     .foregroundStyle(item.kind == .ingreso ? Palette.hielo : Palette.texto1)
-                if !item.active {
+                if finished {
+                    Badge(text: "Terminado", tone: .neutral)
+                } else if !item.active {
                     Badge(text: "Pausado", tone: .neutral)
                 } else if highlight {
                     Badge(text: "Poner fecha", tone: .oro)
@@ -132,6 +143,10 @@ struct FixedView: View {
     }
 
     private func money(_ minor: Int64) -> String { Money(minor: minor, currency: currency).formatted() }
+
+    private func isFinishedByEnd(_ item: Recurring) -> Bool {
+        (item.endDate != nil || item.totalCount != nil) && item.isFinished(calendar: calendar)
+    }
 }
 
 extension EntryKind: Identifiable {

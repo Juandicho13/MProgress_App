@@ -172,12 +172,12 @@ Los modelos locales replican las tablas de `supabase/migrations/20261106000000_i
 | `SpaceMember` | `space_members` | spaceId, userId, role (admin, miembro, lectura) |
 | `SpendCategory` | `categories` | name, icon (SF Symbol), color, sort; spaceId nil = global |
 | `Institution` | `institutions` | name, color, icon, hidden |
-| `Product` | `products` | institutionId, kind (cuenta, debito, credito, bolsillo, efectivo), name, last4, balance, balanceAt, creditLimit, cutDay, dueDay, rateEA, lockedUntil, parentProductId, inWallet, hidden |
-| `Recurring` | `recurring` | kind (gasto, ingreso), name, icon, amount, cycle (puntual, semanal, mensual, anual, otra), intervalDays, nextDate, categoryId, productId, responsibleId, active |
+| `Product` | `products` | institutionId, kind (cuenta, debito, credito, bolsillo, efectivo), name, last4, balance, balanceAt, creditLimit, cutDay, dueDay, rateEA, lockedUntil, parentProductId, inWallet, hidden, rewardProgramId, pointsPerThousand |
+| `Recurring` | `recurring` | kind (gasto, ingreso), name, icon, amount, cycle (puntual, semanal, mensual, anual, otra), intervalDays, nextDate, categoryId, productId, responsibleId, active, dateUnset, endDate, totalCount, paidCount |
 | `Entry` | `entries` | kind, amount, occurredAt, name, merchant, icon, categoryId, productId, recurringId, paidBy, method (wallet, fisica, en_linea, efectivo, transferencia), source (manual, wallet, sms, recibo, importacion, asistente), needsReview, notes |
 | `Split` | `splits` | entryId, userId, amount |
 | `Transfer` | `transfers` | fromProductId, toProductId, amount, occurredAt |
-| `Reminder` | `reminders` | recurringId, daysBefore (0 a 14), target (todos, persona, responsable), userId, atTime |
+| `Reminder` | `reminders` | recurringId, daysBefore (0 a 14), target (todos, persona, responsable), userId, atTime, mode (general, personalizado, ninguno) |
 | `Budget` | `budgets` | categoryId (nil = total), monthlyLimit |
 | `SavingsGoal` | `savings_goals` | name, targetAmount, targetDate, productId |
 | `GoalContribution` | `goal_contributions` | goalId, userId, amount |
@@ -192,7 +192,9 @@ Sin cuenta (hasta F10) existe un solo usuario local con id fijo guardado en el l
 
 - **Te quedan este mes** = ingresos del mes (registrados más pagos fijos de ingreso que caen en el mes y aún no se registran) menos gastos del mes (registrados más pagos fijos de gasto que faltan en el mes). Las transferencias entre productos propios no cuentan.
 - **Próxima fecha de un pago fijo:** mensual suma un mes y, si el día no existe, usa el último día del mes (31 de enero, 28 o 29 de febrero, 31 de marzo). Anual del 29 de febrero cae el 28 en años no bisiestos. Semanal suma 7 días. Otra suma `intervalDays`. Puntual no se repite.
-- **Marcar pagado** un pago fijo crea un `Entry` con `recurringId` y mueve `nextDate` al siguiente ciclo.
+- **Marcar pagado** un pago fijo crea un `Entry` con `recurringId`, suma 1 a `paidCount` y mueve `nextDate` al siguiente ciclo. Con `totalCount` o `endDate` (incluida) no hay cobros de más; al acabarse queda inactivo y "Terminado" (`Domain/RecurringEnd.swift`).
+- **Puntos por tarjeta:** un gasto con una tarjeta que tiene `rewardProgramId` suma `floor(monto / 1000 × pointsPerThousand)` al programa; editarlo recalcula y borrarlo resta (`LedgerStore.adjustPoints`).
+- **Avisos en dos niveles:** general (Ajustes › Avisos: activado, días 0 a 14, hora) y por pago fijo (Como el general, Personalizado, Sin aviso). Un pago fijo sin `Reminder` usa el general.
 - **Urgencia:** Hoy (vence hoy o ya venció sin pagar), Pronto (1 a 3 días), Próximas (más de 3 días). Colores en 10.1.
 - **Saldo actual de un producto** = `balance` en `balanceAt` más los efectos de los movimientos y transferencias posteriores. Un gasto con cuenta o débito resta; con crédito suma deuda; un ingreso a una cuenta suma; pagar la tarjeta es una transferencia de la cuenta al crédito que baja la deuda.
 - **Patrimonio neto** = suma de cuentas, bolsillos y efectivo no ocultos menos la deuda de las tarjetas de crédito.

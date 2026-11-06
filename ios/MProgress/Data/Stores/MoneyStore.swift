@@ -60,6 +60,9 @@ final class MoneyStore {
         var inWallet: Bool = false
         var remindPayment: Bool = true
         var hidden: Bool = false
+        /// Tarjetas: programa de puntos donde acumula y cuántos puntos da por cada 1.000.
+        var rewardProgramId: UUID?
+        var pointsPerThousand: Decimal?
     }
 
     /// Crea un producto con todos sus datos. El saldo queda como saldo de hoy.
@@ -100,7 +103,19 @@ final class MoneyStore {
         product.parentProductId = draft.kind == .debito ? draft.parentProductId : nil
         product.inWallet = isCard && draft.inWallet
         product.hidden = draft.hidden
+        let earns = isCard && draft.rewardProgramId != nil
+        product.rewardProgramId = earns ? draft.rewardProgramId : nil
+        product.pointsPerThousand = earns ? draft.pointsPerThousand.flatMap { $0 > 0 ? $0 : nil } : nil
+        if earns, let programId = draft.rewardProgramId { linkReward(programId, to: product, now: now) }
         product.touch(now)
+    }
+
+    /// El programa queda mostrando con qué tarjeta se acumula, si aún no tenía una.
+    private func linkReward(_ programId: UUID, to product: Product, now: Date) {
+        let query = FetchDescriptor<RewardProgram>(predicate: #Predicate<RewardProgram> { $0.id == programId })
+        guard let reward = try? context.fetch(query).first, reward.productId == nil else { return }
+        reward.productId = product.id
+        reward.touch(now)
     }
 
     func institutions(spaceId: UUID) throws -> [Institution] {
@@ -114,8 +129,29 @@ final class MoneyStore {
     @discardableResult
     func cash(spaceId: UUID) throws -> Product {
         if let existing = try products(spaceId: spaceId).first(where: { $0.kind == .efectivo }) { return existing }
-        let wallet = try addInstitution(spaceId: spaceId, name: "Efectivo", colorHex: "3A3F47")
+        let wallet = try cashInstitution(spaceId: spaceId)
         return try addProduct(spaceId: spaceId, institutionId: wallet.id, kind: .efectivo, name: "Efectivo")
+    }
+
+    /// El grupo "Efectivo" de Dinero, donde viven todos los efectivos. Lo crea si no existe.
+    @discardableResult
+    func cashInstitution(spaceId: UUID) throws -> Institution {
+        let all = try institutions(spaceId: spaceId)
+        let cashOwners = Set(try products(spaceId: spaceId).filter { $0.kind == .efectivo }.map(\.institutionId))
+        if let existing = all.first(where: { cashOwners.contains($0.id) }) ?? all.first(where: { $0.name == "Efectivo" }) {
+            return existing
+        }
+        return try addInstitution(spaceId: spaceId, name: "Efectivo", colorHex: "3A3F47")
+    }
+
+    /// Otro efectivo con nombre propio ("Billetera", "Casa", "Alcancía"), con su saldo, dentro del grupo Efectivo.
+    @discardableResult
+    func addCash(spaceId: UUID, name: String, balanceMinor: Int64 = 0, now: Date = .now) throws -> Product {
+        let group = try cashInstitution(spaceId: spaceId)
+        let clean = name.trimmingCharacters(in: .whitespaces)
+        var draft = ProductDraft(kind: .efectivo, name: clean.isEmpty ? "Efectivo" : clean)
+        draft.balanceMinor = balanceMinor
+        return try addProduct(spaceId: spaceId, institutionId: group.id, draft: draft, now: now)
     }
 
     /// Borra un producto. Los movimientos que lo usaban quedan sin producto, no se borran.

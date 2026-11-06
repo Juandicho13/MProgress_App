@@ -117,8 +117,7 @@ enum CalendarMath {
             result[calendar.startOfDay(for: entry.occurredAt), default: CalendarDay()].entries.append(entry)
         }
         for item in recurring where item.active {
-            for date in CycleMath.occurrences(from: item.nextDate, through: end, cycle: item.cycle, anchor: item.anchor, calendar: calendar)
-            where date >= start {
+            for date in RecurringEnd.dates(of: item, through: end, calendar: calendar) where date >= start {
                 let charge = UpcomingCharge(
                     recurringId: item.id,
                     name: item.name,

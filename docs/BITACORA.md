@@ -2,6 +2,39 @@
 
 Una entrada por ticket, la más nueva arriba. Plantilla en `HANDOFF.md` 11.3.
 
+## 2026-11-06 · F12B Paso 4 iOS Predicciones (bloque 3) · en curso
+
+- Qué: funciones puras en `Domain/Forecast.swift`: `variablePace` (gasto del mes sin `recurringId` entre el día del mes, mínimo 1), `endOfMonth` / `projectedEndOfMonth` (te quedan − ritmo × días que faltan, de `monthSummary`), `variableAverage` (promedio de los últimos 3 meses completos con gasto variable, buscando hasta 12 atrás) y `nextMonths(3)` (ingresos fijos, gastos fijos con fecha final y cuotas, y variable estimado: el promedio o, si no hay, ritmo × días del mes; `net = ingresos − fijos − variable`). Alerta "A este ritmo terminas el mes en − $ X" solo si la proyección es negativa.
+- Pantallas: Resumen con la tarjeta "Así vas a terminar" (arriba, no depende del periodo ni del filtro) y la sección "Los próximos 3 meses" con barras de ingresos, fijos y variable, y lo que quedaría o faltaría cada mes. Inicio muestra la alerta bajo "Te quedan" solo cuando la proyección es negativa.
+- Archivos: ios/MProgress/Domain/Forecast.swift (nuevo), Features/Summary/SummaryView.swift, Features/Home/HomeView.swift; pruebas MProgressTests/Domain/ForecastTests.swift.
+- Verificado: 131 pruebas de dominio en Linux. No depende del bloque 2. Falta compilar en Xcode junto con el bloque 2.
+- Pendiente: compilar y mirar en el iPhone de Juan.
+
+## 2026-11-06 · F12B Paso 3 iPhone (bloque 2) · en curso
+
+- Qué:
+  - Registro rápido sin abrir la app: `QuickAddIntent` es `LiveActivityIntent` con `supportedModes = [.background, .foreground(.dynamic)]`. Pide el monto con el cuadro del sistema (`requestValue`), luego gasto o ingreso, y de dónde sale o a dónde entra (`requestDisambiguation` con los productos que aplican y "Sin elegir"). Guarda y muestra en la isla dinámica y en la pantalla bloqueada "− $ 84.300 · te quedan $ 1.901.100" con Deshacer (`UndoQuickAddIntent`, corre en el proceso de la app), y se cierra sola a los 8 segundos (tarea en segundo plano; al volver a la app se cierran las que quedaron).
+  - Ajuste "Abrir la app al anotar" en la guía del doble toque: con él, el mismo atajo abre MProgress en Registro rápido como antes (`continueInForeground`). También queda la acción "Registro rápido en la app" en Atajos.
+  - Siri: "Anota en MProgress", "Anota un gasto en MProgress", "Anota un ingreso en MProgress". Siri pregunta el monto ("20 mil").
+  - Arreglo del bloque 1: la cuadrícula "Día del mes" escribe en la fecha de Agregar (antes se ignoraba la fecha y fallaban 3 pruebas de AddEntryTests). Un mensual de hoy vuelve a crear el movimiento de hoy enlazado y el fijo desde el mes que viene; el día 31 conserva su ancla.
+- Archivos: ios/Shared/QuickAddActivity.swift, ios/MProgressWidgets/QuickAddLiveActivity.swift, ios/MProgress/Intents/QuickAddIntents.swift, ios/MProgress/Data/LiveActivity/QuickAddActivityController.swift, ios/MProgress/Domain/QuickAddMath.swift (nuevos); Intents/LogExpenseIntents.swift, MProgressWidgets/MProgressWidgets.swift, App/MProgressApp.swift, Features/AutoCapture/QuickAddView.swift, Features/AddEntry/AddEntryModel.swift y AddEntryView.swift, ios/MProgress-Info.plist (`NSSupportsLiveActivities`); pruebas QuickAddMathTests y F12BStoreTests (día del mes).
+- Verificado: 125 pruebas de dominio en Linux. Falta compilar en Xcode y probar en el iPhone (la isla dinámica no se ve en el simulador igual).
+- Límite: una frase de Atajos no puede traer un número ni texto libre, así que "Anota 20 mil de almuerzo en MProgress" no se reconoce de una vez: Siri pregunta el monto después de "Anota en MProgress". El concepto ("almuerzo") se puede pasar desde Atajos con el parámetro Concepto.
+- Pendiente: compilar y probar en el iPhone de Juan; bloque 3 (predicciones).
+
+## 2026-11-06 · F12B Paso 2 iOS (bloque 1) · en curso
+
+- Qué:
+  - Varios efectivos con nombre propio ("Billetera", "Casa", "Alcancía"), cada uno con su saldo, agrupados en el banco Efectivo de Dinero con "+ Efectivo"; se transfiere entre ellos con Transferir.
+  - Pagos con fin: `endDate` (incluida), `totalCount` y `paidCount`. Mes, calendario, próximos y avisos salen de `RecurringEnd.dates`. Marcar pagado suma una cuota; con la última o al pasar la fecha final queda "Terminado" y avisa "Terminaste de pagar X". Textos "Cuota 3 de 12" y "Hasta 15 mar 2027". Agregar y editar tienen "Termina": Nunca, Fecha o Cuotas. Un fijo agregado con fecha vieja cuenta como pagadas las cuotas que quedaron atrás (`AddPlan.elapsed`).
+  - Avisos en dos niveles: general (activado, 0 a 14 días, hora) y por pago fijo (Como el general, Personalizado, Sin aviso). Un fijo sin aviso propio usa el general. El permiso se pregunta "¿Te aviso antes de cada pago?" al crear el primer pago fijo o al terminar el onboarding con fijos; si lo niega, Ajustes › Avisos explica cómo activarlo y abre Ajustes del iPhone.
+  - Fecha fácil: Hoy, Ayer, Mañana y Otra fecha (calendario), hora opcional tras "Agregar hora". Los mensuales nuevos usan "Día del mes" (1 a 31) con "Ya lo pagué este mes" cuando el día ya pasó; editar un mensual también usa la cuadrícula.
+  - Puntos por tarjeta: `rewardProgramId` y `pointsPerThousand`; cada gasto suma floor(monto / 1.000 × puntos), editar recalcula, borrar resta.
+- Archivos: ios/MProgress/Domain/RecurringEnd.swift y DateChoice.swift (nuevos), Records.swift, BalanceCalculator.swift, History.swift, Planning.swift, Rewards.swift, AddPlan.swift, Wallet.swift, Backup.swift; Data/Models/Models.swift, Data/Stores/LedgerStore.swift, MoneyStore.swift, PlanningStore.swift, AutoCaptureStore.swift, Data/Notifications/NotificationScheduler.swift, Data/Backup/BackupService.swift; Features/Shared/DatePieces.swift (nuevo), AddEntry/AddEntryModel.swift y AddEntryView.swift, Fixed/FixedView.swift y RecurringEditView.swift, Planning/ReminderEditView.swift y AlertsView.swift, Money/ProductFormView.swift, InstitutionDetailView.swift, AddInstitutionView.swift, RewardsSection.swift, Home/HomeView.swift, Calendar/CalendarView.swift, Settings/SettingsView.swift, Onboarding/OnboardingView.swift, App/RootView.swift; pruebas MProgressTests/Domain/RecurringEndTests.swift y MProgressTests/Data/F12BStoreTests.swift; supabase/migrations/20261107000000_f12b.sql (nueva, la inicial ya está aplicada y no se toca); HANDOFF.md 8.
+- Verificado: 122 pruebas de dominio en Linux; las dos migraciones y `rls_smoke.sql` en Postgres 16 local (la nueva se puede correr dos veces). Falta compilar en Xcode y las pruebas de datos.
+- Decisión tomada: el aviso general aplica a todos los pagos fijos (gastos e ingresos) que no tengan aviso propio, y avisa solo los días antes (sin el recordatorio extra del mismo día).
+- Pendiente: compilar en el Mac de Juan; bloques 2 (registro rápido sin abrir la app y Live Activity) y 3 (predicciones).
+
 ## 2026-11-06 · F14-A1 Android: primera fase · en curso
 
 - Qué: dominio en Kotlin igual al de iOS (dinero, ciclos, te quedan, próximos cargos, plan de Agregar, pagos fijos, accesos rápidos con el mismo formato de guardado), base local en un archivo JSON privado (`data/Store.kt`, se puede pasar a Room sin tocar pantallas), tema claro y oscuro con los mismos tokens, Inicio, Agregar con monto resaltado y teclado, Más acciones con lápiz y 3 fijadas, Pagos fijos con Pagado, onboarding (ingreso, bancos y tarjetas con últimos 4, fijos con Agregar otro, fechas y con qué se paga con Más tarde), Ajustes con Apariencia que cambia al instante, Borrar cuenta y datos y la firma oficial. Texto blanco sobre la brasa.

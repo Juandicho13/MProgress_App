@@ -39,7 +39,10 @@ struct OnboardingView: View {
     private func finish() {
         do {
             try model.finish(context: context)
+            let hasFixed = !model.selectedFixed.isEmpty || !model.income.money.isZero
             onFinish()
+            // Si dejó pagos fijos, es el momento justo para preguntar por los avisos.
+            if hasFixed { Task { await NotificationAsk.shared.offerIfNeeded() } }
         } catch {
             errorText = error.localizedDescription
         }

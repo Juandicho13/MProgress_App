@@ -43,6 +43,9 @@ struct BackupSnapshot: Codable, Equatable, Sendable {
         var name: String; var last4: String?; var balanceMinor: Int64; var balanceAt: Date; var creditLimitMinor: Int64?
         var cutDay: Int?; var dueDay: Int?; var rateEA: Decimal?; var lockedUntil: Date?; var inWallet: Bool; var hidden: Bool
         var createdAt: Date; var updatedAt: Date; var deletedAt: Date?
+        /// Opcionales para abrir respaldos hechos antes de que existieran (puntos por tarjeta).
+        var rewardProgramId: UUID? = nil
+        var pointsPerThousand: Decimal? = nil
     }
 
     struct RecurringRow: Codable, Equatable, Sendable {
@@ -52,6 +55,10 @@ struct BackupSnapshot: Codable, Equatable, Sendable {
         var createdAt: Date; var updatedAt: Date; var deletedAt: Date?
         /// Opcional para abrir respaldos hechos antes de que existiera.
         var dateUnset: Bool? = nil
+        /// Pagos con fin (cuotas o fecha final). Opcionales por los respaldos viejos.
+        var endDate: Date? = nil
+        var totalCount: Int? = nil
+        var paidCount: Int? = nil
     }
 
     struct EntryRow: Codable, Equatable, Sendable {
@@ -69,6 +76,8 @@ struct BackupSnapshot: Codable, Equatable, Sendable {
     struct ReminderRow: Codable, Equatable, Sendable {
         var id: UUID; var spaceId: UUID; var recurringId: UUID; var daysBefore: Int; var targetRaw: String; var userId: UUID?
         var atMinutes: Int; var notifyPartnerOnPaid: Bool; var sameDay: Bool; var createdAt: Date; var updatedAt: Date; var deletedAt: Date?
+        /// "general", "personalizado" o "ninguno". Opcional: los respaldos viejos solo tenían personalizados.
+        var modeRaw: String? = nil
     }
 
     struct BudgetRow: Codable, Equatable, Sendable {

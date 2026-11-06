@@ -209,7 +209,11 @@ struct CalendarView: View {
         let wasActive = item.active
         do {
             let entry = try ledger.markPaid(item, by: LocalIdentity.userId)
-            undo.show("\(item.name) quedó \(item.kind == .ingreso ? "recibido" : "pagado")") {
+            // Con la última cuota o al pasar la fecha final el pago queda terminado.
+            let message = ledger.finishedByEnd(item)
+                ? RecurringEnd.finishedMessage(name: item.name, kind: item.kind)
+                : "\(item.name) quedó \(item.kind == .ingreso ? "recibido" : "pagado")"
+            undo.show(message) {
                 try? ledger.undoPaid(item, entry: entry, previousNext: previousNext, wasActive: wasActive)
             }
             Task { await NotificationScheduler.reschedule(context: context) }

@@ -63,8 +63,13 @@ struct RewardsSection: View {
 
     private func row(_ reward: RewardProgram) -> some View {
         let record = reward.record
-        let card = wallet.products.first { $0.id == reward.productId }
+        // La tarjeta que acumula aquí (desde su ficha) o la que se eligió en el programa.
+        let earning = wallet.products.first { $0.rewardProgramId == reward.id && $0.pointsPerThousand != nil }
+        let card = earning ?? wallet.products.first { $0.id == reward.productId }
         var subtitle = [reward.kind.title, card.map { c in c.last4.map { "\(c.name) ·· \($0)" } ?? c.name }].compactMap { $0 }.joined(separator: " · ")
+        if let rate = earning?.pointsPerThousand {
+            subtitle += " · " + RewardMath.rateText(pointsPerThousand: rate, kind: reward.kind, currency: wallet.currency)
+        }
         if let expiry = RewardMath.expiryText(record, now: .now, calendar: calendar) { subtitle += " · \(expiry)" }
         let value = RewardMath.estimatedValueMinor(record, currency: wallet.currency)
         return ListRow(tile: InstitutionStyle.tile(name: reward.name, hex: reward.colorHex), title: reward.name, subtitle: subtitle) {

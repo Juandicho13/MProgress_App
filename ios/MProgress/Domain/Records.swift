@@ -53,6 +53,12 @@ struct RecurringRecord: Hashable, Sendable {
     var active: Bool = true
     var categoryId: UUID?
     var productId: UUID?
+    /// Último día con cobro (incluido). Nil: no termina por fecha.
+    var endDate: Date? = nil
+    /// Número de cuotas. Nil: no termina por cuotas.
+    var totalCount: Int? = nil
+    /// Cuotas ya pagadas (cada "marcar pagado" suma 1).
+    var paidCount: Int = 0
 }
 
 struct ProductRecord: Hashable, Sendable {
@@ -68,6 +74,10 @@ struct ProductRecord: Hashable, Sendable {
     var parentProductId: UUID?
     /// Crédito: día del mes en que se paga, si se pidió recordarlo.
     var dueDay: Int?
+    /// Programa de puntos o millas donde acumula esta tarjeta.
+    var rewardProgramId: UUID? = nil
+    /// Puntos por cada 1.000 de la moneda gastados con esta tarjeta.
+    var pointsPerThousand: Decimal? = nil
 }
 
 struct TransferRecord: Hashable, Sendable {

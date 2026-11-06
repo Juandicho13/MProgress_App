@@ -28,13 +28,15 @@ enum BackupService {
             .init(id: $0.id, spaceId: $0.spaceId, institutionId: $0.institutionId, parentProductId: $0.parentProductId, kindRaw: $0.kindRaw,
                   name: $0.name, last4: $0.last4, balanceMinor: $0.balanceMinor, balanceAt: $0.balanceAt, creditLimitMinor: $0.creditLimitMinor,
                   cutDay: $0.cutDay, dueDay: $0.dueDay, rateEA: $0.rateEA, lockedUntil: $0.lockedUntil, inWallet: $0.inWallet, hidden: $0.hidden,
-                  createdAt: $0.createdAt, updatedAt: $0.updatedAt, deletedAt: $0.deletedAt)
+                  createdAt: $0.createdAt, updatedAt: $0.updatedAt, deletedAt: $0.deletedAt,
+                  rewardProgramId: $0.rewardProgramId, pointsPerThousand: $0.pointsPerThousand)
         }
         s.recurring = try context.fetch(FetchDescriptor<Recurring>()).map {
             .init(id: $0.id, spaceId: $0.spaceId, kindRaw: $0.kindRaw, name: $0.name, icon: $0.icon, amountMinor: $0.amountMinor,
                   cycleRaw: $0.cycleRaw, intervalDays: $0.intervalDays, nextDate: $0.nextDate, anchorDay: $0.anchorDay, anchorMonth: $0.anchorMonth,
                   categoryId: $0.categoryId, productId: $0.productId, responsibleId: $0.responsibleId, active: $0.active, createdBy: $0.createdBy,
-                  createdAt: $0.createdAt, updatedAt: $0.updatedAt, deletedAt: $0.deletedAt, dateUnset: $0.dateUnset)
+                  createdAt: $0.createdAt, updatedAt: $0.updatedAt, deletedAt: $0.deletedAt, dateUnset: $0.dateUnset,
+                  endDate: $0.endDate, totalCount: $0.totalCount, paidCount: $0.paidCount)
         }
         s.entries = try context.fetch(FetchDescriptor<Entry>()).map {
             .init(id: $0.id, spaceId: $0.spaceId, kindRaw: $0.kindRaw, amountMinor: $0.amountMinor, occurredAt: $0.occurredAt, name: $0.name,
@@ -49,7 +51,7 @@ enum BackupService {
         s.reminders = try context.fetch(FetchDescriptor<Reminder>()).map {
             .init(id: $0.id, spaceId: $0.spaceId, recurringId: $0.recurringId, daysBefore: $0.daysBefore, targetRaw: $0.targetRaw, userId: $0.userId,
                   atMinutes: $0.atMinutes, notifyPartnerOnPaid: $0.notifyPartnerOnPaid, sameDay: $0.sameDay,
-                  createdAt: $0.createdAt, updatedAt: $0.updatedAt, deletedAt: $0.deletedAt)
+                  createdAt: $0.createdAt, updatedAt: $0.updatedAt, deletedAt: $0.deletedAt, modeRaw: $0.modeRaw)
         }
         s.budgets = try context.fetch(FetchDescriptor<Budget>()).map {
             .init(id: $0.id, spaceId: $0.spaceId, categoryId: $0.categoryId, monthlyLimitMinor: $0.monthlyLimitMinor,
@@ -125,6 +127,8 @@ enum BackupService {
             m.lockedUntil = r.lockedUntil
             m.inWallet = r.inWallet
             m.hidden = r.hidden
+            m.rewardProgramId = r.rewardProgramId
+            m.pointsPerThousand = r.pointsPerThousand
             stamp(m, r.createdAt, r.updatedAt, r.deletedAt)
             context.insert(m)
         }
@@ -139,6 +143,9 @@ enum BackupService {
             m.responsibleId = r.responsibleId
             m.active = r.active
             m.dateUnset = r.dateUnset ?? false
+            m.endDate = r.endDate
+            m.totalCount = r.totalCount
+            m.paidCount = r.paidCount ?? 0
             m.createdBy = r.createdBy
             stamp(m, r.createdAt, r.updatedAt, r.deletedAt)
             context.insert(m)
@@ -175,6 +182,7 @@ enum BackupService {
             m.atMinutes = r.atMinutes
             m.notifyPartnerOnPaid = r.notifyPartnerOnPaid
             m.sameDay = r.sameDay
+            m.modeRaw = r.modeRaw ?? ReminderMode.personalizado.rawValue
             stamp(m, r.createdAt, r.updatedAt, r.deletedAt)
             context.insert(m)
         }

@@ -69,7 +69,13 @@ struct AddInstitutionView: View {
         let store = MoneyStore(context: context)
         do {
             if clean.caseInsensitiveCompare("Efectivo") == .orderedSame {
-                try store.cash(spaceId: spaceId)
+                // Ya hay efectivo: se agrega otro con nombre propio dentro del mismo grupo.
+                let cash = try store.products(spaceId: spaceId).filter { $0.kind == .efectivo }
+                if cash.isEmpty {
+                    try store.cash(spaceId: spaceId)
+                } else {
+                    try store.addCash(spaceId: spaceId, name: WalletMath.nextCashName(existing: cash.map(\.name)))
+                }
             } else {
                 try store.addInstitution(spaceId: spaceId, name: clean, colorHex: colorHex)
             }

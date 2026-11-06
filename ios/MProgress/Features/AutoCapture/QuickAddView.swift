@@ -34,7 +34,7 @@ struct QuickAddView: View {
     private var currency: Currency { space?.currency ?? .cop }
     /// De dónde sale un gasto: tarjetas, cuentas y efectivo. A dónde entra un ingreso: cuentas, cajitas y efectivo.
     private var products: [Product] {
-        allProducts.filter { $0.spaceId == space?.id && (kind == .gasto ? $0.kind != .bolsillo : $0.kind != .credito && $0.kind != .debito) }
+        allProducts.filter { $0.spaceId == space?.id && QuickAddMath.offers($0.kind, for: kind) }
     }
     private var recentCategories: [SpendCategory] {
         Array(categories.sorted { ($0.lastUsedAt ?? .distantPast) > ($1.lastUsedAt ?? .distantPast) }.prefix(8))
@@ -163,13 +163,18 @@ struct QuickAddView: View {
 struct BackTapGuideView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AutoSetup.dobleToque.storageKey) private var configuredAt: Double = 0
+    @AppStorage(QuickAddSettings.opensAppKey) private var opensApp = false
 
-    private let steps: [(String, String)] = [
-        ("Crea el atajo", "Abre Atajos, toca +, busca la acción \"Registro rápido\" de MProgress y guárdalo con ese nombre."),
-        ("Abre Tocar atrás", "En Ajustes del iPhone: Accesibilidad › Tocar › Tocar atrás."),
-        ("Elige Doble toque", "Baja hasta Atajos y elige \"Registro rápido\"."),
-        ("Pruébalo", "Toca dos veces la parte de atrás del iPhone: se abre MProgress listo para escribir el monto."),
-    ]
+    private var steps: [(String, String)] {
+        [
+            ("Crea el atajo", "Abre Atajos, toca +, busca la acción \"Registro rápido\" de MProgress y guárdalo con ese nombre."),
+            ("Abre Tocar atrás", "En Ajustes del iPhone: Accesibilidad › Tocar › Tocar atrás."),
+            ("Elige Doble toque", "Baja hasta Atajos y elige \"Registro rápido\"."),
+            ("Pruébalo", opensApp
+                ? "Toca dos veces la parte de atrás del iPhone: se abre MProgress listo para escribir el monto."
+                : "Toca dos veces la parte de atrás del iPhone: te pide el monto, si es gasto o ingreso y de dónde, sin abrir la app. Lo ves en la isla dinámica con Deshacer."),
+        ]
+    }
 
     var body: some View {
         NavigationStack {
@@ -177,6 +182,22 @@ struct BackTapGuideView: View {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
                     Text("Anota un gasto o un ingreso tocando dos veces la parte de atrás de tu iPhone. Escribes el monto, eliges si entra o sale y de dónde, y listo.")
                         .appFont(.cuerpo)
+                        .foregroundStyle(Palette.texto2)
+                    Card(padding: Spacing.s2) {
+                        Toggle(isOn: $opensApp) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Abrir la app al anotar").appFont(.cuerpo).foregroundStyle(Palette.texto1)
+                                Text(opensApp ? "Se abre MProgress, como antes." : "Anota sin abrir la app y te muestra el resultado en la isla dinámica.")
+                                    .appFont(.leyenda)
+                                    .foregroundStyle(Palette.texto2)
+                            }
+                        }
+                        .tint(Palette.brasa)
+                        .padding(.horizontal, Spacing.s2)
+                        .frame(minHeight: 56)
+                    }
+                    Text("Con Siri: \"Oye Siri, anota en MProgress\" o \"Anota un gasto en MProgress\". Siri te pregunta el monto.")
+                        .appFont(.cuerpo2)
                         .foregroundStyle(Palette.texto2)
                     ForEach(Array(steps.enumerated()), id: \.offset) { item in
                         HStack(alignment: .top, spacing: Spacing.s3) {

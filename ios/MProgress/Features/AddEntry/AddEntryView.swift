@@ -68,6 +68,12 @@ struct AddEntryView: View {
                             .appFont(.cuerpo)
                             .foregroundStyle(Palette.texto1)
                     }
+                    whenCard
+                    if !model.isEditing && model.cycleChoice != .puntual {
+                        Card {
+                            EndRuleEditor(choice: $model.endChoice, endDate: $model.endDate, count: $model.totalCount)
+                        }
+                    }
                     details
                 }
                 .padding(.horizontal, Spacing.margen)
@@ -136,16 +142,35 @@ struct AddEntryView: View {
         }
     }
 
+    /// Cuándo: Día del mes para los mensuales nuevos; Hoy, Ayer, Mañana u Otra fecha para lo demás.
+    private var whenCard: some View {
+        Card {
+            if model.usesDayOfMonth {
+                VStack(alignment: .leading, spacing: Spacing.s3) {
+                    Text("Día del mes").appFont(.titulo3).foregroundStyle(Palette.texto1)
+                    DayOfMonthGrid(day: Binding(get: { model.dayOfMonth(calendar: calendar) },
+                                                set: { model.pickDay($0, calendar: calendar) }))
+                    if DayOfMonth.hasPassed(day: model.dayOfMonth(calendar: calendar), now: .now, calendar: calendar) {
+                        Toggle(isOn: Binding(get: { model.paidThisMonth },
+                                             set: { model.setPaidThisMonth($0, calendar: calendar) })) {
+                            Text(model.kind == .ingreso ? "Ya me llegó este mes" : "Ya lo pagué este mes")
+                                .appFont(.cuerpo)
+                                .foregroundStyle(Palette.texto1)
+                        }
+                        .tint(Palette.brasa)
+                        .frame(minHeight: Size.toqueMinimo)
+                    }
+                    Text(model.planSummary(calendar: calendar)).appFont(.leyenda).foregroundStyle(Palette.texto2)
+                }
+            } else {
+                EasyDatePicker(title: model.cycleChoice == .puntual ? "Fecha" : "Fecha de pago", date: $model.date)
+            }
+        }
+    }
+
     private var details: some View {
         Card(padding: Spacing.s2) {
             VStack(spacing: 0) {
-                DatePicker(selection: $model.date, displayedComponents: .date) {
-                    Text(model.cycleChoice == .puntual ? "Fecha" : "Fecha de pago").appFont(.cuerpo).foregroundStyle(Palette.texto1)
-                }
-                .tint(Palette.brasa)
-                .padding(.horizontal, Spacing.s2)
-                .frame(minHeight: 56)
-                Divider().overlay(Palette.linea)
                 Button {
                     focus = nil
                     showsCategories = true
@@ -205,7 +230,12 @@ struct AddEntryView: View {
                 let percent = Int((crossing.ratio * 100).rounded())
                 undo?.show(crossing.level == .superado ? "Te pasaste del límite de \(name) (\(percent) %)" : "Vas en \(percent) % del límite de \(name)")
             }
-            Task { await NotificationScheduler.reschedule(context: context) }
+            let offerAlerts = model.createdRecurring
+            Task {
+                await NotificationScheduler.reschedule(context: context)
+                // Momento justo para pedir el permiso: se acaba de crear un pago fijo.
+                if offerAlerts { await NotificationAsk.shared.offerIfNeeded() }
+            }
             dismiss()
         } catch {
             errorText = error.localizedDescription

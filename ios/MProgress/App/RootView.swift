@@ -29,6 +29,8 @@ struct RootView: View {
     @State private var tab: AppTab = .inicio
     @State private var undo = UndoCenter()
     @State private var router = QuickAddRouter.shared
+    @State private var alertsAsk = NotificationAsk.shared
+    @Environment(\.modelContext) private var context
     @AppStorage(GlassLevel.storageKey) private var glassRaw = GlassLevel.normal.rawValue
 
     private var glassLevel: GlassLevel { GlassLevel(rawValue: glassRaw) ?? .normal }
@@ -83,6 +85,15 @@ struct RootView: View {
             QuickAddView()
                 .environment(undo)
                 .presentationCornerRadius(Radius.hoja)
+        }
+        // Permiso de avisos en el momento justo: después de crear el primer pago fijo o del onboarding con fijos.
+        .alert("¿Te aviso antes de cada pago?", isPresented: $alertsAsk.pending) {
+            Button("Sí, avísame") {
+                Task { await alertsAsk.accept(context: context) }
+            }
+            Button("Ahora no", role: .cancel) { alertsAsk.decline() }
+        } message: {
+            Text("Te mando una notificación unos días antes de cada pago fijo. Lo cambias cuando quieras en Ajustes › Avisos.")
         }
     }
 }

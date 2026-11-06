@@ -33,7 +33,11 @@ final class AutoCaptureStore {
                 && (product == nil || $0.productId == nil || $0.productId == product?.id)
         }) {
             // El segundo aviso del mismo pago completa lo que falte.
-            if existing.productId == nil { existing.productId = product?.id }
+            if existing.productId == nil, let product {
+                existing.productId = product.id
+                // Ahora se sabe la tarjeta: suma sus puntos.
+                ledger.adjustPoints(for: existing, sign: 1)
+            }
             if existing.merchant == nil, let merchant = charge.merchant {
                 existing.merchant = merchant
                 if existing.name == "Gasto" || existing.name == "Ingreso" { existing.name = merchant }

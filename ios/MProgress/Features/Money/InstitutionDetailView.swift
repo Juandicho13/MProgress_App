@@ -34,6 +34,10 @@ private struct InstitutionDetailContent: View {
     @State private var confirmsDelete = false
 
     private var products: [Product] { wallet.products(of: institution) }
+    /// El grupo Efectivo: solo tiene efectivos (o se llama Efectivo y aún está vacío).
+    private var isCashGroup: Bool {
+        products.isEmpty ? institution.name == "Efectivo" : products.allSatisfy { $0.kind == .efectivo }
+    }
     private var currency: Currency { wallet.currency }
 
     var body: some View {
@@ -41,19 +45,28 @@ private struct InstitutionDetailContent: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s5) {
                 totalCard(totals)
-                section("Cuenta", kinds: [.cuenta, .efectivo])
-                section("Cajitas", kinds: [.bolsillo])
-                section("Tarjetas", kinds: [.credito, .debito])
-                if products.isEmpty {
-                    Text("Agrega la cuenta, cajitas o tarjetas que tienes en \(institution.name).")
-                        .appFont(.cuerpo)
+                if isCashGroup {
+                    // Varios efectivos con nombre propio, cada uno con su saldo, agrupados bajo Efectivo.
+                    section("Efectivo", kinds: [.efectivo])
+                    Button("+ Efectivo") { adding = .efectivo }.buttonStyle(.secondary)
+                    Text("Billetera, casa, alcancía: cada uno lleva su saldo. Para mover plata entre ellos usa Transferir en Mi dinero.")
+                        .appFont(.leyenda)
                         .foregroundStyle(Palette.texto2)
+                } else {
+                    section("Cuenta", kinds: [.cuenta, .efectivo])
+                    section("Cajitas", kinds: [.bolsillo])
+                    section("Tarjetas", kinds: [.credito, .debito])
+                    if products.isEmpty {
+                        Text("Agrega la cuenta, cajitas o tarjetas que tienes en \(institution.name).")
+                            .appFont(.cuerpo)
+                            .foregroundStyle(Palette.texto2)
+                    }
+                    HStack(spacing: Spacing.s3) {
+                        Button("+ Cajita") { adding = .bolsillo }.buttonStyle(.secondary)
+                        Button("+ Tarjeta") { adding = .credito }.buttonStyle(.secondary)
+                    }
+                    Button("+ Cuenta") { adding = .cuenta }.buttonStyle(.secondary)
                 }
-                HStack(spacing: Spacing.s3) {
-                    Button("+ Cajita") { adding = .bolsillo }.buttonStyle(.secondary)
-                    Button("+ Tarjeta") { adding = .credito }.buttonStyle(.secondary)
-                }
-                Button("+ Cuenta") { adding = .cuenta }.buttonStyle(.secondary)
             }
             .padding(.horizontal, Spacing.margen)
             .padding(.top, Spacing.s2)
@@ -175,7 +188,7 @@ private struct InstitutionDetailContent: View {
     private func subtitle(_ product: Product) -> String {
         switch product.kind {
         case .cuenta: return "Disponible para gastar"
-        case .efectivo: return "Billetera física"
+        case .efectivo: return "Efectivo"
         case .bolsillo:
             if let rate = product.rateEA { return "Rentabilidad \(rate.formatted(.number.precision(.fractionLength(0...2))))% E.A." }
             return "Sin rentabilidad"

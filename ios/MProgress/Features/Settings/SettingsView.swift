@@ -54,6 +54,8 @@ struct SettingsView: View {
     @AppStorage(AppTheme.storageKey) private var themeRaw = AppTheme.oscuro.rawValue
     @AppStorage(GlassLevel.storageKey) private var glassRaw = GlassLevel.normal.rawValue
     @AppStorage(AlertSettings.daysBeforeKey) private var daysBefore = 3
+    @AppStorage(AlertSettings.enabledKey) private var alertsEnabled = true
+    @AppStorage(AlertSettings.atMinutesKey) private var alertsMinutes = 540
     @AppStorage(BackupService.lastBackupKey) private var lastBackup: Double = 0
     @AppStorage(AppIconChoice.storageKey) private var iconRaw = AppIconChoice.trazo.rawValue
     @AppStorage(OnboardingModel.doneKey) private var onboardingDone = true
@@ -105,7 +107,7 @@ struct SettingsView: View {
                         divider
                         row("Espacios compartidos", value: "Pronto")
                         divider
-                        link("Avisos", value: daysBefore == 0 ? "El mismo día" : "\(daysBefore) días antes", route: .avisos)
+                        link("Avisos", value: AlertSettings.summary(enabled: alertsEnabled, daysBefore: daysBefore, atMinutes: alertsMinutes), route: .avisos)
                     }
 
                     SectionLabel(text: "Información")

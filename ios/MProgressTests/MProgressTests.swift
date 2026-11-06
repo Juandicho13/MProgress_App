@@ -7,11 +7,12 @@ struct DesignTests {
         #expect(AppTab.allCases.map(\.title) == ["Inicio", "Resumen", "Dinero", "Calendario", "Ajustes"])
     }
 
-    @Test("Sin transparencia el vidrio es sólido y con mucha es el más transparente")
+    @Test("El vidrio arranca como iOS y conserva los valores guardados")
     func vidrio() {
-        #expect(GlassLevel.ninguna.tintOpacity == 1.0)
-        #expect(GlassLevel.ninguna.blurRadius == 0)
-        #expect(GlassLevel.mucha.tintOpacity < GlassLevel.normal.tintOpacity)
+        #expect(GlassLevel.allCases.first == .normal)
+        #expect(GlassLevel.normal.title == "Como iOS")
+        #expect(GlassLevel(rawValue: "ninguna")?.title == "Sólida")
+        #expect(GlassLevel(rawValue: "mucha") != nil)
     }
 
     @Test("Las cifras van más anchas que el texto")

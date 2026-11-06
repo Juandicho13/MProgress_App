@@ -8,15 +8,19 @@ import Foundation
 struct AddPlan: Equatable, Sendable {
     var entryDate: Date?
     var recurringNext: Date?
+    /// Repetido con fecha de hoy o pasada: cuántos cobros quedaron atrás (la fecha elegida y los que se saltaron
+    /// hasta hoy). Con cuotas, son las cuotas que ya cuentan como pagadas.
+    var elapsed: Int = 0
 
-    static func decide(cycle: Cycle, date: Date, now: Date, calendar: Calendar) -> AddPlan {
+    /// `anchor`: el día original si no es el de `date` (un mensual del 31 elegido en noviembre cae el 30 pero sigue siendo del 31).
+    static func decide(cycle: Cycle, date: Date, now: Date, calendar: Calendar, anchor: CycleAnchor? = nil) -> AddPlan {
         let isDue = calendar.startOfDay(for: date) <= calendar.startOfDay(for: now)
         guard cycle.repeats else {
             return isDue ? AddPlan(entryDate: date, recurringNext: nil) : AddPlan(entryDate: nil, recurringNext: date)
         }
         guard isDue else { return AddPlan(entryDate: nil, recurringNext: date) }
 
-        let anchor = CycleAnchor(date: date, calendar: calendar)
+        let anchor = anchor ?? CycleAnchor(date: date, calendar: calendar)
         let today = calendar.startOfDay(for: now)
         var next = CycleMath.next(after: date, cycle: cycle, anchor: anchor, calendar: calendar) ?? date
         var guardCount = 0
@@ -24,7 +28,7 @@ struct AddPlan: Equatable, Sendable {
             next = CycleMath.next(after: next, cycle: cycle, anchor: anchor, calendar: calendar) ?? next
             guardCount += 1
         }
-        return AddPlan(entryDate: date, recurringNext: next)
+        return AddPlan(entryDate: date, recurringNext: next, elapsed: guardCount + 1)
     }
 }
 

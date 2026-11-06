@@ -132,6 +132,10 @@ final class Product: SyncTracked {
     var lockedUntil: Date?
     var inWallet: Bool = false
     var hidden: Bool = false
+    /// Programa de puntos o millas donde acumula esta tarjeta (PLAN_F12B).
+    var rewardProgramId: UUID?
+    /// Puntos por cada 1.000 de la moneda gastados con esta tarjeta.
+    var pointsPerThousand: Decimal?
     var createdAt: Date = Date.now
     var updatedAt: Date = Date.now
     var deletedAt: Date?
@@ -151,7 +155,8 @@ final class Product: SyncTracked {
     }
 
     var record: ProductRecord {
-        ProductRecord(id: id, kind: kind, name: name, balanceMinor: balanceMinor, balanceAt: balanceAt, rateEA: rateEA, hidden: hidden, parentProductId: parentProductId, dueDay: dueDay)
+        ProductRecord(id: id, kind: kind, name: name, balanceMinor: balanceMinor, balanceAt: balanceAt, rateEA: rateEA, hidden: hidden,
+                      parentProductId: parentProductId, dueDay: dueDay, rewardProgramId: rewardProgramId, pointsPerThousand: pointsPerThousand)
     }
 }
 
@@ -174,6 +179,12 @@ final class Recurring: SyncTracked {
     var active: Bool = true
     /// Se creó sin fecha ("Más tarde" en el onboarding). No avisa ni sale en próximos hasta que tenga fecha.
     var dateUnset: Bool = false
+    /// Último día con cobro, incluido (PLAN_F12B "Pagos con fin"). Nil: no termina por fecha.
+    var endDate: Date?
+    /// Número de cuotas. Nil: no termina por cuotas.
+    var totalCount: Int?
+    /// Cuotas pagadas: cada "marcar pagado" suma 1.
+    var paidCount: Int = 0
     var createdBy: UUID?
     var createdAt: Date = Date.now
     var updatedAt: Date = Date.now
@@ -195,6 +206,19 @@ final class Recurring: SyncTracked {
 
     var anchor: CycleAnchor { CycleAnchor(day: anchorDay, month: anchorMonth) }
 
+    var endChoice: RecurringEndChoice { RecurringEndChoice.of(endDate: endDate, totalCount: totalCount) }
+
+    /// Ya no le quedan cobros: terminó sus cuotas o pasó su fecha final.
+    func isFinished(calendar: Calendar = .current) -> Bool {
+        RecurringEnd.isFinished(nextDate: nextDate, endDate: endDate, totalCount: totalCount, paidCount: paidCount, calendar: calendar)
+    }
+
+    /// "Cuota 3 de 12", "Hasta 15 mar 2027", "Terminado" o nil.
+    func endText(calendar: Calendar = .current) -> String? {
+        RecurringEnd.progressText(endDate: endDate, totalCount: totalCount, paidCount: paidCount,
+                                  finished: isFinished(calendar: calendar), calendar: calendar)
+    }
+
     init(id: UUID = UUID(), spaceId: UUID, kind: EntryKind, name: String, amountMinor: Int64, cycle: Cycle, nextDate: Date, calendar: Calendar = .current) {
         self.id = id
         self.spaceId = spaceId
@@ -210,7 +234,9 @@ final class Recurring: SyncTracked {
     }
 
     var record: RecurringRecord {
-        RecurringRecord(id: id, kind: kind, name: name, amountMinor: amountMinor, cycle: cycle, nextDate: nextDate, anchor: anchor, active: active && !dateUnset && deletedAt == nil, categoryId: categoryId, productId: productId)
+        RecurringRecord(id: id, kind: kind, name: name, amountMinor: amountMinor, cycle: cycle, nextDate: nextDate, anchor: anchor,
+                        active: active && !dateUnset && deletedAt == nil, categoryId: categoryId, productId: productId,
+                        endDate: endDate, totalCount: totalCount, paidCount: paidCount)
     }
 }
 
@@ -316,6 +342,8 @@ final class Reminder: SyncTracked {
     var notifyPartnerOnPaid: Bool = false
     /// Además de los días antes, avisar el mismo día del cobro.
     var sameDay: Bool = true
+    /// "general", "personalizado" o "ninguno" (PLAN_F12B "Avisos en dos niveles"). Los avisos de antes eran personalizados.
+    var modeRaw: String = ReminderMode.personalizado.rawValue
     var createdAt: Date = Date.now
     var updatedAt: Date = Date.now
     var deletedAt: Date?
@@ -327,8 +355,13 @@ final class Reminder: SyncTracked {
         self.daysBefore = min(14, max(0, daysBefore))
     }
 
+    var mode: ReminderMode {
+        get { ReminderMode(rawValue: modeRaw) ?? .personalizado }
+        set { modeRaw = newValue.rawValue }
+    }
+
     var rule: ReminderRule {
-        ReminderRule(recurringId: recurringId, daysBefore: daysBefore, atMinutes: atMinutes, sameDay: sameDay)
+        ReminderRule(recurringId: recurringId, daysBefore: daysBefore, atMinutes: atMinutes, sameDay: sameDay, mode: mode)
     }
 }
 

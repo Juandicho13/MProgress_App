@@ -49,4 +49,21 @@ enum RewardMath {
     static func balanceText(_ reward: RewardRecord) -> String {
         "\(Money.groupThousands(reward.balance)) \(reward.kind.unit)"
     }
+
+    /// Puntos que da un gasto con una tarjeta: floor(monto / 1.000 × puntos por cada 1.000).
+    /// El monto va en unidades de la moneda (pesos, no centavos). Sin regla o con monto cero da 0.
+    static func pointsEarned(amountMinor: Int64, currency: Currency, pointsPerThousand: Decimal?) -> Int64 {
+        guard let rate = pointsPerThousand, rate > 0, amountMinor > 0 else { return 0 }
+        var exact = Decimal(amountMinor) / Decimal(currency.minorPerUnit) / Decimal(1000) * rate
+        var floored = Decimal()
+        NSDecimalRound(&floored, &exact, 0, .down)
+        return max(0, NSDecimalNumber(decimal: floored).int64Value)
+    }
+
+    /// "2 puntos por cada $ 1.000".
+    static func rateText(pointsPerThousand: Decimal, kind: RewardKind, currency: Currency) -> String {
+        let shown = "\(pointsPerThousand)".replacingOccurrences(of: ".", with: ",")
+        let unit = pointsPerThousand == 1 ? String(kind.unit.dropLast()) : kind.unit
+        return "\(shown) \(unit) por cada \(Money(units: 1000, currency: currency).formatted())"
+    }
 }

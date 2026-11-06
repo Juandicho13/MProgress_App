@@ -332,6 +332,7 @@ struct MProgressWidgetBundle: WidgetBundle {
         CalendarWidget()
         LockScreenWidget()
         QuickAddControl()
+        QuickAddLiveActivity()
     }
 }
 

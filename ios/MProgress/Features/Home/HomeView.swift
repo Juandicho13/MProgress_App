@@ -46,6 +46,11 @@ struct HomeView: View {
         BalanceCalculator.monthSummary(entries: entries.map(\.record), recurring: recurring.map(\.record), now: now, calendar: calendar)
     }
 
+    /// Te quedan − ritmo del gasto variable × días que faltan.
+    private var projectedEndOfMonth: Int64 {
+        Forecast.projectedEndOfMonth(entries: entries.map(\.record), recurring: recurring.map(\.record), now: now, calendar: calendar)
+    }
+
     private var upcoming: [UpcomingCharge] {
         BalanceCalculator.upcoming(recurring: recurring.map(\.record), now: now, calendar: calendar, kind: nil, limit: 6)
     }
@@ -196,6 +201,12 @@ struct HomeView: View {
                 Text("Gastado \(Money(minor: summary.spentMinor, currency: currency).formatted()) de \(Money(minor: summary.expectedIncomeMinor, currency: currency).formatted()) · faltan \(summary.daysLeft) días")
                     .appFont(.cuerpo2)
                     .foregroundStyle(Palette.texto2)
+                // Predicción (PLAN_F12B Paso 4): solo se muestra si a este ritmo el mes termina en negativo.
+                if let alert = Forecast.alertText(projectedMinor: projectedEndOfMonth, currency: currency) {
+                    Label(alert, systemImage: "exclamationmark.triangle.fill")
+                        .appFont(.cuerpo2)
+                        .foregroundStyle(Palette.peligro)
+                }
             }
         }
         .accessibilityElement(children: .combine)
@@ -254,7 +265,8 @@ struct HomeView: View {
                                                tint: charge.kind == .ingreso ? Palette.hieloVelo : Palette.superficie3,
                                                foreground: charge.kind == .ingreso ? Palette.hielo : Palette.texto1),
                                 title: charge.name,
-                                subtitle: "\(DueText.describe(charge.date, now: now, calendar: calendar)) · \(item?.cycle.title ?? "")") {
+                                subtitle: [DueText.describe(charge.date, now: now, calendar: calendar), item?.cycle.title, item?.endText(calendar: calendar)]
+                                    .compactMap { $0 }.joined(separator: " · ")) {
                             VStack(alignment: .trailing, spacing: 4) {
                                 Text(signed(charge.amountMinor, charge.kind))
                                     .appFont(.cifra)
@@ -364,7 +376,11 @@ struct HomeView: View {
         let wasActive = item.active
         do {
             let entry = try ledger.markPaid(item, by: LocalIdentity.userId)
-            undo.show("\(item.name) quedó \(item.kind == .ingreso ? "recibido" : "pagado")") {
+            // Con la última cuota o al pasar la fecha final el pago queda terminado.
+            let message = ledger.finishedByEnd(item)
+                ? RecurringEnd.finishedMessage(name: item.name, kind: item.kind)
+                : "\(item.name) quedó \(item.kind == .ingreso ? "recibido" : "pagado")"
+            undo.show(message) {
                 try? ledger.undoPaid(item, entry: entry, previousNext: previousNext, wasActive: wasActive)
             }
             Task { await NotificationScheduler.reschedule(context: context) }
