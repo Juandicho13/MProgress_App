@@ -29,6 +29,10 @@ struct MProgressApp: App {
             }
             .preferredColorScheme((AppTheme(rawValue: themeRaw) ?? .oscuro).colorScheme)
             .lockGate()
+            // preferredColorScheme no vuelve a "Sistema" sin reiniciar y no siempre llega a las hojas:
+            // se fija también en cada ventana para que el cambio se vea al instante en toda la app.
+            .onAppear { AppTheme.apply(themeRaw) }
+            .onChange(of: themeRaw) { _, raw in AppTheme.apply(raw) }
         }
         .modelContainer(container)
         .onChange(of: scenePhase) { _, phase in

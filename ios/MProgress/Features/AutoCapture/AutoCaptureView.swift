@@ -11,6 +11,9 @@ struct AutoCaptureView: View {
     @State private var reviewing: Entry?
     @State private var guide: Guide?
     @State private var showsBackTap = false
+    @AppStorage(AutoSetup.dobleToque.storageKey) private var backTapAt: Double = 0
+    @AppStorage(AutoSetup.applePay.storageKey) private var applePayAt: Double = 0
+    @AppStorage(AutoSetup.sms.storageKey) private var smsAt: Double = 0
     @State private var sample = "Bancolombia: Compraste $84.300 en EXITO con tu T.Cred *4417. 05/11 13:22"
 
     enum Guide: String, Identifiable {
@@ -37,7 +40,7 @@ struct AutoCaptureView: View {
                         Button { showsBackTap = true } label: {
                             ListRow(tile: IconTile(content: .symbol("hand.tap")), title: "Doble toque atrás",
                                     subtitle: "Toca dos veces el iPhone y anotas al instante") {
-                                Text("Configurar").appFont(.etiqueta).foregroundStyle(Palette.brasaTinta)
+                                status(backTapAt > 0)
                             }
                             .contentShape(Rectangle())
                         }
@@ -79,16 +82,25 @@ struct AutoCaptureView: View {
     }
 
     private func sourceRow(_ title: String, _ subtitle: String, _ symbol: String, _ tint: Color, source: EntrySource, action: @escaping () -> Void) -> some View {
-        let active = allEntries.contains { $0.sourceRaw == source.rawValue }
+        let marked = source == .applePay ? applePayAt > 0 : smsAt > 0
+        let active = marked || allEntries.contains { $0.sourceRaw == source.rawValue }
         return Button(action: action) {
             ListRow(tile: IconTile(content: .symbol(symbol), tint: tint, foreground: tint == Palette.brasa ? Palette.sobreBrasa : Palette.texto1),
                     title: title, subtitle: subtitle) {
-                Text(active ? "Activo" : "Configurar").appFont(.etiqueta).foregroundStyle(active ? Palette.exito : Palette.brasaTinta)
+                status(active)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityHint("Toca para ver cómo configurarlo")
+    }
+
+    private func status(_ configured: Bool) -> some View {
+        HStack(spacing: 4) {
+            if configured { Image(systemName: "checkmark.circle.fill").font(.system(size: 13, weight: .semibold)) }
+            Text(configured ? "Configurado" : "Configurar").appFont(.etiqueta)
+        }
+        .foregroundStyle(configured ? Palette.exito : Palette.brasaTinta)
     }
 
     private func detectedRow(_ entry: Entry) -> some View {
@@ -199,6 +211,15 @@ private struct ShortcutGuideView: View {
                         .foregroundStyle(Palette.texto2)
                     if let url = URL(string: "shortcuts://") {
                         Link("Abrir Atajos", destination: url).buttonStyle(.primary)
+                    }
+                    let setup: AutoSetup = guide == .applePay ? .applePay : .sms
+                    if setup.isConfigured {
+                        Label("Configurado", systemImage: "checkmark.circle.fill")
+                            .appFont(.etiqueta)
+                            .foregroundStyle(Palette.exito)
+                            .frame(maxWidth: .infinity, minHeight: Size.toqueMinimo)
+                    } else {
+                        Button("Ya lo configuré") { setup.mark(); dismiss() }.buttonStyle(.secondary)
                     }
                 }
                 .padding(.horizontal, Spacing.margen)

@@ -274,6 +274,16 @@ enum BackupCrypto {
         try AES.GCM.open(AES.GCM.SealedBox(combined: data), using: key())
     }
 
+    /// Borra la llave de respaldo (también la copia en el llavero de iCloud).
+    static func deleteKey() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrSynchronizable as String: kSecAttrSynchronizableAny,
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+
     private static func key() throws -> SymmetricKey {
         if let stored = read() { return SymmetricKey(data: stored) }
         let new = SymmetricKey(size: .bits256)

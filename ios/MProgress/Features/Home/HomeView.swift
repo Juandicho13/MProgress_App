@@ -12,6 +12,7 @@ struct HomeView: View {
 
     @State private var adding: AddRequest?
     @State private var showsMore = false
+    @AppStorage(QuickActionLayout.storageKey) private var actionsRaw = QuickActionLayout.standard.stored
     @State private var selected: Entry?
     @State private var payingCard: CardDue?
     @State private var chargeActions: Recurring?
@@ -96,22 +97,9 @@ struct HomeView: View {
             EntryDetailView(entry: entry, currency: currency)
         }
         .sheet(isPresented: $showsMore) {
-            MoreSheet { kind, cycle in
+            MoreSheet(stored: $actionsRaw) { kind in
                 showsMore = false
-                adding = AddRequest(kind: kind, cycle: cycle)
-            } onOpen: { target in
-                showsMore = false
-                if target == .recibo {
-                    scanning = true
-                } else if target == .rapido {
-                    // Espera a que se cierre Más antes de abrir el registro rápido.
-                    Task {
-                        try? await Task.sleep(for: .milliseconds(450))
-                        QuickAddRouter.shared.pending = true
-                    }
-                } else {
-                    route = target
-                }
+                perform(kind, fromSheet: true)
             }
             .presentationDetents([.height(650), .large])
             .presentationCornerRadius(Radius.hoja)
@@ -214,11 +202,35 @@ struct HomeView: View {
     }
 
     private var quickActions: some View {
-        HStack(spacing: Spacing.s3) {
-            QuickAction(title: "Gasto", symbol: "plus", primary: true) { adding = AddRequest(kind: .gasto, cycle: .puntual) }
-            QuickAction(title: "Ingreso", symbol: "arrow.down") { adding = AddRequest(kind: .ingreso, cycle: .puntual) }
-            QuickAction(title: "Fijo", symbol: "repeat") { adding = AddRequest(kind: .gasto, cycle: .mensual) }
+        let pinned = QuickActionLayout(stored: actionsRaw).pinned
+        return HStack(spacing: Spacing.s3) {
+            ForEach(Array(pinned.enumerated()), id: \.element) { index, kind in
+                QuickAction(title: kind.shortTitle, symbol: kind.symbol, primary: index == 0) { perform(kind) }
+            }
             QuickAction(title: "Más", symbol: "ellipsis") { showsMore = true }
+        }
+    }
+
+    /// Ejecuta una acción del menú Más o de los accesos rápidos.
+    private func perform(_ kind: QuickActionKind, fromSheet: Bool = false) {
+        switch kind {
+        case .gasto: adding = AddRequest(kind: .gasto, cycle: .puntual)
+        case .ingreso: adding = AddRequest(kind: .ingreso, cycle: .puntual)
+        case .fijo: adding = AddRequest(kind: .gasto, cycle: .mensual)
+        case .sueldo: adding = AddRequest(kind: .ingreso, cycle: .mensual)
+        case .anual: adding = AddRequest(kind: .gasto, cycle: .anual)
+        case .fijos: route = .fijos
+        case .limites: route = .limites
+        case .ahorro: route = .ahorro
+        case .historial: route = .historial
+        case .automatico: route = .automatico
+        case .recibo: scanning = true
+        case .rapido:
+            // Si viene de Más, espera a que la hoja se cierre antes de abrir otra.
+            Task {
+                if fromSheet { try? await Task.sleep(for: .milliseconds(450)) }
+                QuickAddRouter.shared.pending = true
+            }
         }
     }
 
@@ -423,42 +435,124 @@ enum HomeRoute: Hashable, Identifiable {
 }
 
 private struct MoreSheet: View {
-    let onAdd: (EntryKind, AddEntryModel.CycleChoice) -> Void
-    let onOpen: (HomeRoute) -> Void
+    @Binding var stored: String
+    let onPick: (QuickActionKind) -> Void
+    @State private var editing = false
+
+    private var layout: QuickActionLayout { QuickActionLayout(stored: stored) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
-            Text("Más acciones").appFont(.titulo2).foregroundStyle(Palette.texto1).padding(.top, Spacing.s6)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.s3), count: 3), spacing: Spacing.s3) {
-                tile("Ingreso extra", "arrow.down.circle") { onAdd(.ingreso, .puntual) }
-                tile("Sueldo o fijo", "repeat") { onAdd(.ingreso, .mensual) }
-                tile("Pago anual", "calendar") { onAdd(.gasto, .anual) }
-                tile("Pagos fijos", "repeat") { onOpen(.fijos) }
-                tile("Registro rápido", "hand.tap") { onOpen(.rapido) }
-                tile("Límites", "gauge.with.dots.needle.33percent") { onOpen(.limites) }
-                tile("Ahorro", "target") { onOpen(.ahorro) }
-                tile("Historial", "clock.arrow.circlepath") { onOpen(.historial) }
-                tile("Escanear recibo", "doc.text.viewfinder") { onOpen(.recibo) }
-                tile("Registro automático", "wand.and.stars") { onOpen(.automatico) }
+            HStack {
+                Text(editing ? "Organizar" : "Más acciones").appFont(.titulo2).foregroundStyle(Palette.texto1)
+                Spacer()
+                Button {
+                    withAnimation(.snappy) { editing.toggle() }
+                } label: {
+                    Group {
+                        if editing {
+                            Text("Listo").appFont(.etiqueta).padding(.horizontal, Spacing.s4)
+                        } else {
+                            Image(systemName: "pencil").font(.system(size: 17, weight: .semibold)).frame(width: 44)
+                        }
+                    }
+                    .foregroundStyle(editing ? Palette.sobreBrasa : Palette.texto1)
+                    .frame(height: 44)
+                    .background(Capsule().fill(editing ? Palette.brasa : Palette.superficie3))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(editing ? "Listo" : "Organizar acciones")
             }
-            Text("Dividir gastos llega con los espacios en pareja.")
-                .appFont(.cuerpo2)
-                .foregroundStyle(Palette.texto2)
-            Spacer()
+            .padding(.top, Spacing.s6)
+
+            if editing { editor } else { grid }
         }
         .padding(.horizontal, Spacing.margen)
         .background(Palette.superficie2.ignoresSafeArea())
     }
 
-    private func tile(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    private var grid: some View {
+        VStack(alignment: .leading, spacing: Spacing.s4) {
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.s3), count: 3), spacing: Spacing.s3) {
+                    ForEach(layout.order) { kind in
+                        tile(kind)
+                    }
+                }
+                Text("Toca el lápiz para ordenarlas y elegir las 3 que ves en Inicio. Dividir gastos llega con los espacios en pareja.")
+                    .appFont(.cuerpo2)
+                    .foregroundStyle(Palette.texto2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, Spacing.s4)
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    private var editor: some View {
+        List {
+            Section {
+                ForEach(layout.pinned) { kind in editRow(kind) }
+                    .onMove { from, to in update { $0.movePinned(from: from, to: to) } }
+            } header: {
+                Text("En Inicio · \(layout.pinned.count) de \(QuickActionLayout.pinnedLimit)").appFont(.leyenda).foregroundStyle(Palette.texto2)
+            } footer: {
+                Text("La primera se ve resaltada. Arrastra para cambiar el orden.").appFont(.leyenda).foregroundStyle(Palette.texto2)
+            }
+            Section {
+                ForEach(layout.unpinned) { kind in editRow(kind) }
+                    .onMove { from, to in update { $0.moveUnpinned(from: from, to: to) } }
+            } header: {
+                Text("En Más").appFont(.leyenda).foregroundStyle(Palette.texto2)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .environment(\.editMode, .constant(.active))
+    }
+
+    private func editRow(_ kind: QuickActionKind) -> some View {
+        let pinned = layout.isPinned(kind)
+        return HStack(spacing: Spacing.s3) {
+            Image(systemName: kind.symbol).font(.system(size: 18, weight: .medium)).frame(width: 28)
+                .foregroundStyle(Palette.texto1)
+            Text(kind.title).appFont(.cuerpo).foregroundStyle(Palette.texto1)
+            Spacer()
+            Button {
+                withAnimation(.snappy) { update { $0.togglePin(kind) } }
+            } label: {
+                Image(systemName: pinned ? "pin.fill" : "pin")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(pinned ? Palette.brasaTinta : Palette.texto2)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(pinned ? "Quitar de Inicio" : "Poner en Inicio")
+        }
+        .listRowBackground(Palette.superficie3)
+    }
+
+    private func update(_ change: (inout QuickActionLayout) -> Void) {
+        var copy = layout
+        change(&copy)
+        stored = copy.stored
+    }
+
+    private func tile(_ kind: QuickActionKind) -> some View {
+        Button { onPick(kind) } label: {
             VStack(spacing: Spacing.s2) {
-                Image(systemName: symbol).font(.system(size: 24, weight: .medium))
-                Text(title).appFont(.leyenda).multilineTextAlignment(.center)
+                Image(systemName: kind.symbol).font(.system(size: 24, weight: .medium))
+                Text(kind.title).appFont(.leyenda).multilineTextAlignment(.center)
             }
             .foregroundStyle(Palette.texto1)
             .frame(maxWidth: .infinity, minHeight: 96)
             .background(RoundedRectangle(cornerRadius: Radius.boton, style: .continuous).fill(Palette.superficie3))
+            .overlay(alignment: .topTrailing) {
+                if layout.isPinned(kind) {
+                    Image(systemName: "pin.fill").font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Palette.brasaTinta).padding(Spacing.s2)
+                }
+            }
         }
         .buttonStyle(.plain)
     }

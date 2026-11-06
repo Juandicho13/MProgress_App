@@ -2,6 +2,18 @@
 
 Una entrada por ticket, la más nueva arriba. Plantilla en `HANDOFF.md` 11.3.
 
+## 2026-11-06 · F14-A1 Android: primera fase · en curso
+
+- Qué: dominio en Kotlin igual al de iOS (dinero, ciclos, te quedan, próximos cargos, plan de Agregar, pagos fijos, accesos rápidos con el mismo formato de guardado), base local en un archivo JSON privado (`data/Store.kt`, se puede pasar a Room sin tocar pantallas), tema claro y oscuro con los mismos tokens, Inicio, Agregar con monto resaltado y teclado, Más acciones con lápiz y 3 fijadas, Pagos fijos con Pagado, onboarding (ingreso, bancos y tarjetas con últimos 4, fijos con Agregar otro, fechas y con qué se paga con Más tarde), Ajustes con Apariencia que cambia al instante, Borrar cuenta y datos y la firma oficial. Texto blanco sobre la brasa.
+- Verificado: `./gradlew assembleDebug testDebugUnitTest` en Linux con el SDK 37: compila y pasan 10 pruebas de dominio.
+- Pendiente (A2): Resumen, Dinero (bancos y saldos), Calendario, historial, límites, ahorro, avisos y widgets de Android; probar en un teléfono o emulador.
+
+## 2026-11-06 · Ajustes pedidos por Juan (segunda ronda) · en curso
+
+- Qué: texto blanco sobre naranja (la brasa pasa a #F55F1F para que el blanco tenga contraste); Más acciones con lápiz para ordenar y fijar 3 accesos rápidos en Inicio (`Domain/QuickActions.swift`); Registro automático muestra "Configurado" cuando el atajo llega a la app o el usuario lo confirma (`AutoSetup`); Ajustes › Cuenta › Borrar cuenta y datos (`Data/Account/AccountEraser.swift`); firma con la forma oficial (skill firma-juan-olarte-dev), centrada al final; Apariencia aplica el tema en todas las ventanas al instante, niveles de vidrio más marcados y "Seguir a iOS" como interruptor.
+- Verificado: 103 pruebas de dominio en Linux; pruebas de Xcode en el simulador.
+- Pendiente: Juan elige el ícono (A Anillo, B Trazo, C Progreso, D Barras) para generar las variantes.
+
 ## 2026-11-06 · F12 Widgets · en curso
 
 - Qué: extensión MProgressWidgets con Próximo cargo (pequeño), Te quedan (mediano, + Gasto y 4 cargos), Calendario de cobros (grande), pantalla bloqueada (anillo, rectangular e inline) y botón "Registro rápido" para el Centro de control. La app escribe un resumen ya calculado (`Shared/WidgetSnapshot.swift`) al volver y al salir, y los widgets lo leen; los enlaces `mprogress://rapido`, `fijos`, `calendario` e `inicio` abren la app donde toca.

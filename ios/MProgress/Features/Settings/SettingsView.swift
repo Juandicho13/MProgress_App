@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import SwiftData
 
 /// Tema de la app (pantalla 5). Oscuro por defecto, como IronProgress.
@@ -22,6 +23,24 @@ enum AppTheme: String, CaseIterable, Identifiable {
         case .sistema: nil
         }
     }
+
+    var interfaceStyle: UIUserInterfaceStyle {
+        switch self {
+        case .oscuro: .dark
+        case .claro: .light
+        case .sistema: .unspecified
+        }
+    }
+
+    /// Aplica el tema a todas las ventanas abiertas, hojas incluidas.
+    @MainActor
+    static func apply(_ raw: String) {
+        let style = (AppTheme(rawValue: raw) ?? .oscuro).interfaceStyle
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            for window in windowScene.windows { window.overrideUserInterfaceStyle = style }
+        }
+    }
 }
 
 enum SettingsRoute: Hashable {
@@ -39,6 +58,10 @@ struct SettingsView: View {
     @AppStorage(AppIconChoice.storageKey) private var iconRaw = AppIconChoice.brasa.rawValue
     @AppStorage(OnboardingModel.doneKey) private var onboardingDone = true
     @State private var showsBackTap = false
+    @State private var confirmsErase = false
+    @State private var eraseError: String?
+    @Environment(\.modelContext) private var modelContext
+    @AppStorage(AutoSetup.dobleToque.storageKey) private var backTapAt: Double = 0
     @Environment(\.calendar) private var calendar
 
     private var space: Space? { spaces.first { $0.kindRaw == "personal" } ?? spaces.first }
@@ -72,7 +95,7 @@ struct SettingsView: View {
                         divider
                         link("Ícono de la app", value: AppIconChoice(rawValue: iconRaw)?.title ?? "Brasa", route: .icono)
                         divider
-                        Button { showsBackTap = true } label: { rowContent("Doble toque atrás", value: "Registro rápido") }
+                        Button { showsBackTap = true } label: { rowContent("Doble toque atrás", value: backTapAt > 0 ? "Configurado" : "Sin configurar") }
                             .buttonStyle(.plain)
                     }
 
@@ -93,6 +116,24 @@ struct SettingsView: View {
                         row("Escríbeme", value: "Pronto")
                     }
 
+                    SectionLabel(text: "Cuenta")
+                    group {
+                        Button(role: .destructive) { confirmsErase = true } label: {
+                            HStack {
+                                Text("Borrar cuenta y datos").appFont(.cuerpo).foregroundStyle(Palette.peligro)
+                                Spacer()
+                                Image(systemName: "trash").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.peligro)
+                            }
+                            .padding(.horizontal, Spacing.s2)
+                            .frame(minHeight: 56)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Text("Borra tus movimientos, bancos, pagos fijos, metas, respaldos y ajustes de este iPhone. No se puede deshacer.")
+                        .appFont(.leyenda)
+                        .foregroundStyle(Palette.texto2)
+
                     #if DEBUG
                     Button("Volver a ver el onboarding") { onboardingDone = false }
                         .appFont(.etiqueta)
@@ -110,6 +151,17 @@ struct SettingsView: View {
             .background(Palette.fondo.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showsBackTap) { BackTapGuideView() }
+            .confirmationDialog("¿Borrar tu cuenta y todos tus datos?", isPresented: $confirmsErase, titleVisibility: .visible) {
+                Button("Borrar todo", role: .destructive) { erase() }
+                Button("Cancelar", role: .cancel) {}
+            } message: {
+                Text("Se borra todo lo que hay en este iPhone, también los respaldos. La app vuelve al inicio como nueva.")
+            }
+            .alert("No se pudo borrar", isPresented: Binding(get: { eraseError != nil }, set: { if !$0 { eraseError = nil } })) {
+                Button("Entendido", role: .cancel) {}
+            } message: {
+                Text(eraseError ?? "")
+            }
             .navigationDestination(for: SettingsRoute.self) { route in
                 switch route {
                 case .apariencia: AppearanceView()
@@ -120,6 +172,17 @@ struct SettingsView: View {
                 case .novedades: WhatsNewView()
                 }
             }
+        }
+    }
+
+    private func erase() {
+        do {
+            try AccountEraser.eraseAll(context: modelContext)
+            faceID = false
+            themeRaw = AppTheme.oscuro.rawValue
+            onboardingDone = false
+        } catch {
+            eraseError = "Intenta de nuevo. Si sigue pasando, reinicia la app."
         }
     }
 

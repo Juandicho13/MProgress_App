@@ -162,6 +162,7 @@ struct QuickAddView: View {
 /// Guía del doble toque atrás: Atajos + Accesibilidad.
 struct BackTapGuideView: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(AutoSetup.dobleToque.storageKey) private var configuredAt: Double = 0
 
     private let steps: [(String, String)] = [
         ("Crea el atajo", "Abre Atajos, toca +, busca la acción \"Registro rápido\" de MProgress y guárdalo con ese nombre."),
@@ -199,6 +200,19 @@ struct BackTapGuideView: View {
                         QuickAddRouter.shared.pending = true
                     }
                     .buttonStyle(.secondary)
+                    if configuredAt > 0 {
+                        Label("Configurado: ya funciona en este iPhone", systemImage: "checkmark.circle.fill")
+                            .appFont(.etiqueta)
+                            .foregroundStyle(Palette.exito)
+                            .frame(maxWidth: .infinity, minHeight: Size.toqueMinimo)
+                        Button("Lo quité, marcar sin configurar") { configuredAt = 0 }
+                            .appFont(.etiqueta)
+                            .foregroundStyle(Palette.texto2)
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Button("Ya lo configuré") { AutoSetup.dobleToque.mark(); dismiss() }
+                            .buttonStyle(.secondary)
+                    }
                     Text("Apple no deja que una app active el doble toque por sí sola; con estos pasos queda listo en un minuto.")
                         .appFont(.leyenda)
                         .foregroundStyle(Palette.texto2)

@@ -4,9 +4,18 @@ import SwiftUI
 struct AppearanceView: View {
     @AppStorage(GlassLevel.storageKey) private var glassRaw = GlassLevel.normal.rawValue
     @AppStorage(AppTheme.storageKey) private var themeRaw = AppTheme.oscuro.rawValue
+    @AppStorage(GlassLevel.followSystemKey) private var followSystem = true
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     private var level: GlassLevel { GlassLevel(rawValue: glassRaw) ?? .normal }
+
+    private var followText: String {
+        switch (followSystem, reduceTransparency) {
+        case (true, true): "Reducir transparencia está activo en tu iPhone, así que el vidrio se ve sólido."
+        case (true, false): "Si activas Reducir transparencia en Ajustes del iPhone, el vidrio se vuelve sólido."
+        case (false, _): "La app usa el nivel que elegiste aquí, sin mirar Reducir transparencia."
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -19,12 +28,11 @@ struct AppearanceView: View {
                 SegmentedPill(options: AppTheme.allCases.map { (value: $0.rawValue, title: $0.title) }, selection: $themeRaw)
                 Card {
                     VStack(alignment: .leading, spacing: Spacing.s2) {
-                        HStack {
+                        Toggle(isOn: $followSystem) {
                             Text("Seguir a iOS").appFont(.titulo3).foregroundStyle(Palette.texto1)
-                            Spacer()
-                            Badge(text: reduceTransparency ? "Activo" : "Apagado", tone: reduceTransparency ? .oro : .neutral)
                         }
-                        Text("Si activas Reducir transparencia en Ajustes del iPhone, el vidrio se vuelve sólido sin importar lo que elijas aquí.")
+                        .tint(Palette.brasa)
+                        Text(followText)
                             .appFont(.cuerpo2)
                             .foregroundStyle(Palette.texto2)
                     }

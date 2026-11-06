@@ -5,6 +5,8 @@ enum GlassLevel: String, CaseIterable, Identifiable, Sendable {
     case mucha, normal, poca, ninguna
 
     static let storageKey = "apariencia.vidrio"
+    /// Si está activo, Reducir transparencia de iOS vuelve sólido el vidrio.
+    static let followSystemKey = "apariencia.seguirIOS"
 
     var id: String { rawValue }
 
@@ -19,9 +21,9 @@ enum GlassLevel: String, CaseIterable, Identifiable, Sendable {
 
     var tintOpacity: Double {
         switch self {
-        case .mucha: 0.40
-        case .normal: 0.86
-        case .poca: 0.95
+        case .mucha: 0.12
+        case .normal: 0.55
+        case .poca: 0.85
         case .ninguna: 1.0
         }
     }
@@ -46,13 +48,18 @@ struct GlassBackground<S: Shape>: View {
     var shadow: Bool = true
     @Environment(\.glassLevel) private var level
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @AppStorage(GlassLevel.followSystemKey) private var followSystem = true
 
-    var isSolid: Bool { reduceTransparency || level == .ninguna }
+    var isSolid: Bool { (followSystem && reduceTransparency) || level == .ninguna }
 
     var body: some View {
         ZStack {
             if !isSolid {
-                shape.fill(level == .poca ? .thickMaterial : .ultraThinMaterial)
+                switch level {
+                case .mucha: shape.fill(.ultraThinMaterial)
+                case .normal: shape.fill(.thinMaterial)
+                default: shape.fill(.thickMaterial)
+                }
             }
             shape.fill(Palette.vidrioTinte.opacity(isSolid ? 1 : level.tintOpacity))
             shape.stroke(Palette.vidrioBorde, lineWidth: 1)

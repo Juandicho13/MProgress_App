@@ -53,6 +53,7 @@ struct LogExpenseIntent: AppIntent {
         let currency = Currency.cop
         let minor = Int64((amount * Double(currency.minorPerUnit)).rounded())
         guard minor > 0 else { return .result(dialog: "El monto tiene que ser mayor que cero.") }
+        (source == .sms ? AutoSetup.sms : AutoSetup.applePay).mark()
         let last4 = card.flatMap { SmsParser.last4(in: "*\($0.filter(\.isNumber).suffix(4))") }
         let merchantName = merchant?.trimmingCharacters(in: .whitespaces).nilIfEmpty.map(SmsParser.prettify)
         let charge = ParsedCharge(kind: .gasto, amountMinor: minor, merchant: merchantName, last4: last4, bank: nil)
@@ -78,6 +79,7 @@ struct LogSmsIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        AutoSetup.sms.mark()
         guard let charge = SmsParser.parse(text) else {
             return .result(dialog: "Ese mensaje no parece una compra ni un pago.")
         }
@@ -101,6 +103,7 @@ struct QuickAddIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
+        AutoSetup.dobleToque.mark()
         QuickAddRouter.shared.pending = true
         return .result()
     }

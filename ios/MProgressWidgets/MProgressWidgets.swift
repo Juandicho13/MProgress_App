@@ -9,11 +9,12 @@ private enum Forja {
     static let superficie = Color(red: 0.102, green: 0.110, blue: 0.125)
     static let texto1 = Color(red: 0.953, green: 0.957, blue: 0.965)
     static let texto2 = Color(red: 0.62, green: 0.64, blue: 0.67)
-    static let brasa = Color(red: 1.0, green: 0.42, blue: 0.173)
+    static let brasa = Color(red: 0.961, green: 0.373, blue: 0.122)
     static let oro = Color(red: 0.961, green: 0.769, blue: 0.318)
     static let hielo = Color(red: 0.424, green: 0.769, blue: 0.949)
     static let peligro = Color(red: 1.0, green: 0.42, blue: 0.42)
-    static let sobreBrasa = Color(red: 0.08, green: 0.04, blue: 0.02)
+    static let sobreBrasa = Color.white
+    static let sobreOro = Color(red: 0.08, green: 0.04, blue: 0.02)
 
     static func cifra(_ size: CGFloat) -> Font { .system(size: size, weight: .bold, design: .default).width(.expanded) }
     static func texto(_ size: CGFloat, _ weight: Font.Weight = .medium) -> Font { .system(size: size, weight: weight) }
@@ -197,7 +198,7 @@ private struct DayCell: View {
     var body: some View {
         Text("\(day)")
             .font(Forja.texto(12, urgency == nil ? .medium : .bold))
-            .foregroundStyle(urgency == nil ? (today ? Forja.brasa : Forja.texto1) : Forja.sobreBrasa)
+            .foregroundStyle(urgency == nil ? (today ? Forja.brasa : Forja.texto1) : (urgency == 0 ? Forja.sobreBrasa : Forja.sobreOro))
             .frame(maxWidth: .infinity, minHeight: 22)
             .background(
                 Capsule().fill(color).padding(.horizontal, 3)
@@ -299,7 +300,7 @@ private struct UrgencyBadge: View {
         let label = daysLeft <= 0 ? "HOY" : daysLeft == 1 ? "MAÑANA" : "EN \(daysLeft) DÍAS"
         Text(label)
             .font(Forja.texto(10, .heavy))
-            .foregroundStyle(Forja.sobreBrasa)
+            .foregroundStyle(daysLeft <= 0 ? Forja.sobreBrasa : Forja.sobreOro)
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(Capsule().fill(daysLeft <= 0 ? Forja.brasa : daysLeft <= 3 ? Forja.oro : Forja.texto2))
