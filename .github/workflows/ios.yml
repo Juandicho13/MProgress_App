@@ -1,0 +1,34 @@
+name: iOS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  dominio:
+    name: Dominio (Linux)
+    runs-on: ubuntu-24.04
+    container: swift:6.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pruebas del dominio
+        run: swift test --package-path ios
+
+  app:
+    name: App (simulador)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Elegir el Xcode más nuevo
+        run: |
+          XCODE=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+      - name: Compilar y probar
+        run: |
+          SIM=$(xcrun simctl list devices available | grep -m1 -oE "iPhone [0-9]+ Pro" || echo "iPhone 17 Pro")
+          cd ios
+          xcodebuild -project MProgress.xcodeproj -scheme MProgress \
+            -destination "platform=iOS Simulator,name=$SIM" \
+            CODE_SIGNING_ALLOWED=NO test
