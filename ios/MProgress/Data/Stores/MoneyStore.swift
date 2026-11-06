@@ -1,0 +1,159 @@
+import Foundation
+import SwiftData
+
+/// Bancos, tarjetas, bolsillos y transferencias de un espacio (F06).
+@MainActor
+final class MoneyStore {
+    let context: ModelContext
+
+    init(context: ModelContext) {
+        self.context = context
+    }
+
+    @discardableResult
+    func addInstitution(spaceId: UUID, name: String, colorHex: String? = nil) throws -> Institution {
+        let institution = Institution(spaceId: spaceId, name: name, colorHex: colorHex)
+        institution.touch()
+        context.insert(institution)
+        try context.save()
+        return institution
+    }
+
+    /// `last4` solo acepta 4 dígitos; cualquier otra cosa se descarta (nunca el número completo).
+    @discardableResult
+    func addProduct(spaceId: UUID, institutionId: UUID, kind: ProductKind, name: String, balanceMinor: Int64 = 0,
+                    last4: String? = nil, parentProductId: UUID? = nil, rateEA: Decimal? = nil) throws -> Product {
+        let product = Product(spaceId: spaceId, institutionId: institutionId, kind: kind, name: name)
+        product.balanceMinor = balanceMinor
+        product.balanceAt = .now
+        product.last4 = MoneyStore.cleanLast4(last4)
+        product.parentProductId = parentProductId
+        product.rateEA = rateEA
+        product.touch()
+        context.insert(product)
+        try context.save()
+        return product
+    }
+
+    @discardableResult
+    func transfer(spaceId: UUID, from: Product, to: Product, amountMinor: Int64, on date: Date = .now) throws -> Transfer {
+        precondition(amountMinor > 0, "La transferencia va siempre positiva")
+        precondition(from.id != to.id, "No se transfiere a sí mismo")
+        let transfer = Transfer(spaceId: spaceId, fromProductId: from.id, toProductId: to.id, amountMinor: amountMinor, occurredAt: date)
+        transfer.touch()
+        context.insert(transfer)
+        try context.save()
+        return transfer
+    }
+
+    /// Datos de un producto que se piden en Agregar a un banco (pantalla 33).
+    struct ProductDraft: Equatable {
+        var kind: ProductKind = .cuenta
+        var name: String = ""
+        var balanceMinor: Int64 = 0
+        var last4: String?
+        var creditLimitMinor: Int64?
+        var cutDay: Int?
+        var dueDay: Int?
+        var rateEA: Decimal?
+        var parentProductId: UUID?
+        var inWallet: Bool = false
+        var remindPayment: Bool = true
+        var hidden: Bool = false
+    }
+
+    /// Crea un producto con todos sus datos. El saldo queda como saldo de hoy.
+    @discardableResult
+    func addProduct(spaceId: UUID, institutionId: UUID, draft: ProductDraft, now: Date = .now) throws -> Product {
+        let product = Product(spaceId: spaceId, institutionId: institutionId, kind: draft.kind, name: draft.name)
+        apply(draft, to: product, now: now)
+        context.insert(product)
+        try context.save()
+        return product
+    }
+
+    /// Cambia un producto. Si el saldo cambió, se toma como el saldo de hoy (ajuste) y los movimientos
+    /// anteriores dejan de moverlo.
+    func update(_ product: Product, draft: ProductDraft, currentBalanceMinor: Int64, now: Date = .now) throws {
+        let balanceChanged = draft.balanceMinor != currentBalanceMinor
+        let previousBalance = product.balanceMinor
+        let previousAt = product.balanceAt
+        apply(draft, to: product, now: now)
+        if !balanceChanged {
+            product.balanceMinor = previousBalance
+            product.balanceAt = previousAt
+        }
+        try context.save()
+    }
+
+    private func apply(_ draft: ProductDraft, to product: Product, now: Date) {
+        product.kind = draft.kind
+        product.name = draft.name.trimmingCharacters(in: .whitespaces)
+        product.balanceMinor = draft.balanceMinor
+        product.balanceAt = now
+        let isCard = draft.kind == .credito || draft.kind == .debito
+        product.last4 = isCard ? MoneyStore.cleanLast4(draft.last4) : nil
+        product.creditLimitMinor = draft.kind == .credito ? draft.creditLimitMinor : nil
+        product.cutDay = draft.kind == .credito ? draft.cutDay.map { min(31, max(1, $0)) } : nil
+        product.dueDay = draft.kind == .credito && draft.remindPayment ? draft.dueDay.map { min(31, max(1, $0)) } : nil
+        product.rateEA = draft.kind == .bolsillo ? draft.rateEA : nil
+        product.parentProductId = draft.kind == .debito ? draft.parentProductId : nil
+        product.inWallet = isCard && draft.inWallet
+        product.hidden = draft.hidden
+        product.touch(now)
+    }
+
+    func institutions(spaceId: UUID) throws -> [Institution] {
+        try context.fetch(FetchDescriptor<Institution>(
+            predicate: #Predicate<Institution> { $0.spaceId == spaceId && $0.deletedAt == nil },
+            sortBy: [SortDescriptor(\.sort), SortDescriptor(\.createdAt)]
+        ))
+    }
+
+    /// La billetera de efectivo del espacio; la crea la primera vez.
+    @discardableResult
+    func cash(spaceId: UUID) throws -> Product {
+        if let existing = try products(spaceId: spaceId).first(where: { $0.kind == .efectivo }) { return existing }
+        let wallet = try addInstitution(spaceId: spaceId, name: "Efectivo", colorHex: "3A3F47")
+        return try addProduct(spaceId: spaceId, institutionId: wallet.id, kind: .efectivo, name: "Efectivo")
+    }
+
+    /// Borra un producto. Los movimientos que lo usaban quedan sin producto, no se borran.
+    func softDelete(_ product: Product, now: Date = .now) throws {
+        product.deletedAt = now
+        product.touch(now)
+        try context.save()
+    }
+
+    /// Borra un banco con todos sus productos.
+    func softDelete(_ institution: Institution, now: Date = .now) throws {
+        let id = institution.id
+        let owned = try context.fetch(FetchDescriptor<Product>(predicate: #Predicate<Product> { $0.institutionId == id && $0.deletedAt == nil }))
+        for product in owned {
+            product.deletedAt = now
+            product.touch(now)
+        }
+        institution.deletedAt = now
+        institution.touch(now)
+        try context.save()
+    }
+
+    func products(spaceId: UUID) throws -> [Product] {
+        try context.fetch(FetchDescriptor<Product>(
+            predicate: #Predicate<Product> { $0.spaceId == spaceId && $0.deletedAt == nil },
+            sortBy: [SortDescriptor(\.createdAt)]
+        ))
+    }
+
+    func transfers(spaceId: UUID) throws -> [Transfer] {
+        try context.fetch(FetchDescriptor<Transfer>(
+            predicate: #Predicate<Transfer> { $0.spaceId == spaceId && $0.deletedAt == nil }
+        ))
+    }
+
+    nonisolated static func cleanLast4(_ text: String?) -> String? {
+        guard let text else { return nil }
+        let digits = text.filter(\.isNumber)
+        return digits.count == 4 ? digits : nil
+    }
+}
