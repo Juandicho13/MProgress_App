@@ -4,9 +4,9 @@ Estado: `[ ]` pendiente · `[~]` en curso o bloqueado (ver bitácora) · `[x]` h
 Cada ticket se cierra solo cuando cumple su criterio y el build con pruebas está en verde.
 Las pantallas citadas están en `docs/PANTALLAS.md` y en el PDF de diseño.
 
-**Fase en curso: F10** (parada: Juan crea el proyecto en Supabase; F08 espera el iPhone y SMS reales) (F00-02 y F00-06 esperan a Juan: firma en Xcode y el archivo del CI)
+**Fase en curso (2026-11-06): F10 en iPhone y F14 (Android) en paralelo.** F12B (pasos 1 a 4 de `docs/PLAN_F12B.md`) está hecho en iPhone y en curso en Android. F08 espera SMS reales; F00-06 espera el archivo del CI; widgets con datos, iCloud y Apple Watch esperan la cuenta paga de Apple.
 
-Android: hay un esqueleto en `android/` (Kotlin, Compose, mismas versiones que IronProgress) con la barra de pestañas, para abrirlo en Android Studio. Su desarrollo real sigue siendo F14.
+Android dejó de ser un esqueleto: app real en `android/` (Kotlin, Compose, Archivo, mismos tokens y pantallas que iOS), con APKs de prueba (0.1 a 0.7). Ver F14 abajo.
 
 ---
 
@@ -97,19 +97,19 @@ Parada: necesita el iPhone de Juan y SMS reales.
 ## F09 · Ajustes, apariencia y respaldo
 
 - [x] F09-01 Ajustes con firma al pie (pantalla 13). "Escríbeme" espera el correo de soporte que defina Juan; "Califica la app" llega al publicar.
-- [x] F09-02 Apariencia: tema oscuro y claro, transparencia en 4 niveles (pantalla 5).
+- [x] F09-02 Apariencia: tema oscuro, claro y sistema (cambia al instante), vidrio Liquid Glass de Apple con 4 opciones (Como iOS, Clara, Tintada, Sólida) y Seguir a iOS (pantalla 5).
 - [x] F09-03 Moneda por cuenta (pantalla 28).
-- [x] F09-04 Ícono de la app con íconos alternos (pantalla 29). Brasa es el principal; Noche, Hielo, Oro, Claro y Grafito son alternos.
+- [x] F09-04 Ícono de la app (pantalla 29): 4 símbolos naranja (Trazo es el principal; Anillo, Progreso y Barras) con fondo negro o blanco. Igual en Android con alias del lanzador.
 - [x] F09-05 Bloqueo con Face ID al abrir (con código del iPhone como respaldo).
 - [~] F09-06 Respaldo: archivo cifrado automático en iCloud Drive, exportar e importar `.mprogress` y CSV (pantalla 4). Criterio: restaurar en un iPhone limpio deja todo igual. Hecho: respaldo cifrado diario (AES-GCM, llave en el llavero de iCloud) en Archivos › MProgress › Respaldos, exportar `.mprogress` y CSV, restaurar con prueba de iPhone limpio en verde. Falta: mover la carpeta a iCloud Drive cuando la app tenga firma (F00-02).
 - [x] F09-07 Novedades (pantalla 30).
 
 ## F10 · Cuenta y sincronización
 
-Parada: Juan crea el proyecto en Supabase.
+Plan detallado: `docs/PLAN_F10.md` (cifrado de extremo a extremo: Supabase solo guarda sobres cifrados).
 
-- [ ] F10-01 Proyecto Supabase, migración aplicada y `supabase/tests/rls_smoke.sql` en verde.
-- [ ] F10-02 Inicio de sesión con Apple, Google y correo, y "Seguir sin cuenta". **Falta diseño:** pedirlo antes de programar.
+- [x] F10-01 Proyecto Supabase en East US (ver `supabase/PROYECTO.md`), migraciones init y f12b aplicadas, RLS verificada. La migración f10 (sobres y llaves) está escrita y probada en local; se aplica al compilar el bloque 2.
+- [~] F10-02 Entrar con correo y enlace mágico (PKCE, `mprogress://auth-callback`) y "Seguir sin cuenta". Apple y Google cuando haya cuenta paga y cliente OAuth. En curso en iPhone.
 - [~] F10-03 Motor de sincronización de HANDOFF 9 con pruebas de conflicto y de borrado. Hecho: `SyncEngine` (subir en lotes y en orden, bajar por cursor, gana el `updatedAt` más reciente, 3 intentos y luego error) y el estado de la pastilla, con pruebas contra un servidor falso. Falta: conectar SwiftData (LocalSyncStore) y Supabase (RemoteSyncStore) cuando exista el proyecto (F10-01).
 - [ ] F10-04 Indicador sin conexión, hoja de estado y marcas de pendiente (pantallas 36 y 37).
 - [ ] F10-05 Al iniciar sesión, subir los datos locales a la cuenta sin duplicar.
@@ -136,10 +136,23 @@ Parada: Juan crea el proyecto en Supabase.
 
 ---
 
+## F12B · Mejoras antes de F10 (`docs/PLAN_F12B.md`)
+
+- [x] iPhone, paso 2: varios efectivos, pagos con cuotas o fecha final, avisos en dos niveles con permiso en el momento justo, fecha y hora fáciles, puntos por tarjeta.
+- [x] iPhone, paso 3: doble toque sin abrir la app con Live Activity en la isla y Deshacer; frases de Siri.
+- [x] iPhone, paso 4: predicciones (así vas a terminar el mes, los próximos 3 meses, aviso en Inicio).
+- [~] Android, pasos 1 a 4: hecho hasta el 0.7 (pagos fijos completos, detalle, categorías, avisos, huella, monedas, respaldo, transferir, límites, ahorro, puntos, varios efectivos). Falta: escáner, notificaciones de Wallet y bancos, botón de ajustes rápidos, widgets y predicciones.
+
+## F14 · Android nativo
+
+- [x] F14-01 Dominio en Kotlin igual al de iOS, con pruebas JVM.
+- [x] F14-02 Todas las pestañas y pantallas con el mismo diseño de iOS (verificado con capturas Robolectric).
+- [~] F14-03 Paridad de funciones (ver F12B).
+- [ ] F14-04 Cuentas, nube y cifrado con los mismos formatos de iOS (F10).
+
 ## Después de F12 (por planear, no se programa todavía)
 
 - F13 Premium: qué es básico y qué es pago, precios, StoreKit 2 y paywall (pantallas 19 y 18 ajustadas).
-- F14 Android nativo (Kotlin y Compose) con la misma base.
 - F15 iPad y Mac.
 - F16 Windows y Wear OS.
 - F17 Publicación: política de privacidad, términos, App Store Connect.

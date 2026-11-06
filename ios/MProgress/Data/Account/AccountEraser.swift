@@ -2,8 +2,8 @@ import Foundation
 import SwiftData
 import UserNotifications
 
-/// Borrar cuenta y datos (requisito de Apple para publicar). Hoy no hay cuenta en la nube:
-/// borra todo lo de este iPhone. Cuando llegue Supabase (F10) también pedirá borrar la cuenta remota.
+/// Borrar cuenta y datos (requisito de Apple para publicar): borra todo lo de este iPhone. La cuenta en la nube
+/// se borra antes con `CloudAccount.deleteRemoteAccount()` (Ajustes lo hace en ese orden).
 enum AccountEraser {
     @MainActor
     static func eraseAll(context: ModelContext) throws {
@@ -32,13 +32,16 @@ enum AccountEraser {
         center.removeAllPendingNotificationRequests()
         center.removeAllDeliveredNotifications()
 
-        // 4. Preferencias (tema, accesos rápidos, onboarding) y datos de los widgets.
+        // 4. Sesión, llaves de cifrado e identidad del dispositivo en el llavero.
+        CloudAccount.shared.forgetEverything()
+
+        // 5. Preferencias (tema, accesos rápidos, onboarding) y datos de los widgets.
         if let bundle = Bundle.main.bundleIdentifier {
             UserDefaults.standard.removePersistentDomain(forName: bundle)
         }
         if let url = WidgetSnapshot.fileURL { try? FileManager.default.removeItem(at: url) }
 
-        // 5. La base queda lista para empezar de cero con el onboarding.
+        // 6. La base queda lista para empezar de cero con el onboarding.
         _ = try Seed.runIfNeeded(context: context, localUser: LocalIdentity.userId)
         WidgetPublisher.publish(context: context)
     }

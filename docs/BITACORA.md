@@ -2,6 +2,30 @@
 
 Una entrada por ticket, la más nueva arriba. Plantilla en `HANDOFF.md` 11.3.
 
+## 2026-11-07 · F10 bloques 2 y 3: cuenta, sincronización cifrada, recuperación y dispositivos · en curso
+
+- Qué:
+  - Entrar con enlace mágico y PKCE (`Data/Cloud/AuthClient.swift`): `POST /auth/v1/otp` con `create_user`, `code_challenge` S256 y `redirect_to=mprogress://auth-callback`; RootView recibe `?code=` y lo cambia por la sesión (`grant_type=pkce`). La sesión vive en el llavero (solo este dispositivo) y se renueva sola un minuto antes de vencer. El código de 6 dígitos queda listo detrás de `CloudConfig.allowsCodeEntry` (apagado hasta tener SMTP propio).
+  - Configuración en un solo archivo (`Data/Cloud/CloudConfig.swift`): URL y publishable key de `supabase/PROYECTO.md`.
+  - Sincronización (`Data/Cloud/CloudAccount.swift`, `CloudAPI.swift`, `Data/Sync/SwiftDataSyncStore.swift`): el espacio Personal de la nube pasa a ser el de los datos locales; este iPhone se registra con su llave pública; el primer dispositivo crea la llave del espacio, la envuelve para sí y para el código de recuperación y lo muestra ("Ya lo guardé"); los siguientes esperan aprobación o usan el código. Sobres por PostgREST con el `SyncEngine` de siempre. Sincroniza al abrir, al volver a primer plano, 3 segundos después de guardar y con "Sincronizar ahora"; sin conexión se acumula. Bajar dos veces el mismo cambio no escribe nada.
+  - Pantallas: Ajustes › Cuenta y nube (correo, enlace, estado, sincronizar, reintentar, dispositivos, código nuevo, cerrar sesión), código de recuperación, escribir el código, dispositivos (aprobar y quitar) y el aviso "¿Apruebas tu otro dispositivo?" en cualquier pantalla. Pastilla "Sin conexión · N cambios sin sincronizar" en Inicio.
+  - Borrar cuenta y datos: primero `delete_my_account` en la nube (si falla, no se borra nada) y luego todo lo local, llavero incluido.
+  - El respaldo y la nube usan las mismas filas (`Data/Backup/BackupRows.swift`).
+- Archivos: ios/MProgress/Data/Cloud/{CloudConfig,Keychain,SupabaseHTTP,AuthClient,CloudAPI,CloudAccount}.swift, Data/Sync/SwiftDataSyncStore.swift, Data/Backup/BackupRows.swift y BackupService.swift, Data/Account/AccountEraser.swift, Domain/ServerTime.swift, Features/Settings/AccountView.swift y SettingsView.swift, Features/Home/HomeView.swift, App/RootView.swift, App/MProgressApp.swift; pruebas MProgressTests/Domain/ServerTimeTests.swift y MProgressTests/Data/CloudSyncTests.swift; docs/PLAN_F10.md.
+- Verificado: 144 pruebas de dominio en Linux. Falta compilar en Xcode, aplicar `20261108000000_f10.sql` en el proyecto real y probar con dos iPhone o un iPhone y el simulador.
+- Pendiente: Sign in with Apple y Google (cuenta paga y cliente OAuth); quitar un dispositivo no cambia la llave del espacio (para eso habría que cifrar todo otra vez).
+
+## 2026-11-07 · F10 bloque 1: migración y cifrado de extremo a extremo · en curso
+
+- Qué:
+  - Migración `supabase/migrations/20261108000000_f10.sql`: `devices.public_key`, `sync_records` (sobres cifrados con `changed_at` del teléfono y `updated_at`/`updated_by` que pone el servidor; un cambio más viejo no pisa uno más nuevo), `space_keys` (una por dispositivo y una de recuperación con `device_id` null, única por espacio), `device_in_space` para no envolver llaves para extraños y `delete_my_account`. Todo con RLS por miembro del espacio. Se puede correr dos veces.
+  - Dominio (`Domain/E2EE.swift`): protocolo `CryptoProvider`, envolver la llave del espacio entre dos X25519 (con la pública del que comparte dentro y verificación de que es de la cuenta), código de recuperación (24 caracteres base32 sin ambiguos, en grupos de 4) y su llave, sobres AES-GCM con "espacio|entidad|id", PKCE (S256). `Domain/EncryptedSync.swift`: `SyncEnvelope`, `EnvelopeTransport` y `EncryptedRemote`, que cifra al subir y descifra al bajar con el `SyncEngine` de siempre. El motor ahora usa la hora del servidor como cursor y sincroniza también los puntos (`reward_programs`).
+  - CryptoKit en `Data/Crypto/CryptoKitProvider.swift`.
+  - Formato exacto para Android en `docs/PLAN_F10.md`.
+- Archivos: supabase/migrations/20261108000000_f10.sql, supabase/tests/rls_f10.sql, ios/MProgress/Domain/E2EE.swift, EncryptedSync.swift, Sync.swift, ios/MProgress/Data/Crypto/CryptoKitProvider.swift; pruebas MProgressTests/Domain/E2EETests.swift (con un cifrador falso) y MProgressTests/Data/CryptoKitProviderTests.swift (con CryptoKit, incluye el ejemplo de PKCE del RFC 7636); docs/PLAN_F10.md.
+- Verificado: 141 pruebas de dominio en Linux; las cuatro migraciones, `rls_smoke.sql` y `rls_f10.sql` en Postgres 16 local. La migración no se aplicó al proyecto real (lo hace el coordinador).
+- Pendiente: bloque 2 (enlace mágico con PKCE, sesión en el llavero, Ajustes › Cuenta) y bloque 3 (sincronización con PostgREST, código de recuperación, aprobar dispositivos, borrar cuenta remota).
+
 ## 2026-11-06 · F12B Paso 4 iOS Predicciones (bloque 3) · en curso
 
 - Qué: funciones puras en `Domain/Forecast.swift`: `variablePace` (gasto del mes sin `recurringId` entre el día del mes, mínimo 1), `endOfMonth` / `projectedEndOfMonth` (te quedan − ritmo × días que faltan, de `monthSummary`), `variableAverage` (promedio de los últimos 3 meses completos con gasto variable, buscando hasta 12 atrás) y `nextMonths(3)` (ingresos fijos, gastos fijos con fecha final y cuotas, y variable estimado: el promedio o, si no hay, ritmo × días del mes; `net = ingresos − fijos − variable`). Alerta "A este ritmo terminas el mes en − $ X" solo si la proyección es negativa.

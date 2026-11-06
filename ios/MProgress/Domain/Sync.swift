@@ -1,12 +1,17 @@
 import Foundation
 
-/// Una fila lista para subir o recién bajada (HANDOFF 9). `payload` es la fila en JSON tal como la guarda Supabase.
+/// Una fila lista para subir o recién bajada (HANDOFF 9). `payload` es la fila en JSON; en F10 viaja cifrada
+/// dentro de un sobre (`EncryptedRemote`). `updatedAt` es cuándo cambió en el teléfono y decide los choques.
 struct SyncRecord: Equatable, Sendable {
     var table: String
     var id: UUID
     var updatedAt: Date
     var deletedAt: Date?
     var payload: Data
+    /// Espacio al que pertenece (F10). Nil: el espacio por defecto del que sincroniza.
+    var spaceId: UUID? = nil
+    /// Cuándo llegó al servidor (lo pone el servidor). Es el cursor para bajar cambios.
+    var serverUpdatedAt: Date? = nil
 }
 
 enum SyncStatus: Equatable, Sendable {
@@ -56,7 +61,7 @@ protocol LocalSyncStore {
 struct SyncEngine {
     static let maxAttempts = 3
     /// Orden de las tablas: primero lo que otras filas referencian.
-    static let tables = ["spaces", "categories", "institutions", "products", "recurring", "entries", "splits",
+    static let tables = ["spaces", "categories", "institutions", "reward_programs", "products", "recurring", "entries", "splits",
                          "transfers", "reminders", "budgets", "savings_goals", "goal_contributions"]
 
     struct Report: Equatable, Sendable {
@@ -98,7 +103,8 @@ struct SyncEngine {
                 try local.apply(row)
                 report.pulled += 1
             }
-            if let newest = rows.map(\.updatedAt).max() {
+            // El cursor es la hora del servidor (si la hay): así no se pierde nada por relojes distintos.
+            if let newest = rows.map({ $0.serverUpdatedAt ?? $0.updatedAt }).max() {
                 local.setCursor(newest, table: table)
             }
         }

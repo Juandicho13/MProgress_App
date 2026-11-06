@@ -12,3 +12,8 @@ La secret key (sb_secret_...) y la contraseña de la base de datos NUNCA van en 
 ## Migraciones aplicadas (SQL Editor)
 - 2026-11-06: `migrations/20261106000000_init.sql`. Verificado: 18 tablas, todas con RLS, 15 categorías base.
 - 2026-11-06: `migrations/20261107000000_f12b.sql` (cuotas, fecha final, modo de aviso, puntos por tarjeta).
+- 2026-11-06: `migrations/20261108000000_f10.sql` (sobres cifrados, llaves por dispositivo, borrar cuenta). Verificado: 20 tablas, todas con RLS.
+
+## Autenticación
+- Site URL y Redirect URL: `mprogress://auth-callback` (los enlaces del correo abren la app). Configurado el 2026-11-06.
+- Correo: el de Supabase por defecto (enlace mágico, pocos envíos por hora). Para mandar un código de 6 dígitos y más correos hace falta SMTP propio (Resend u otro) en Authentication › Emails › SMTP Settings.

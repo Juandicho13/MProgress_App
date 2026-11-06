@@ -69,6 +69,7 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s6) {
                 header
+                syncPill
                 balance
                 quickActions
                 if isEmpty {
@@ -176,6 +177,21 @@ struct HomeView: View {
             .accessibilityLabel("Cuenta \(space?.name ?? "Personal")")
             Spacer()
             CircleIconButton(systemImage: "bell", label: "Avisos") { route = .avisos }
+        }
+    }
+
+    /// Pastilla de sincronización (F10): solo con cuenta, sin conexión o con error. "Sin conexión · 3 cambios sin sincronizar".
+    @ViewBuilder
+    private var syncPill: some View {
+        let cloud = CloudAccount.shared
+        if cloud.isSignedIn, let text = SyncEngine.pillText(cloud.status) {
+            Label(text, systemImage: "icloud.slash")
+                .appFont(.etiqueta)
+                .foregroundStyle(Palette.texto1)
+                .padding(.horizontal, Spacing.s4)
+                .frame(minHeight: 36)
+                .glassBackground(Capsule())
+                .accessibilityElement(children: .combine)
         }
     }
 

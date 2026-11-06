@@ -18,6 +18,8 @@ struct MProgressApp: App {
         }
         // El Deshacer de la isla dinámica corre en este proceso aunque la app no esté abierta.
         QuickAddRunner.installUndo()
+        // Cuenta en la nube (opcional): lee la sesión del llavero y sincroniza si la hay.
+        CloudAccount.shared.start()
     }
 
     var body: some Scene {
@@ -48,6 +50,7 @@ struct MProgressApp: App {
             Task { @MainActor in
                 // Si la app se suspendió antes de cerrar la isla del registro rápido, se cierra ahora.
                 await QuickAddActivityController.endStale()
+                await CloudAccount.shared.sync()
                 await NotificationScheduler.reschedule(context: container.mainContext)
                 // Un respaldo cifrado al día, al volver a la app (F09-06).
                 _ = try? BackupService.autoBackupIfNeeded(context: container.mainContext)

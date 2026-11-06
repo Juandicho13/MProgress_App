@@ -44,7 +44,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
 }
 
 enum SettingsRoute: Hashable {
-    case apariencia, moneda, icono, respaldo, avisos, novedades
+    case apariencia, moneda, icono, respaldo, avisos, novedades, cuenta
 }
 
 /// Ajustes (pantalla 13): General, Datos e Información, con la firma al pie.
@@ -62,6 +62,8 @@ struct SettingsView: View {
     @State private var showsBackTap = false
     @State private var confirmsErase = false
     @State private var eraseError: String?
+    @State private var erasing = false
+    private var cloud: CloudAccount { .shared }
     @Environment(\.modelContext) private var modelContext
     @AppStorage(AutoSetup.dobleToque.storageKey) private var backTapAt: Double = 0
     @Environment(\.calendar) private var calendar
@@ -76,8 +78,10 @@ struct SettingsView: View {
                     HStack(spacing: Spacing.s3) {
                         Avatar(name: "Mi cuenta", size: 48)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Sin cuenta").appFont(.titulo3).foregroundStyle(Palette.texto1)
-                            Text("Todo se guarda en este iPhone").appFont(.cuerpo2).foregroundStyle(Palette.texto2)
+                            Text(cloud.email ?? "Sin cuenta").appFont(.titulo3).foregroundStyle(Palette.texto1).lineLimit(1)
+                            Text(cloud.isSignedIn ? "Cifrado y sincronizado con tu cuenta" : "Todo se guarda en este iPhone")
+                                .appFont(.cuerpo2)
+                                .foregroundStyle(Palette.texto2)
                         }
                     }
                     .accessibilityElement(children: .combine)
@@ -120,6 +124,8 @@ struct SettingsView: View {
 
                     SectionLabel(text: "Cuenta")
                     group {
+                        link("Cuenta y nube", value: cloud.isSignedIn ? cloud.status.title : "Crear o entrar", route: .cuenta)
+                        divider
                         Button(role: .destructive) { confirmsErase = true } label: {
                             HStack {
                                 Text("Borrar cuenta y datos").appFont(.cuerpo).foregroundStyle(Palette.peligro)
@@ -132,7 +138,9 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    Text("Borra tus movimientos, bancos, pagos fijos, metas, respaldos y ajustes de este iPhone. No se puede deshacer.")
+                    Text(cloud.isSignedIn
+                         ? "Borra tu cuenta en la nube con todo lo que tiene, y tus movimientos, bancos, pagos fijos, metas, respaldos y ajustes de este iPhone. No se puede deshacer."
+                         : "Borra tus movimientos, bancos, pagos fijos, metas, respaldos y ajustes de este iPhone. No se puede deshacer.")
                         .appFont(.leyenda)
                         .foregroundStyle(Palette.texto2)
 
@@ -157,7 +165,9 @@ struct SettingsView: View {
                 Button("Borrar todo", role: .destructive) { erase() }
                 Button("Cancelar", role: .cancel) {}
             } message: {
-                Text("Se borra todo lo que hay en este iPhone, también los respaldos. La app vuelve al inicio como nueva.")
+                Text(cloud.isSignedIn
+                     ? "Se borra tu cuenta en la nube y todo lo que hay en este iPhone, también los respaldos. La app vuelve al inicio como nueva."
+                     : "Se borra todo lo que hay en este iPhone, también los respaldos. La app vuelve al inicio como nueva.")
             }
             .alert("No se pudo borrar", isPresented: Binding(get: { eraseError != nil }, set: { if !$0 { eraseError = nil } })) {
                 Button("Entendido", role: .cancel) {}
@@ -172,19 +182,34 @@ struct SettingsView: View {
                 case .respaldo: BackupView()
                 case .avisos: AlertsView()
                 case .novedades: WhatsNewView()
+                case .cuenta: AccountView()
                 }
             }
         }
     }
 
     private func erase() {
-        do {
-            try AccountEraser.eraseAll(context: modelContext)
-            faceID = false
-            themeRaw = AppTheme.oscuro.rawValue
-            onboardingDone = false
-        } catch {
-            eraseError = "Intenta de nuevo. Si sigue pasando, reinicia la app."
+        guard !erasing else { return }
+        erasing = true
+        Task {
+            defer { erasing = false }
+            // Primero la cuenta en la nube (función delete_my_account); si no se puede, no se borra nada.
+            if cloud.isSignedIn {
+                do {
+                    try await cloud.deleteRemoteAccount()
+                } catch {
+                    eraseError = "No se pudo borrar tu cuenta en la nube. Revisa tu conexión e intenta de nuevo."
+                    return
+                }
+            }
+            do {
+                try AccountEraser.eraseAll(context: modelContext)
+                faceID = false
+                themeRaw = AppTheme.oscuro.rawValue
+                onboardingDone = false
+            } catch {
+                eraseError = "Intenta de nuevo. Si sigue pasando, reinicia la app."
+            }
         }
     }
 

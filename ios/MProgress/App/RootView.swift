@@ -1,4 +1,6 @@
 import SwiftUI
+import SwiftData
+import Combine
 
 enum AppTab: String, CaseIterable, Identifiable {
     case inicio, resumen, dinero, calendario, ajustes
@@ -73,6 +75,10 @@ struct RootView: View {
         .onOpenURL { url in
             // Enlaces de los widgets: mprogress://rapido, fijos, calendario, inicio.
             switch url.host() {
+            case CloudConfig.callbackHost:
+                // Enlace mágico del correo: entra a la cuenta.
+                tab = .ajustes
+                Task { await CloudAccount.shared.handle(url: url) }
             case "rapido": router.pending = true
             case "calendario": tab = .calendario
             case "fijos":
@@ -85,6 +91,24 @@ struct RootView: View {
             QuickAddView()
                 .environment(undo)
                 .presentationCornerRadius(Radius.hoja)
+        }
+        // Sincroniza unos segundos después de cada cambio guardado (si hay cuenta).
+        .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
+            CloudAccount.shared.scheduleSync()
+        }
+        // Código de recuperación recién creado: se muestra una vez.
+        .sheet(item: Binding(get: { CloudAccount.shared.recoveryPrompt }, set: { CloudAccount.shared.recoveryPrompt = $0 })) { prompt in
+            RecoveryCodeView(code: prompt.code)
+        }
+        // Otro iPhone entró con tu correo y espera tu aprobación.
+        .alert("¿Apruebas tu otro dispositivo?",
+               isPresented: Binding(get: { CloudAccount.shared.approvalPrompt != nil },
+                                    set: { if !$0 { CloudAccount.shared.approvalPrompt = nil } }),
+               presenting: CloudAccount.shared.approvalPrompt) { device in
+            Button("Aprobar") { Task { await CloudAccount.shared.approve(device) } }
+            Button("Ahora no", role: .cancel) { CloudAccount.shared.dismissApproval(device) }
+        } message: { device in
+            Text("\(device.name ?? "Un iPhone") entró con tu correo. Si fuiste tú, apruébalo para que pueda leer tus datos cifrados.")
         }
         // Permiso de avisos en el momento justo: después de crear el primer pago fijo o del onboarding con fijos.
         .alert("¿Te aviso antes de cada pago?", isPresented: $alertsAsk.pending) {
