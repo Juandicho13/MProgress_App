@@ -598,19 +598,20 @@ alter publication supabase_realtime add table
 
 -- Categorías globales
 
-insert into public.categories (space_id, name, icon, sort) values
-  (null, 'Entretenimiento', 'play.rectangle', 1),
-  (null, 'Música', 'music.note', 2),
-  (null, 'Productividad', 'briefcase', 3),
-  (null, 'Servicios', 'wrench.and.screwdriver', 4),
-  (null, 'Renta', 'house', 5),
-  (null, 'Mercado', 'cart', 6),
-  (null, 'Transporte', 'car', 7),
-  (null, 'Salidas', 'fork.knife', 8),
-  (null, 'Deporte', 'dumbbell', 9),
-  (null, 'Salud', 'cross.case', 10),
-  (null, 'Educación', 'graduationcap', 11),
-  (null, 'Social', 'person.2', 12),
-  (null, 'Negocios', 'building.2', 13),
-  (null, 'Finanzas', 'banknote', 14),
-  (null, 'Otros', 'square.grid.2x2', 99);
+-- Ids fijos: los mismos que usa la app en Seed.swift.
+insert into public.categories (id, space_id, name, icon, sort) values
+  ('0a000000-0000-4000-8000-000000000001', null, 'Entretenimiento', 'play.rectangle', 1),
+  ('0a000000-0000-4000-8000-000000000002', null, 'Música', 'music.note', 2),
+  ('0a000000-0000-4000-8000-000000000003', null, 'Productividad', 'briefcase', 3),
+  ('0a000000-0000-4000-8000-000000000004', null, 'Servicios', 'wrench.and.screwdriver', 4),
+  ('0a000000-0000-4000-8000-000000000005', null, 'Renta', 'house', 5),
+  ('0a000000-0000-4000-8000-000000000006', null, 'Mercado', 'cart', 6),
+  ('0a000000-0000-4000-8000-000000000007', null, 'Transporte', 'car', 7),
+  ('0a000000-0000-4000-8000-000000000008', null, 'Salidas', 'fork.knife', 8),
+  ('0a000000-0000-4000-8000-000000000009', null, 'Deporte', 'dumbbell', 9),
+  ('0a000000-0000-4000-8000-000000000010', null, 'Salud', 'cross.case', 10),
+  ('0a000000-0000-4000-8000-000000000011', null, 'Educación', 'graduationcap', 11),
+  ('0a000000-0000-4000-8000-000000000012', null, 'Social', 'person.2', 12),
+  ('0a000000-0000-4000-8000-000000000013', null, 'Negocios', 'building.2', 13),
+  ('0a000000-0000-4000-8000-000000000014', null, 'Finanzas', 'banknote', 14),
+  ('0a000000-0000-4000-8000-000000000099', null, 'Otros', 'square.grid.2x2', 99);

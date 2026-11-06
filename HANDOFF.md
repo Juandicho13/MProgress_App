@@ -1,6 +1,6 @@
 # MProgress · Manual de relevo
 
-**Estado:** 6 de noviembre de 2026 · **Fase actual:** F00 · **Repositorio:** `Juandicho13/MProgress_App` · **Rama principal:** `main`
+**Estado:** 6 de noviembre de 2026 · **Fase actual:** F02 · **Repositorio:** `Juandicho13/MProgress_App` · **Rama principal:** `main`
 
 Este manual es para cualquier modelo de IA y para Juan. Junto con `docs/FASES.md`, `docs/PANTALLAS.md` y `docs/BITACORA.md` contiene todo lo necesario para seguir el proyecto sin abrir nada más. El plan, el lienzo de diseño y los documentos de Claude son privados; lo esencial está copiado aquí.
 
@@ -170,7 +170,7 @@ Los modelos locales replican las tablas de `supabase/migrations/20261106000000_i
 | --- | --- | --- |
 | `Space` | `spaces` | name, kind (personal, pareja, familia, trabajo, viaje), currency, color, shareTotalsOnly, defaultSplit, endsOn |
 | `SpaceMember` | `space_members` | spaceId, userId, role (admin, miembro, lectura) |
-| `Category` | `categories` | name, icon (SF Symbol), color, sort; spaceId nil = global |
+| `SpendCategory` | `categories` | name, icon (SF Symbol), color, sort; spaceId nil = global |
 | `Institution` | `institutions` | name, color, icon, hidden |
 | `Product` | `products` | institutionId, kind (cuenta, debito, credito, bolsillo, efectivo), name, last4, balance, balanceAt, creditLimit, cutDay, dueDay, rateEA, lockedUntil, parentProductId, inWallet, hidden |
 | `Recurring` | `recurring` | kind (gasto, ingreso), name, icon, amount, cycle (puntual, semanal, mensual, anual, otra), intervalDays, nextDate, categoryId, productId, responsibleId, active |
@@ -280,6 +280,14 @@ xcodebuild -scheme MProgress -destination 'platform=iOS Simulator,name=iPhone 18
 ```
 
 Si el simulador no existe, `xcrun simctl list devices available` y se usa el iPhone más nuevo de la lista.
+
+Pruebas del dominio sin Xcode (también en Linux con Swift 6.1 o superior). Los archivos de `MProgress/Domain` no pueden importar SwiftUI, SwiftData ni UIKit:
+
+```
+swift test --package-path ios
+```
+
+Nombres a tener en cuenta: la categoría se llama `SpendCategory` (`Category` choca con un tipo de Objective-C). Los modelos guardan enums como texto (`kindRaw`, `cycleRaw`) y exponen la propiedad tipada (`kind`, `cycle`). Cada modelo convierte a su valor del dominio con `.record`.
 
 Base de datos local para probar la migración (requiere Supabase CLI):
 
