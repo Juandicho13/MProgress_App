@@ -1,20 +1,15 @@
 package com.olarte.mprogress.ui.history
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -23,9 +18,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import com.olarte.mprogress.data.Store
 import com.olarte.mprogress.domain.DueText
@@ -33,45 +27,68 @@ import com.olarte.mprogress.domain.EntryKind
 import com.olarte.mprogress.domain.EntryRecord
 import com.olarte.mprogress.domain.HistoryMath
 import com.olarte.mprogress.domain.Money
+import com.olarte.mprogress.ui.components.BackButton
 import com.olarte.mprogress.ui.components.Card
-import com.olarte.mprogress.ui.components.ListRow
+import com.olarte.mprogress.ui.components.EmptyState
+import com.olarte.mprogress.ui.components.EntryRow
+import com.olarte.mprogress.ui.components.IconTile
+import com.olarte.mprogress.ui.components.PrimaryButton
+import com.olarte.mprogress.ui.components.SearchField
+import com.olarte.mprogress.ui.components.SectionLabel
 import com.olarte.mprogress.ui.components.T
 import com.olarte.mprogress.ui.components.Type
 import com.olarte.mprogress.ui.theme.Palette
-import com.olarte.mprogress.ui.theme.Radius
 import com.olarte.mprogress.ui.theme.Spacing
 import java.time.LocalDate
+import java.time.YearMonth
 
-/** Historial (pantalla 17): búsqueda y movimientos por día. Tocar uno permite borrarlo. */
+/** Historial (pantalla 11) por mes con total y buscador, igual que HistoryView de iOS. Tocar uno permite borrarlo. */
 @Composable
-fun HistoryScreen(store: Store, onBack: () -> Unit) {
+fun HistoryScreen(store: Store, onAdd: () -> Unit = {}, onBack: () -> Unit) {
     val ledger by store.ledger.collectAsState()
     var query by remember { mutableStateOf("") }
     var deleting by remember { mutableStateOf<EntryRecord?>(null) }
     val today = LocalDate.now()
-    val days = HistoryMath.days(HistoryMath.filter(ledger.entries, query))
+    val filtered = HistoryMath.filter(ledger.entries, query)
+    val months = filtered.groupBy { YearMonth.from(it.occurredAt) }.toSortedMap(compareByDescending { it })
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(horizontal = Spacing.margen).padding(bottom = 120.dp),
-        verticalArrangement = Arrangement.spacedBy(Spacing.s4),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s5),
     ) {
-        T("‹ Inicio", Type.etiqueta, Palette.brasaTinta, Modifier.padding(top = Spacing.s4).clip(CircleShape).clickable(onClick = onBack).padding(4.dp))
+        BackButton("Volver a Inicio", onBack)
         T("Historial", Type.titulo1)
-        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.campo)).background(Palette.superficie3).padding(Spacing.s4)) {
-            if (query.isEmpty()) T("Buscar por nombre o monto", Type.cuerpo, Palette.texto2)
-            BasicTextField(query, { query = it }, Modifier.fillMaxWidth(), textStyle = Type.cuerpo.copy(color = Palette.texto1), cursorBrush = SolidColor(Palette.brasa), singleLine = true)
-        }
-        if (days.isEmpty()) T(if (query.isBlank()) "Todavía no hay movimientos." else "Nada coincide con \"$query\".", Type.cuerpo2, Palette.texto2)
-        days.forEach { day ->
+        if (ledger.entries.isEmpty()) {
             Card {
-                Row {
-                    T(DueText.describe(day.day, today), Type.titulo3, modifier = Modifier.weight(1f))
-                    T(Money(day.netMinor).formatted(sign = true), Type.etiqueta, Palette.texto2)
-                }
-                day.entries.forEach { e ->
-                    val income = e.kind == EntryKind.INGRESO
-                    ListRow(if (income) "↓" else "↑", e.name.ifBlank { if (income) "Ingreso" else "Gasto" }, null, onClick = { deleting = e }) {
-                        T((if (income) Money(e.amountMinor) else Money(-e.amountMinor)).formatted(sign = income), Type.titulo3, if (income) Palette.exito else Palette.texto1)
+                EmptyState("Tu historial está vacío", "Cada gasto o ingreso que registres queda aquí, ordenado por mes.",
+                    art = { IconTile(Icons.Rounded.History, Palette.brasaVelo, Palette.brasaTinta, size = 64.dp) },
+                    actions = { PrimaryButton("Agregar movimiento", onClick = onAdd) })
+            }
+        } else {
+            SearchField(query, "Buscar por nombre, categoría o monto") { query = it }
+            if (months.isEmpty()) T("Nada coincide con “$query”.", Type.cuerpo, Palette.texto2, Modifier.padding(top = Spacing.s4))
+            months.forEach { (month, items) ->
+                val income = items.filter { it.kind == EntryKind.INGRESO }.sumOf { it.amountMinor }
+                val spent = items.filter { it.kind == EntryKind.GASTO }.sumOf { it.amountMinor }
+                val net = income - spent
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        val name = DueText.monthName(month.atDay(1)).replaceFirstChar { it.uppercase() }
+                        T(if (month.year == today.year) name else "$name ${month.year}", Type.titulo2, modifier = Modifier.weight(1f))
+                        T(Money(net).formatted(sign = true), Type.cifra, if (net < 0) Palette.texto1 else Palette.hielo)
+                    }
+                    T("Entró ${Money(income).formatted()} · salió ${Money(spent).formatted()}", Type.cuerpo2, Palette.texto2)
+                    Card(padding = Spacing.s3) {
+                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                            HistoryMath.days(items).forEach { day ->
+                                Column(Modifier.padding(top = Spacing.s2)) {
+                                    SectionLabel(when (day.day) { today -> "Hoy"; today.minusDays(1) -> "Ayer"; else -> DueText.shortDate(day.day, today) })
+                                }
+                                day.entries.forEach { e ->
+                                    EntryRow(e.name, e.kind, e.amountMinor, if (e.recurringId != null) "Pago fijo" else "Sin categoría", onClick = { deleting = e })
+                                }
+                            }
+                        }
                     }
                 }
             }

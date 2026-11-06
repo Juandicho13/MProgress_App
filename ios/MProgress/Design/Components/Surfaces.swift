@@ -132,7 +132,8 @@ struct SignatureFooter: View {
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.top, Spacing.s8)
-        .padding(.bottom, Spacing.s6)
+        // Espacio extra para poder bajar más: la barra de abajo nunca la tapa.
+        .padding(.bottom, Size.barra + Spacing.s8 + Spacing.s6)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Desarrollado por juan-olarte-dev")
     }

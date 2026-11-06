@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Niveles de transparencia del vidrio (HANDOFF 10.4). Se guarda en Ajustes › Apariencia.
+/// Vidrio de la app (HANDOFF 10.4): usa el Liquid Glass de Apple (iOS 26). Se guarda en Ajustes › Apariencia.
+/// Los valores guardados se conservan: mucha, normal, poca, ninguna.
 enum GlassLevel: String, CaseIterable, Identifiable, Sendable {
-    case mucha, normal, poca, ninguna
+    case normal, mucha, poca, ninguna
 
     static let storageKey = "apariencia.vidrio"
     /// Si está activo, Reducir transparencia de iOS vuelve sólido el vidrio.
@@ -12,28 +13,19 @@ enum GlassLevel: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .mucha: "Mucha"
-        case .normal: "Normal"
-        case .poca: "Poca"
-        case .ninguna: "Ninguna"
+        case .normal: "Como iOS"
+        case .mucha: "Clara"
+        case .poca: "Tintada"
+        case .ninguna: "Sólida"
         }
     }
 
-    var tintOpacity: Double {
+    var detail: String {
         switch self {
-        case .mucha: 0.12
-        case .normal: 0.55
-        case .poca: 0.85
-        case .ninguna: 1.0
-        }
-    }
-
-    var blurRadius: CGFloat {
-        switch self {
-        case .mucha: 32
-        case .normal: 24
-        case .poca: 12
-        case .ninguna: 0
+        case .normal: "El vidrio líquido de Apple, igual que en el sistema."
+        case .mucha: "Más transparente: se ve lo que hay detrás."
+        case .poca: "Vidrio con un tinte oscuro, más fácil de leer."
+        case .ninguna: "Sin transparencia."
         }
     }
 }
@@ -42,7 +34,8 @@ extension EnvironmentValues {
     @Entry var glassLevel: GlassLevel = .normal
 }
 
-/// Fondo de vidrio para barra, pastillas y hojas. Con Reducir transparencia es sólido siempre.
+/// Fondo de vidrio para barra, pastillas y hojas, con el Liquid Glass del sistema.
+/// Con Reducir transparencia (si "Seguir a iOS" está activo) o en Sólida, es un color plano.
 struct GlassBackground<S: Shape>: View {
     let shape: S
     var shadow: Bool = true
@@ -53,19 +46,21 @@ struct GlassBackground<S: Shape>: View {
     var isSolid: Bool { (followSystem && reduceTransparency) || level == .ninguna }
 
     var body: some View {
-        ZStack {
-            if !isSolid {
-                switch level {
-                case .mucha: shape.fill(.ultraThinMaterial)
-                case .normal: shape.fill(.thinMaterial)
-                default: shape.fill(.thickMaterial)
-                }
-            }
-            shape.fill(Palette.vidrioTinte.opacity(isSolid ? 1 : level.tintOpacity))
-            shape.stroke(Palette.vidrioBorde, lineWidth: 1)
+        if isSolid {
+            shape.fill(Palette.vidrioTinte)
+                .overlay(shape.stroke(Palette.vidrioBorde, lineWidth: 1))
+                .shadow(color: .black.opacity(shadow ? 0.35 : 0), radius: 16, y: 10)
+        } else {
+            Color.clear.glassEffect(glass, in: shape)
         }
-        .compositingGroup()
-        .shadow(color: .black.opacity(shadow ? 0.45 : 0), radius: 16, y: 12)
+    }
+
+    private var glass: Glass {
+        switch level {
+        case .mucha: .clear
+        case .poca: .regular.tint(Palette.vidrioTinte.opacity(0.55))
+        default: .regular
+        }
     }
 }
 

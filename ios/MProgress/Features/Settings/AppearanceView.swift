@@ -24,6 +24,7 @@ struct AppearanceView: View {
                 preview
                 SectionLabel(text: "Transparencia del vidrio")
                 SegmentedPill(options: GlassLevel.allCases.map { (value: $0.rawValue, title: $0.title) }, selection: $glassRaw)
+                Text(level.detail).appFont(.cuerpo2).foregroundStyle(Palette.texto2)
                 SectionLabel(text: "Tema")
                 SegmentedPill(options: AppTheme.allCases.map { (value: $0.rawValue, title: $0.title) }, selection: $themeRaw)
                 Card {
@@ -37,7 +38,7 @@ struct AppearanceView: View {
                             .foregroundStyle(Palette.texto2)
                     }
                 }
-                Text("El texto siempre se mantiene legible: con menos transparencia el vidrio se oscurece y nunca baja del contraste mínimo.")
+                Text("El vidrio es el Liquid Glass de Apple: refleja y deja ver lo que pasa detrás, como en las apps del sistema.")
                     .appFont(.leyenda)
                     .foregroundStyle(Palette.texto2)
                 SignatureFooter()

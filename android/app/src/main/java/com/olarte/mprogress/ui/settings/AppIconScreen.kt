@@ -5,6 +5,9 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
+import com.olarte.mprogress.ui.theme.Radius
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -76,6 +79,7 @@ object AppIcons {
     }
 }
 
+/** Ícono de la app (pantalla 29), igual que AppIconView de iOS. */
 @Composable
 fun AppIconScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -83,25 +87,27 @@ fun AppIconScreen(onBack: () -> Unit) {
     fun pick(s: IconSymbol, w: Boolean) { AppIcons.set(context, s, w); state = s to w }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(horizontal = Spacing.margen).padding(bottom = 110.dp),
-        verticalArrangement = Arrangement.spacedBy(Spacing.s4),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(horizontal = Spacing.margen).padding(bottom = Spacing.s8),
+        verticalArrangement = Arrangement.spacedBy(Spacing.s5),
     ) {
-        T("‹ Ajustes", Type.etiqueta, Palette.brasaTinta, Modifier.padding(top = Spacing.s4).clip(CircleShape).clickable(onClick = onBack).padding(4.dp))
+        BackBar(onBack)
         T("Ícono de la app", Type.titulo1)
         SectionLabel("Símbolo")
-        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.padding(vertical = Spacing.s2)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s4)) {
             IconSymbol.entries.forEach { s ->
                 val on = state.first == s
-                Column(Modifier.weight(1f).clickable { pick(s, state.second) }, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Image(painterResource(AppIcons.preview(s, state.second)), s.title,
-                        Modifier.size(64.dp).border(3.dp, if (on) Palette.brasa else Color.Transparent, RoundedCornerShape(20.dp)).padding(4.dp).clip(RoundedCornerShape(15.dp)))
-                    T(s.title, Type.etiqueta, modifier = Modifier.padding(top = Spacing.s2))
+                Column(Modifier.weight(1f).heightIn(min = 110.dp).clip(RoundedCornerShape(Radius.boton)).clickable { pick(s, state.second) },
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.s2, Alignment.CenterVertically)) {
+                    Box(Modifier.size(72.dp).border(3.dp, if (on) Palette.brasa else Color.Transparent, RoundedCornerShape(21.dp)), contentAlignment = Alignment.Center) {
+                        Image(painterResource(AppIcons.preview(s, state.second)), s.title, Modifier.size(64.dp).clip(RoundedCornerShape(18.dp)))
+                    }
+                    T(s.title, Type.etiqueta)
                 }
             }
         }
         SectionLabel("Fondo")
         Segmented(listOf("negro" to "Negro", "blanco" to "Blanco"), if (state.second) "blanco" else "negro") { pick(state.first, it == "blanco") }
-        T("Tu teléfono puede tardar unos segundos en mostrar el ícono nuevo en la pantalla de inicio.", Type.leyenda, Palette.texto2)
-        SignatureFooter()
+        T("Qué entra en Premium se decide más adelante; por ahora todos están disponibles. Tu teléfono puede tardar unos segundos en mostrar el ícono nuevo.",
+            Type.leyenda, Palette.texto2)
     }
 }

@@ -19,6 +19,10 @@ compose-material3 = { module = "org.jetbrains.compose.material3:material3", vers
 compose-uiToolingPreview = { module = "org.jetbrains.compose.ui:ui-tooling-preview", version.ref = "composeMultiplatform" }
 compose-uiTooling = { module = "org.jetbrains.compose.ui:ui-tooling", version.ref = "composeMultiplatform" }
 coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+compose-icons = { module = "org.jetbrains.compose.material:material-icons-extended", version = "1.7.3" }
+robolectric = { module = "org.robolectric:robolectric", version = "4.16" }
+roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version = "1.52.0" }
+androidx-test-core = { module = "androidx.test:core", version = "1.7.0" }
 junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]

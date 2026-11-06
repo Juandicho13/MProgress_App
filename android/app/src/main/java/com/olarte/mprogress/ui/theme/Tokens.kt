@@ -11,21 +11,21 @@ import androidx.compose.ui.unit.dp
 data class Colors(
     val fondo: Color, val superficie1: Color, val superficie2: Color, val superficie3: Color, val controlActivo: Color,
     val linea: Color, val texto1: Color, val texto2: Color, val brasaTinta: Color, val brasaVelo: Color,
-    val hielo: Color, val oro: Color, val peligro: Color, val exito: Color, val vidrioTinte: Color, val vidrioBorde: Color,
+    val hielo: Color, val hieloVelo: Color, val peligroVelo: Color, val oro: Color, val peligro: Color, val exito: Color, val vidrioTinte: Color, val vidrioBorde: Color,
     val isDark: Boolean,
 )
 
 val DarkColors = Colors(
     fondo = Color(0xFF0A0B0D), superficie1 = Color(0xFF15171B), superficie2 = Color(0xFF1D2025), superficie3 = Color(0xFF262A30),
     controlActivo = Color(0xFF3A3F47), linea = Color(0x14FFFFFF), texto1 = Color(0xFFF3F4F6), texto2 = Color(0xFFA5ABB4),
-    brasaTinta = Color(0xFFFF6B2C), brasaVelo = Color(0xFF3A241E), hielo = Color(0xFF6CC4F2), oro = Color(0xFFF5C451),
+    brasaTinta = Color(0xFFFF6B2C), brasaVelo = Color(0xFF3A241E), hielo = Color(0xFF6CC4F2), hieloVelo = Color(0xFF23333D), peligroVelo = Color(0xFF3A1A20), oro = Color(0xFFF5C451),
     peligro = Color(0xFFFF5A6E), exito = Color(0xFF4ADE80), vidrioTinte = Color(0xFF1A1C21), vidrioBorde = Color(0x1FFFFFFF), isDark = true,
 )
 
 val LightColors = Colors(
     fondo = Color(0xFFF3F4F6), superficie1 = Color(0xFFFFFFFF), superficie2 = Color(0xFFFFFFFF), superficie3 = Color(0xFFE8EAEE),
     controlActivo = Color(0xFFFFFFFF), linea = Color(0x140E1014), texto1 = Color(0xFF0E1014), texto2 = Color(0xFF545B66),
-    brasaTinta = Color(0xFFB83D0B), brasaVelo = Color(0xFFFFEAE1), hielo = Color(0xFF166AA0), oro = Color(0xFF7E5A00),
+    brasaTinta = Color(0xFFB83D0B), brasaVelo = Color(0xFFFFEAE1), hielo = Color(0xFF166AA0), hieloVelo = Color(0xFFE6F2F9), peligroVelo = Color(0xFFFDE7EA), oro = Color(0xFF7E5A00),
     peligro = Color(0xFFC8243E), exito = Color(0xFF15803D), vidrioTinte = Color(0xFFFFFFFF), vidrioBorde = Color(0x140E1014), isDark = false,
 )
 
@@ -49,6 +49,8 @@ object Palette {
     val brasaTinta @Composable get() = LocalColors.current.brasaTinta
     val brasaVelo @Composable get() = LocalColors.current.brasaVelo
     val hielo @Composable get() = LocalColors.current.hielo
+    val hieloVelo @Composable get() = LocalColors.current.hieloVelo
+    val peligroVelo @Composable get() = LocalColors.current.peligroVelo
     val oro @Composable get() = LocalColors.current.oro
     val peligro @Composable get() = LocalColors.current.peligro
     val exito @Composable get() = LocalColors.current.exito

@@ -20,7 +20,7 @@ import java.time.LocalDate
 import java.util.UUID
 
 /** Banco o billetera. Como en iOS: nunca se guardan números completos ni claves, solo los últimos 4. */
-data class Institution(val id: String = UUID.randomUUID().toString(), val name: String)
+data class Institution(val id: String = UUID.randomUUID().toString(), val name: String, val colorHex: Long? = null)
 
 data class Product(
     val id: String = UUID.randomUUID().toString(),
@@ -100,8 +100,8 @@ class Store private constructor(private val file: File, val prefs: SharedPrefere
         l.copy(entries = l.entries + entry, recurring = updated)
     }
 
-    fun addInstitution(name: String): String {
-        val inst = Institution(name = name)
+    fun addInstitution(name: String, colorHex: Long? = null): String {
+        val inst = Institution(name = name, colorHex = colorHex)
         update { it.copy(institutions = it.institutions + inst) }
         return inst.id
     }
@@ -116,6 +116,17 @@ class Store private constructor(private val file: File, val prefs: SharedPrefere
     fun setBalance(productId: String, balanceMinor: Long) = update { l ->
         l.copy(products = l.products.map { if (it.id == productId) it.copy(balanceMinor = balanceMinor, balanceAt = LocalDate.now().plusDays(1)) else it })
     }
+
+    /** Edita nombre, últimos 4, día de pago y, si cambió, el saldo de hoy. */
+    fun updateProduct(id: String, name: String, last4: String?, dueDay: Int?, balanceMinor: Long?) = update { l ->
+        l.copy(products = l.products.map { p ->
+            if (p.id != id) p else p.copy(name = name, last4 = last4?.filter(Char::isDigit)?.takeLast(4)?.ifBlank { null }, dueDay = dueDay).let {
+                if (balanceMinor != null) it.copy(balanceMinor = balanceMinor, balanceAt = LocalDate.now().plusDays(1)) else it
+            }
+        })
+    }
+
+    fun renameInstitution(id: String, name: String) = update { l -> l.copy(institutions = l.institutions.map { if (it.id == id) it.copy(name = name) else it }) }
 
     fun deleteProduct(id: String) = update { l -> l.copy(products = l.products.filter { it.id != id }) }
 
@@ -172,6 +183,7 @@ class Store private constructor(private val file: File, val prefs: SharedPrefere
             }
             l.copy(institutions = institutions, products = products, recurring = recurring)
         }
+        prefs.edit().putStringSet("onboarding.intereses", plan.interests.toSet()).apply()
         setOnboarded(true)
     }
 
@@ -199,7 +211,7 @@ class Store private constructor(private val file: File, val prefs: SharedPrefere
 
     private fun encode(l: Ledger) = JSONObject().apply {
         put("version", 1)
-        put("institutions", JSONArray(l.institutions.map { JSONObject().put("id", it.id).put("name", it.name) }))
+        put("institutions", JSONArray(l.institutions.map { JSONObject().put("id", it.id).put("name", it.name).apply { it.colorHex?.let { c -> put("color", c) } } }))
         put("products", JSONArray(l.products.map {
             JSONObject().put("id", it.id).put("institutionId", it.institutionId).put("kind", it.kind.name).put("name", it.name)
                 .put("last4", it.last4 ?: JSONObject.NULL).put("dueDay", it.dueDay ?: JSONObject.NULL)
@@ -223,7 +235,7 @@ class Store private constructor(private val file: File, val prefs: SharedPrefere
     private fun <T> JSONArray?.list(f: (JSONObject) -> T): List<T> = if (this == null) emptyList() else (0 until length()).map { f(getJSONObject(it)) }
 
     private fun decode(o: JSONObject) = Ledger(
-        institutions = o.optJSONArray("institutions").list { Institution(it.getString("id"), it.getString("name")) },
+        institutions = o.optJSONArray("institutions").list { Institution(it.getString("id"), it.getString("name"), if (it.has("color")) it.getLong("color") else null) },
         products = o.optJSONArray("products").list {
             Product(it.getString("id"), it.getString("institutionId"), ProductKind.valueOf(it.getString("kind")), it.getString("name"), it.str("last4"), it.int("dueDay"),
                 it.optLong("balanceMinor", 0), it.str("balanceAt")?.let(LocalDate::parse) ?: LocalDate.now(), it.optBoolean("hidden", false), it.str("parentProductId"))
@@ -259,6 +271,8 @@ data class OnboardingDraft(
     val incomeProductIndex: Int? = null,
     val banks: List<BankDraft> = emptyList(),
     val fixed: List<FixedDraft> = emptyList(),
+    /** Intereses elegidos en el onboarding (se guardan como en iOS, en onboarding.intereses). */
+    val interests: List<String> = emptyList(),
 ) {
     /** Productos en el orden en que se crean, para elegir con qué se paga. */
     val allProducts: List<Pair<String, ProductDraft>> get() = banks.flatMap { b -> b.products.sortedBy { it.kind != ProductKind.CUENTA }.map { b.name to it } }

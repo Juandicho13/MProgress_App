@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -24,12 +26,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Cancel
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Backspace
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -38,6 +47,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
+import com.olarte.mprogress.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -47,15 +61,27 @@ import com.olarte.mprogress.ui.theme.Radius
 import com.olarte.mprogress.ui.theme.Size
 import com.olarte.mprogress.ui.theme.Spacing
 
+/** Archivo variable, la misma fuente de iOS, con peso y ancho exactos (las cifras al 112,5 % de ancho). */
+@OptIn(ExperimentalTextApi::class)
+private fun archivo(weight: Int, width: Float = 100f) = FontFamily(
+    Font(R.font.archivo, FontWeight(weight), variationSettings = FontVariation.Settings(FontVariation.weight(weight), FontVariation.width(width)))
+)
+
+/** Estilos de texto de HANDOFF 10.2, iguales a iOS. */
 object Type {
-    val titulo1 = TextStyle(fontSize = 30.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
-    val titulo2 = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold)
-    val titulo3 = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-    val cuerpo = TextStyle(fontSize = 16.sp)
-    val cuerpo2 = TextStyle(fontSize = 14.sp)
-    val etiqueta = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-    val leyenda = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp)
-    val cifra = TextStyle(fontSize = 44.sp, fontWeight = FontWeight.Bold, letterSpacing = (-1).sp)
+    val titulo1 = TextStyle(fontFamily = archivo(700), fontSize = 30.sp, lineHeight = 36.sp, letterSpacing = (-0.4).sp)
+    val titulo2 = TextStyle(fontFamily = archivo(600), fontSize = 20.sp, lineHeight = 26.sp)
+    val titulo3 = TextStyle(fontFamily = archivo(600), fontSize = 17.sp, lineHeight = 22.sp)
+    val cuerpo = TextStyle(fontFamily = archivo(400), fontSize = 16.sp, lineHeight = 24.sp)
+    val cuerpo2 = TextStyle(fontFamily = archivo(400), fontSize = 14.sp, lineHeight = 20.sp)
+    val etiqueta = TextStyle(fontFamily = archivo(500), fontSize = 13.sp, lineHeight = 16.sp)
+    val leyenda = TextStyle(fontFamily = archivo(500), fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.5.sp)
+    val pestana = TextStyle(fontFamily = archivo(500), fontSize = 11.sp, lineHeight = 14.sp)
+    val cifraHeroe = TextStyle(fontFamily = archivo(700, 112.5f), fontSize = 46.sp, lineHeight = 50.sp, letterSpacing = (-0.4).sp)
+    val cifraGrande = TextStyle(fontFamily = archivo(600, 112.5f), fontSize = 32.sp, lineHeight = 38.sp)
+    val cifra = TextStyle(fontFamily = archivo(600, 112.5f), fontSize = 17.sp, lineHeight = 22.sp)
+    val cifraPequena = TextStyle(fontFamily = archivo(600, 112.5f), fontSize = 15.sp, lineHeight = 20.sp)
+    val boton = TextStyle(fontFamily = archivo(600), fontSize = 17.sp, lineHeight = 22.sp)
 }
 
 @Composable
@@ -73,105 +99,170 @@ fun Card(modifier: Modifier = Modifier, padding: androidx.compose.ui.unit.Dp = S
 @Composable
 fun SectionLabel(text: String) = T(text.uppercase(), Type.leyenda, Palette.texto2, Modifier.fillMaxWidth())
 
+/** Botón principal: píldora brasa de 56; deshabilitado al 40 %. */
 @Composable
 fun PrimaryButton(title: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
     Box(
-        modifier.fillMaxWidth().height(Size.botonPrincipal).clip(CircleShape)
-            .background(if (enabled) Palette.brasa else Palette.superficie3)
-            .clickable(enabled = enabled, onClick = onClick),
+        modifier.fillMaxWidth().height(Size.botonPrincipal).alpha(if (enabled) 1f else 0.4f).clip(CircleShape)
+            .background(Palette.brasa).clickable(enabled = enabled, onClick = onClick).padding(horizontal = Spacing.s5),
         contentAlignment = Alignment.Center,
-    ) { T(title, Type.titulo3, if (enabled) Palette.sobreBrasa else Palette.texto2) }
+    ) { T(title, Type.titulo3, Palette.sobreBrasa, maxLines = 1) }
 }
 
+/** Botón secundario: píldora gris de 48 (roja si es peligro). */
 @Composable
-fun SecondaryButton(title: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun SecondaryButton(title: String, modifier: Modifier = Modifier, enabled: Boolean = true, danger: Boolean = false, onClick: () -> Unit) {
     Box(
-        modifier.fillMaxWidth().height(Size.botonPrincipal).clip(CircleShape).background(Palette.superficie3).clickable(onClick = onClick),
+        modifier.fillMaxWidth().height(48.dp).alpha(if (enabled) 1f else 0.4f).clip(CircleShape)
+            .background(if (danger) Palette.peligroVelo else Palette.superficie3).clickable(enabled = enabled, onClick = onClick).padding(horizontal = Spacing.s4),
         contentAlignment = Alignment.Center,
-    ) { T(title, Type.titulo3) }
+    ) { T(title, Type.titulo3, if (danger) Palette.peligro else Palette.texto1, maxLines = 1) }
 }
 
-/** Píldora elegible: naranja con texto blanco si está elegida. */
+/** Hoja inferior dibujada encima de la pantalla (sirve igual en la app y en las capturas). */
 @Composable
-fun Chip(title: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier.heightIn(min = 40.dp).clip(CircleShape).background(if (selected) Palette.brasa else Palette.superficie3)
-            .clickable(onClick = onClick).padding(horizontal = Spacing.s4, vertical = Spacing.s2),
-        contentAlignment = Alignment.Center,
-    ) { T(title, Type.etiqueta, if (selected) Palette.sobreBrasa else Palette.texto1, maxLines = 1) }
+fun OverlaySheet(onDismiss: () -> Unit, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).clickable(interactionSource = null, indication = null, onClick = onDismiss)) {
+        Column(
+            modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .clip(RoundedCornerShape(topStart = Radius.hoja, topEnd = Radius.hoja)).background(Palette.superficie2)
+                .clickable(interactionSource = null, indication = null) {}.navigationBarsPadding(),
+        ) {
+            Box(Modifier.padding(top = Spacing.s2).align(Alignment.CenterHorizontally).width(36.dp).height(5.dp).clip(CircleShape).background(Palette.texto2.copy(alpha = 0.4f)))
+            content()
+        }
+    }
+}
+
+/** Píldora como Chip de iOS: etiqueta, alto mínimo 40, velo brasa con texto brasa si está elegida. */
+@Composable
+fun Chip(title: String, selected: Boolean = false, modifier: Modifier = Modifier, icon: ImageVector? = null, onClick: () -> Unit) {
+    Row(
+        modifier.heightIn(min = 40.dp).clip(CircleShape).background(if (selected) Palette.brasaVelo else Palette.superficie1)
+            .clickable(onClick = onClick).padding(horizontal = Spacing.s4),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1),
+    ) {
+        val c = if (selected) Palette.brasaTinta else Palette.texto1
+        if (icon != null) Icon(icon, null, Modifier.size(15.dp), tint = c)
+        T(title, Type.etiqueta, c, maxLines = 1)
+    }
 }
 
 @Composable
 fun Tile(glyph: String, tint: Color = Palette.superficie3, fg: Color = Palette.texto1, size: androidx.compose.ui.unit.Dp = Size.baldosa) {
     Box(Modifier.size(size).clip(RoundedCornerShape(size * 0.32f)).background(tint), contentAlignment = Alignment.Center) {
-        T(glyph, TextStyle(fontSize = (size.value * 0.42f).sp, fontWeight = FontWeight.SemiBold), fg)
+        T(glyph.take(2).uppercase(), TextStyle(fontFamily = Type.titulo3.fontFamily, fontSize = (size.value * 0.32f).sp, fontWeight = FontWeight.Bold), fg)
     }
 }
 
+/** Baldosa con ícono, como IconTile de iOS. */
 @Composable
-fun Segmented(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(CircleShape).background(Palette.superficie3).padding(Spacing.s1)) {
+fun IconTile(icon: ImageVector, tint: Color = Palette.superficie3, fg: Color = Palette.texto1, size: androidx.compose.ui.unit.Dp = Size.baldosa, circle: Boolean = false, rotate: Float = 0f) {
+    Box(Modifier.size(size).clip(if (circle) CircleShape else RoundedCornerShape(size * 0.32f)).background(tint), contentAlignment = Alignment.Center) {
+        Icon(icon, null, Modifier.size(size * 0.46f).rotate(rotate), tint = fg)
+    }
+}
+
+/** Avatar redondo con iniciales. */
+@Composable
+fun Avatar(name: String, size: androidx.compose.ui.unit.Dp = 32.dp) {
+    val initials = name.split(" ").filter { it.isNotBlank() }.take(2).joinToString("") { it.first().uppercase() }.ifEmpty { "?" }
+    Box(Modifier.size(size).clip(CircleShape).background(Palette.brasa), contentAlignment = Alignment.Center) {
+        T(initials, TextStyle(fontFamily = Type.titulo3.fontFamily, fontSize = (size.value * 0.36f).sp, fontWeight = FontWeight.Bold), Palette.sobreBrasa)
+    }
+}
+
+/** Insignia: HOY, PRONTO. */
+@Composable
+fun Badge(text: String, bg: Color, fg: Color) {
+    Box(Modifier.clip(CircleShape).background(bg).padding(horizontal = Spacing.s2, vertical = 3.dp)) {
+        T(text.uppercase(), TextStyle(fontFamily = Type.etiqueta.fontFamily, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp), fg)
+    }
+}
+
+/** Botón redondo con ícono (la campana de Inicio). */
+@Composable
+fun CircleIconButton(icon: ImageVector, label: String, filled: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
+    Box(Modifier.size(Size.toqueMinimo).alpha(if (enabled) 1f else 0.4f).clip(CircleShape).background(if (filled) Palette.brasa else Palette.superficie1)
+        .clickable(enabled = enabled, onClick = onClick).semantics { contentDescription = label },
+        contentAlignment = Alignment.Center) { Icon(icon, null, Modifier.size(20.dp), tint = if (filled) Palette.sobreBrasa else Palette.texto1) }
+}
+
+/** Píldora segmentada como SegmentedPill de iOS. */
+@Composable
+fun Segmented(options: List<Pair<String, String>>, selected: String, modifier: Modifier = Modifier, onSelect: (String) -> Unit) {
+    Row(modifier.fillMaxWidth().clip(CircleShape).background(Palette.superficie3).padding(Spacing.s1), horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
         options.forEach { (value, title) ->
             val on = value == selected
             Box(
-                Modifier.weight(1f).height(44.dp).clip(CircleShape).background(if (on) Palette.controlActivo else Color.Transparent).clickable { onSelect(value) },
+                Modifier.weight(1f).heightIn(min = 40.dp).clip(CircleShape).background(if (on) Palette.controlActivo else Color.Transparent).clickable { onSelect(value) },
                 contentAlignment = Alignment.Center,
-            ) { T(title, Type.etiqueta, if (on) Palette.texto1 else Palette.texto2) }
+            ) { T(title, Type.etiqueta.copy(fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium), Palette.texto1, maxLines = 1) }
         }
     }
 }
 
-/** Monto grande que se resalta con borde brasa y cursor cuando está activo (igual que iOS). */
+/** Monto grande que se resalta con borde brasa y cursor cuando está activo (igual que AmountDisplay de iOS). */
 @Composable
-fun AmountDisplay(prefix: String, text: String, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
+fun AmountDisplay(prefix: String, text: String, active: Boolean, modifier: Modifier = Modifier, empty: Boolean = text == "0", onClick: () -> Unit = {}) {
     val blink by rememberInfiniteTransition(label = "cursor").animateFloat(1f, 0f, infiniteRepeatable(tween(530), RepeatMode.Reverse), label = "cursor")
     Row(
         modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.tarjeta))
-            .background(if (active) Palette.brasaVelo else Palette.superficie1)
-            .border(2.dp, if (active) Palette.brasa else Color.Transparent, RoundedCornerShape(Radius.tarjeta))
-            .clickable(onClick = onClick).padding(vertical = Spacing.s5, horizontal = Spacing.s4),
-        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+            .background(if (active) Palette.brasaVelo else Color.Transparent)
+            .border(if (active) 2.dp else 1.dp, if (active) Palette.brasa else Palette.linea, RoundedCornerShape(Radius.tarjeta))
+            .clickable(onClick = onClick).padding(vertical = Spacing.s3, horizontal = Spacing.s4),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.s2, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically,
     ) {
-        T("$prefix ", Type.titulo2, Palette.texto2)
-        T(text, Type.cifra)
-        if (active) Box(Modifier.padding(start = 2.dp).width(3.dp).height(40.dp).alpha(blink).background(Palette.brasa))
+        T(prefix, Type.cifraGrande, if (active) Palette.brasaTinta else Palette.texto2)
+        T(text, Type.cifraHeroe, if (empty) Palette.texto2 else Palette.texto1, maxLines = 1)
+        if (active) Box(Modifier.width(3.dp).height(44.dp).alpha(blink).clip(RoundedCornerShape(1.5.dp)).background(Palette.brasa))
     }
 }
 
+/** Teclado numérico de iOS: teclas de 52 de alto, radio 20; la coma y borrar sin fondo. */
 @Composable
 fun Keypad(allowsComma: Boolean, onKey: (Char) -> Unit, onDelete: () -> Unit) {
-    val rows = listOf("123", "456", "789", (if (allowsComma) "," else " ") + "0<")
+    val rows = listOf("123", "456", "789", ",0<")
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         rows.forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 row.forEach { c ->
+                    val hidden = c == ',' && !allowsComma
                     Box(
-                        Modifier.weight(1f).height(54.dp).clip(RoundedCornerShape(Radius.campo))
-                            .background(if (c == ' ') Color.Transparent else Palette.superficie3)
-                            .clickable(enabled = c != ' ') { if (c == '<') onDelete() else onKey(c) },
+                        Modifier.weight(1f).height(52.dp).clip(RoundedCornerShape(Radius.boton))
+                            .background(if (c == ',' || c == '<') Color.Transparent else Palette.superficie3)
+                            .alpha(if (hidden) 0f else 1f)
+                            .clickable(enabled = !hidden) { if (c == '<') onDelete() else onKey(c) },
                         contentAlignment = Alignment.Center,
-                    ) { T(if (c == '<') "⌫" else c.toString(), Type.titulo2) }
+                    ) {
+                        if (c == '<') Icon(androidx.compose.material.icons.Icons.AutoMirrored.Outlined.Backspace, "Borrar", Modifier.size(22.dp), tint = Palette.texto1)
+                        else T(c.toString(), TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Medium), Palette.texto1)
+                    }
                 }
             }
         }
     }
 }
 
-/** Fila de lista con baldosa, título, subtítulo y algo a la derecha. */
+/** Fila de lista como ListRow de iOS: baldosa, título, subtítulo y algo a la derecha. */
 @Composable
-fun ListRow(glyph: String, title: String, subtitle: String? = null, tint: Color = Palette.superficie3, fg: Color = Palette.texto1,
-            onClick: (() -> Unit)? = null, trailing: @Composable () -> Unit = {}) {
+fun ListRow(glyph: String? = null, title: String, subtitle: String? = null, tint: Color = Palette.superficie3, fg: Color = Palette.texto1,
+            icon: ImageVector? = null, chevron: Boolean = false, onClick: (() -> Unit)? = null, trailing: @Composable () -> Unit = {}) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 60.dp).clip(RoundedCornerShape(Radius.campo))
+        Modifier.fillMaxWidth().heightIn(min = 56.dp)
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(vertical = Spacing.s1),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
     ) {
-        Tile(glyph, tint, fg)
-        Column(Modifier.weight(1f)) {
+        when {
+            icon != null -> IconTile(icon, tint, fg)
+            glyph != null -> Tile(glyph, tint, fg)
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             T(title, Type.titulo3, maxLines = 1)
             subtitle?.let { T(it, Type.cuerpo2, Palette.texto2, maxLines = 1) }
         }
         trailing()
+        if (chevron) Icon(androidx.compose.material.icons.Icons.Rounded.ChevronRight, null, Modifier.size(18.dp), tint = Palette.texto2)
     }
 }
 
@@ -184,7 +275,7 @@ fun SignatureFooter() {
     val ink = Palette.texto1
     val ring = Palette.brasaTinta
     Row(
-        Modifier.fillMaxWidth().padding(top = Spacing.s8, bottom = Spacing.s6).semantics(mergeDescendants = true) { contentDescription = "Desarrollado por juan-olarte-dev" },
+        Modifier.fillMaxWidth().padding(top = Spacing.s8, bottom = Size.barra + Spacing.s8 + Spacing.s6).semantics(mergeDescendants = true) { contentDescription = "Desarrollado por juan-olarte-dev" },
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
     ) {
         T("juan-olarte-dev", TextStyle(fontSize = 14.sp, letterSpacing = 0.7.sp), ink.copy(alpha = 0.75f))
@@ -207,3 +298,62 @@ fun SignatureFooter() {
     }
 }
 
+
+/** Monto con signo para listas: "+ $ 2.200.000" o "− $ 84.300". */
+fun signedAmount(minor: Long, kind: com.olarte.mprogress.domain.EntryKind) =
+    com.olarte.mprogress.domain.Money(if (kind == com.olarte.mprogress.domain.EntryKind.INGRESO) minor else -minor).formatted(sign = true)
+
+/** Baldosa de un movimiento o pago fijo: iniciales, azul hielo si es ingreso. */
+@Composable
+fun EntryTile(name: String, kind: com.olarte.mprogress.domain.EntryKind, size: androidx.compose.ui.unit.Dp = Size.baldosa) {
+    val income = kind == com.olarte.mprogress.domain.EntryKind.INGRESO
+    Tile(name.ifBlank { "?" }, if (income) Palette.hieloVelo else Palette.superficie3, if (income) Palette.hielo else Palette.texto1, size)
+}
+
+/** Fila de un movimiento en Inicio, Historial y Calendario, como EntryRow de iOS. */
+@Composable
+fun EntryRow(name: String, kind: com.olarte.mprogress.domain.EntryKind, amountMinor: Long, subtitle: String?, onClick: (() -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) {
+    val income = kind == com.olarte.mprogress.domain.EntryKind.INGRESO
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(vertical = Spacing.s1),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3),
+    ) {
+        EntryTile(name, kind)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            T(name.ifBlank { if (income) "Ingreso" else "Gasto" }, Type.titulo3, maxLines = 1)
+            subtitle?.let { T(it, Type.cuerpo2, Palette.texto2, maxLines = 1) }
+        }
+        if (trailing != null) trailing() else T(signedAmount(amountMinor, kind), Type.cifra, if (income) Palette.hielo else Palette.texto1)
+    }
+}
+
+/** Estado vacío con dibujo, título, texto y acciones. */
+@Composable
+fun EmptyState(title: String, message: String, art: @Composable () -> Unit, actions: @Composable () -> Unit = {}) {
+    Column(Modifier.fillMaxWidth().padding(Spacing.s6), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.s4)) {
+        art()
+        T(title, Type.titulo2, align = TextAlign.Center)
+        T(message, Type.cuerpo, Palette.texto2, align = TextAlign.Center)
+        actions()
+    }
+}
+
+/** Botón redondo para volver, como el de la barra de iOS. */
+@Composable
+fun BackButton(label: String = "Volver", onBack: () -> Unit) {
+    Box(Modifier.padding(top = Spacing.s2)) { CircleIconButton(androidx.compose.material.icons.Icons.AutoMirrored.Rounded.ArrowBack, label, onClick = onBack) }
+}
+
+/** Campo de búsqueda con botón para borrar. */
+@Composable
+fun SearchField(text: String, prompt: String, onChange: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = Size.toqueMinimo).clip(RoundedCornerShape(Radius.campo)).background(Palette.superficie1).padding(horizontal = Spacing.s4),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        Box(Modifier.weight(1f)) {
+            if (text.isEmpty()) T(prompt, Type.cuerpo, Palette.texto2, maxLines = 1)
+            androidx.compose.foundation.text.BasicTextField(text, onChange, Modifier.fillMaxWidth(), textStyle = Type.cuerpo.copy(color = Palette.texto1),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(Palette.brasa), singleLine = true)
+        }
+        if (text.isNotEmpty()) Icon(androidx.compose.material.icons.Icons.Rounded.Cancel, "Borrar búsqueda", Modifier.size(20.dp).clickable { onChange("") }, tint = Palette.texto2)
+    }
+}

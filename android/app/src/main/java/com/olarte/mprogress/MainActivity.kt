@@ -45,6 +45,8 @@ import com.olarte.mprogress.domain.Cycle
 import com.olarte.mprogress.domain.EntryKind
 import com.olarte.mprogress.domain.QuickActionKind
 import com.olarte.mprogress.ui.components.T
+import com.olarte.mprogress.ui.components.Sym
+import androidx.compose.foundation.layout.size
 import com.olarte.mprogress.ui.components.Type
 import com.olarte.mprogress.ui.fixed.FixedScreen
 import com.olarte.mprogress.ui.home.AddEntryContent
@@ -87,8 +89,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class AppTab(val title: String, val glyph: String) {
-    Inicio("Inicio", "⌂"), Resumen("Resumen", "▥"), Dinero("Dinero", "▤"), Calendario("Calendario", "▦"), Ajustes("Ajustes", "⚙")
+enum class AppTab(val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector, val iconOn: androidx.compose.ui.graphics.vector.ImageVector) {
+    Inicio("Inicio", Sym.house, Sym.houseFill), Resumen("Resumen", Sym.chart, Sym.chartFill), Dinero("Dinero", Sym.bank, Sym.bankFill),
+    Calendario("Calendario", Sym.calendar, Sym.calendarFill), Ajustes("Ajustes", Sym.gear, Sym.gearFill)
 }
 
 private enum class Route { FIJOS, HISTORIAL }
@@ -121,9 +124,9 @@ fun RootScreen(store: Store) {
 
     Box(Modifier.fillMaxSize()) {
         when {
-            route == Route.FIJOS -> FixedScreen(store, onBack = { route = null }, onAdd = { adding = AddRequest(EntryKind.GASTO, Cycle.Mensual) })
-            tab == AppTab.Inicio -> HomeScreen(store, ::perform) { more = true }
-            route == Route.HISTORIAL -> com.olarte.mprogress.ui.history.HistoryScreen(store) { route = null }
+            route == Route.FIJOS -> FixedScreen(store, onBack = { route = null }, onAdd = { k -> adding = AddRequest(k, Cycle.Mensual) })
+            tab == AppTab.Inicio -> HomeScreen(store, ::perform, onMore = { more = true }, onOpenFixed = { route = Route.FIJOS }, onOpenHistory = { route = Route.HISTORIAL })
+            route == Route.HISTORIAL -> com.olarte.mprogress.ui.history.HistoryScreen(store, onAdd = { adding = AddRequest(EntryKind.GASTO, Cycle.Puntual) }) { route = null }
             tab == AppTab.Resumen -> com.olarte.mprogress.ui.summary.SummaryScreen(store)
             tab == AppTab.Dinero -> com.olarte.mprogress.ui.money.MoneyScreen(store)
             tab == AppTab.Calendario -> com.olarte.mprogress.ui.calendar.CalendarScreen(store)
@@ -138,7 +141,7 @@ fun RootScreen(store: Store) {
 
     adding?.let { request ->
         val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet({ adding = null }, sheetState = state, containerColor = Palette.superficie2, shape = RoundedCornerShape(topStart = Radius.hoja, topEnd = Radius.hoja)) {
+        ModalBottomSheet({ adding = null }, sheetState = state, dragHandle = null, containerColor = Palette.superficie2, shape = RoundedCornerShape(topStart = Radius.hoja, topEnd = Radius.hoja)) {
             AddEntryContent(store, request) { scope.launch { state.hide() }.invokeOnCompletion { adding = null } }
         }
     }
@@ -164,8 +167,8 @@ fun GlassTabBar(selected: AppTab, tint: Float, onSelect: (AppTab) -> Unit, modif
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
             ) {
                 val c = if (active) Palette.brasaTinta else Palette.texto2
-                T(item.glyph, Type.etiqueta, c)
-                T(item.title, Type.leyenda.copy(letterSpacing = androidx.compose.ui.unit.TextUnit.Unspecified), c, maxLines = 1)
+                androidx.compose.material3.Icon(if (active) item.iconOn else item.icon, null, Modifier.padding(bottom = 2.dp).size(22.dp), tint = c)
+                T(item.title, Type.pestana.copy(fontWeight = if (active) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium), c, maxLines = 1)
             }
         }
     }
