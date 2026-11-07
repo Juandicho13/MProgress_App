@@ -20,6 +20,9 @@ import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.Verified
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoFixHigh
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.TrackChanges
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
@@ -67,8 +70,7 @@ import com.olarte.mprogress.ui.theme.Size
 import com.olarte.mprogress.ui.theme.Spacing
 
 /** Lo mismo que Ajustes muestra en Registro automático: en la estándar no hay nada que configurar. */
-private fun autoCaptureConfigured(context: Context) = !com.olarte.mprogress.auto.AutoCapture.fullCapture ||
-    com.olarte.mprogress.auto.AutoCapture.enabled(context) || com.olarte.mprogress.auto.AutoCapture.smsEnabled(context)
+private fun autoCaptureConfigured(context: Context) = com.olarte.mprogress.auto.AutoCapture.configured(context)
 
 /**
  * "Saca todo el provecho a MProgress": primeros pasos en Inicio, debajo de los accesos rápidos, igual que GuideCard de iOS.
@@ -127,9 +129,9 @@ fun GuideCard(store: Store, onAction: (QuickActionKind) -> Unit, onOpenFixed: ()
                 null -> {}
             }
             GuideStepId.BANCOS -> onAddBank()
-            GuideStepId.AUTOMATICO -> onAction(QuickActionKind.AUTOMATICO)
-            GuideStepId.LIMITES -> onAction(QuickActionKind.LIMITES)
-            GuideStepId.AHORRO -> onAction(QuickActionKind.AHORRO)
+            GuideStepId.AUTOMATICO -> com.olarte.mprogress.auto.LaunchAction.pending.value = "revisar"
+            GuideStepId.LIMITES -> com.olarte.mprogress.auto.LaunchAction.pending.value = "limites"
+            GuideStepId.AHORRO -> com.olarte.mprogress.auto.LaunchAction.pending.value = "ahorro"
             GuideStepId.AVISOS -> onOpenAlerts()
             GuideStepId.BLOQUEO -> confirmLock = true
             GuideStepId.CUENTA -> com.olarte.mprogress.auto.LaunchAction.pending.value = "cuenta"
@@ -227,9 +229,9 @@ fun GuideCard(store: Store, onAction: (QuickActionKind) -> Unit, onOpenFixed: ()
 private fun iconOf(step: GuideStep): ImageVector = when (step.id) {
     GuideStepId.PRIMEROS_DATOS -> Icons.Rounded.Add
     GuideStepId.BANCOS -> Sym.bank
-    GuideStepId.AUTOMATICO -> Sym.of(QuickActionKind.AUTOMATICO)
-    GuideStepId.LIMITES -> Sym.of(QuickActionKind.LIMITES)
-    GuideStepId.AHORRO -> Sym.of(QuickActionKind.AHORRO)
+    GuideStepId.AUTOMATICO -> Icons.Rounded.AutoFixHigh
+    GuideStepId.LIMITES -> Icons.Rounded.Speed
+    GuideStepId.AHORRO -> Icons.Rounded.TrackChanges
     GuideStepId.AVISOS -> Sym.bell
     GuideStepId.BLOQUEO -> Icons.Outlined.Fingerprint
     GuideStepId.CUENTA -> Icons.Outlined.Cloud

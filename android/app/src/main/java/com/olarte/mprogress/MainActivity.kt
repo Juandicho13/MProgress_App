@@ -182,10 +182,7 @@ fun RootScreen(store: Store) {
             QuickActionKind.RAPIDO -> quick = true
             QuickActionKind.INGRESO -> adding = AddRequest(EntryKind.INGRESO, Cycle.Puntual)
             QuickActionKind.FIJOS -> route = Route.FIJOS
-            QuickActionKind.LIMITES -> route = Route.LIMITES
             QuickActionKind.RECIBO -> scanning = true
-            QuickActionKind.AUTOMATICO -> route = Route.AUTOMATICO
-            QuickActionKind.AHORRO -> route = Route.AHORRO
             else -> android.widget.Toast.makeText(context, "${kind.title} llega pronto a Android.", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
@@ -200,6 +197,8 @@ fun RootScreen(store: Store) {
             "calendario" -> { route = null; tab = AppTab.Calendario }
             "inicio" -> { route = null; tab = AppTab.Inicio }
             "revisar" -> route = Route.AUTOMATICO
+            "limites" -> route = Route.LIMITES
+            "ahorro" -> route = Route.AHORRO
             "cuenta" -> { route = null; tab = AppTab.Ajustes; com.olarte.mprogress.ui.settings.SettingsNav.page.value = "cuenta" }
         }
         if (launch != null) com.olarte.mprogress.auto.LaunchAction.pending.value = null

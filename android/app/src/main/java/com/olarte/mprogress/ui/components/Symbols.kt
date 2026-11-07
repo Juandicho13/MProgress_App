@@ -86,10 +86,7 @@ object Sym {
         QuickActionKind.INGRESO -> Icons.Rounded.ArrowDownward
         QuickActionKind.FIJOS -> Icons.AutoMirrored.Rounded.ReceiptLong
         QuickActionKind.RAPIDO -> Icons.Rounded.TouchApp
-        QuickActionKind.LIMITES -> Icons.Rounded.Speed
-        QuickActionKind.AHORRO -> Icons.Rounded.TrackChanges
         QuickActionKind.RECIBO -> Icons.Rounded.DocumentScanner
-        QuickActionKind.AUTOMATICO -> Icons.Rounded.AutoFixHigh
     }
 
     val savings = Icons.Rounded.Savings

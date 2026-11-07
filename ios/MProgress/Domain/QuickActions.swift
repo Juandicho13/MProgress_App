@@ -2,7 +2,7 @@ import Foundation
 
 /// Acciones del menú Más. El usuario las ordena y fija 3 como accesos rápidos en Inicio.
 enum QuickActionKind: String, CaseIterable, Codable, Sendable, Identifiable {
-    case gasto, ingreso, fijos, rapido, limites, ahorro, recibo, automatico
+    case gasto, ingreso, fijos, rapido, recibo
 
     var id: String { rawValue }
 
@@ -13,10 +13,7 @@ enum QuickActionKind: String, CaseIterable, Codable, Sendable, Identifiable {
         case .ingreso: "Ingreso extra"
         case .fijos: "Pagos fijos"
         case .rapido: "Registro rápido"
-        case .limites: "Límites"
-        case .ahorro: "Ahorro"
         case .recibo: "Escanear recibo"
-        case .automatico: "Registro automático"
         }
     }
 
@@ -27,10 +24,7 @@ enum QuickActionKind: String, CaseIterable, Codable, Sendable, Identifiable {
         case .ingreso: "Ingreso"
         case .fijos: "Fijos"
         case .rapido: "Rápido"
-        case .limites: "Límites"
-        case .ahorro: "Ahorro"
         case .recibo: "Recibo"
-        case .automatico: "Auto"
         }
     }
 
@@ -40,10 +34,7 @@ enum QuickActionKind: String, CaseIterable, Codable, Sendable, Identifiable {
         case .ingreso: "arrow.down"
         case .fijos: "list.bullet.rectangle"
         case .rapido: "hand.tap"
-        case .limites: "gauge.with.dots.needle.33percent"
-        case .ahorro: "target"
         case .recibo: "doc.text.viewfinder"
-        case .automatico: "wand.and.stars"
         }
     }
 }
@@ -54,9 +45,9 @@ struct QuickActionLayout: Equatable, Sendable {
     static let pinnedLimit = 3
     static let standard = QuickActionLayout(order: QuickActionKind.allCases, pinned: [.gasto, .ingreso, .fijos])
     /// Acciones que existieron y se quitaron (Gasto fijo, Sueldo o fijo y Pago anual repetían Pagos fijos; Historial
-    /// ya está en Inicio › Movimientos › Ver todo). Si alguien las tenía fijadas, su lugar se llena con las de por
+    /// ya está en Inicio › Movimientos › Ver todo; Registro automático vive en Ajustes; Límites y Ahorro, en Dinero). Si alguien las tenía fijadas, su lugar se llena con las de por
     /// defecto para que Inicio siga mostrando 3.
-    static let retired: Set<String> = ["fijo", "sueldo", "anual", "historial"]
+    static let retired: Set<String> = ["fijo", "sueldo", "anual", "historial", "automatico", "limites", "ahorro"]
 
     private(set) var order: [QuickActionKind]
     private(set) var pinned: [QuickActionKind]

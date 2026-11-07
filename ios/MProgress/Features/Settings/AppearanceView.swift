@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Apariencia (pantalla 5): vista previa del vidrio, 4 niveles, Seguir a iOS y tema.
-struct AppearanceView: View {
+/// Tema y vidrio (pantalla 5, ahora sección de Diseño): vista previa del vidrio, 4 niveles, Seguir a iOS y tema.
+struct AppearanceSection: View {
     @AppStorage(GlassLevel.storageKey) private var glassRaw = GlassLevel.normal.rawValue
     @AppStorage(AppTheme.storageKey) private var themeRaw = AppTheme.oscuro.rawValue
     @AppStorage(GlassLevel.followSystemKey) private var followSystem = true
@@ -18,39 +18,28 @@ struct AppearanceView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.s5) {
-                Text("Apariencia").appFont(.titulo1).foregroundStyle(Palette.texto1).accessibilityAddTraits(.isHeader)
-                preview
-                SectionLabel(text: "Transparencia del vidrio")
-                SegmentedPill(options: GlassLevel.allCases.map { (value: $0.rawValue, title: $0.title) }, selection: $glassRaw)
-                Text(level.detail).appFont(.cuerpo2).foregroundStyle(Palette.texto2)
-                SectionLabel(text: "Tema")
-                SegmentedPill(options: AppTheme.allCases.map { (value: $0.rawValue, title: $0.title) }, selection: $themeRaw)
-                Card {
-                    VStack(alignment: .leading, spacing: Spacing.s2) {
-                        Toggle(isOn: $followSystem) {
-                            Text("Seguir a iOS").appFont(.titulo3).foregroundStyle(Palette.texto1)
-                        }
-                        .tint(Palette.brasa)
-                        Text(followText)
-                            .appFont(.cuerpo2)
-                            .foregroundStyle(Palette.texto2)
+        VStack(alignment: .leading, spacing: Spacing.s5) {
+            preview
+            SectionLabel(text: "Transparencia del vidrio")
+            SegmentedPill(options: GlassLevel.allCases.map { (value: $0.rawValue, title: $0.title) }, selection: $glassRaw)
+            Text(level.detail).appFont(.cuerpo2).foregroundStyle(Palette.texto2)
+            SectionLabel(text: "Tema")
+            SegmentedPill(options: AppTheme.allCases.map { (value: $0.rawValue, title: $0.title) }, selection: $themeRaw)
+            Card {
+                VStack(alignment: .leading, spacing: Spacing.s2) {
+                    Toggle(isOn: $followSystem) {
+                        Text("Seguir a iOS").appFont(.titulo3).foregroundStyle(Palette.texto1)
                     }
+                    .tint(Palette.brasa)
+                    Text(followText)
+                        .appFont(.cuerpo2)
+                        .foregroundStyle(Palette.texto2)
                 }
-                Text("El vidrio es el Liquid Glass de Apple: refleja y deja ver lo que pasa detrás, como en las apps del sistema.")
-                    .appFont(.leyenda)
-                    .foregroundStyle(Palette.texto2)
-                SignatureFooter()
             }
-            .padding(.horizontal, Spacing.margen)
-            .padding(.top, Spacing.s2)
-            .padding(.bottom, Spacing.s8)
+            Text("El vidrio es el Liquid Glass de Apple: refleja y deja ver lo que pasa detrás, como en las apps del sistema.")
+                .appFont(.leyenda)
+                .foregroundStyle(Palette.texto2)
         }
-        .scrollIndicators(.hidden)
-        .background(Palette.fondo.ignoresSafeArea())
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .navigationBarTitleDisplayMode(.inline)
     }
 
     /// Fondo con color detrás de una barra de vidrio, para ver el efecto del nivel elegido.

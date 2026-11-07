@@ -36,13 +36,14 @@ enum Palette {
     static let lineaControl = Color(light: 0x7F8792, dark: 0x6C727B)
     static let texto1 = Color(light: 0x0E1014, dark: 0xF3F4F6)
     static let texto2 = Color(light: 0x545B66, dark: 0xA5ABB4)
-    static let brasa = Color(hex: 0xF55F1F)
-    static let brasaPresionada = Color(light: 0xDE5014, dark: 0xE04F12)
-    static let sobreBrasa = Color(hex: 0xFFFFFF)
-    static let brasaTinta = Color(light: 0xB83D0B, dark: 0xFF6B2C)
-    static let brasaVelo = Color(light: 0xFFEAE1, dark: 0x3A241E)
-    static let hielo = Color(light: 0x166AA0, dark: 0x6CC4F2)
-    static let hieloVelo = Color(light: 0xE6F2F9, dark: 0x23333D)
+    // Acento (brasa) e ingresos (hielo): salen de Ajustes › Diseño › Colores y cambian en vivo (LiveColors).
+    static var brasa: Color { Color(hex: LiveColors.shared.accent.fill) }
+    static var brasaPresionada: Color { let t = LiveColors.shared.accent; return Color(light: t.pressedLight, dark: t.pressedDark) }
+    static var sobreBrasa: Color { Color(hex: LiveColors.shared.accent.onFill) }
+    static var brasaTinta: Color { let t = LiveColors.shared.accent; return Color(light: t.inkLight, dark: t.inkDark) }
+    static var brasaVelo: Color { let t = LiveColors.shared.accent; return Color(light: t.veilLight, dark: t.veilDark) }
+    static var hielo: Color { let t = LiveColors.shared.income; return Color(light: t.inkLight, dark: t.inkDark) }
+    static var hieloVelo: Color { let t = LiveColors.shared.income; return Color(light: t.veilLight, dark: t.veilDark) }
     static let oro = Color(light: 0x7E5A00, dark: 0xF5C451)
     static let oroRelleno = Color(hex: 0xF5C451)
     static let sobreOro = Color(hex: 0x2A1F00)

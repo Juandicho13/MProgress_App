@@ -2,11 +2,21 @@ package com.olarte.mprogress.domain
 
 import kotlin.math.abs
 
-/** Moneda soportada. `minorDigits`: cifras de la unidad mínima; `shownDigits`: las que se ven. Igual que iOS. */
+/**
+ * Moneda (ISO 4217). `minorDigits`: cifras de la unidad mínima; `shownDigits`: las que se ven. Igual que iOS.
+ * Dos monedas son iguales si tienen el mismo código: nombre y símbolo son solo para mostrar.
+ */
 data class Currency(val code: String, val symbol: String, val name: String, val minorDigits: Int, val shownDigits: Int) {
     val minorPerUnit: Long get() = pow10(minorDigits)
 
+    /** Bandera del país de la moneda, si tiene uno claro. */
+    val flag: String? get() = CurrencyCatalog.flag(code)
+
+    override fun equals(other: Any?) = other is Currency && other.code == code
+    override fun hashCode() = code.hashCode()
+
     companion object {
+        // Las de siempre: no cambian (los montos guardados dependen de `minorDigits`).
         val COP = Currency("COP", "$", "Peso colombiano", 2, 0)
         val EUR = Currency("EUR", "€", "Euro", 2, 2)
         val USD = Currency("USD", "US$", "Dólar estadounidense", 2, 2)
@@ -15,8 +25,26 @@ data class Currency(val code: String, val symbol: String, val name: String, val 
         val ARS = Currency("ARS", "$", "Peso argentino", 2, 0)
         val CLP = Currency("CLP", "$", "Peso chileno", 0, 0)
         val PEN = Currency("PEN", "S/", "Sol peruano", 2, 2)
-        val all = listOf(COP, EUR, USD, MXN, GBP, ARS, CLP, PEN)
-        fun from(code: String) = all.firstOrNull { it.code == code.uppercase() } ?: COP
+        val legacy = listOf(COP, EUR, USD, MXN, GBP, ARS, CLP, PEN)
+
+        /** Todas las monedas activas, de la A a la Z por nombre. */
+        val all: List<Currency> get() = CurrencyCatalog.sorted
+        /** Las que más se usan, para arriba del selector. */
+        val popular: List<Currency> get() = CurrencyCatalog.POPULAR.mapNotNull { CurrencyCatalog.byCode[it] }
+
+        /** Un código desconocido cae en COP, como antes. */
+        fun from(code: String) = known(code) ?: COP
+        fun known(code: String): Currency? = CurrencyCatalog.byCode[code.trim().uppercase()]
+
+        /** Busca por código o nombre, sin tildes ni mayúsculas. Vacío devuelve todas; el código exacto va primero. */
+        fun search(query: String): List<Currency> {
+            val words = HistoryMath.normalize(query).split(' ').filter { it.isNotEmpty() }
+            if (words.isEmpty()) return all
+            val hits = all.filter { c -> val hay = HistoryMath.normalize("${c.code} ${c.name}"); words.all { hay.contains(it) } }
+            val key = words.joinToString("").uppercase()
+            return hits.filter { it.code == key } + hits.filter { it.code != key }
+        }
+
         /** Moneda del espacio elegida en Ajustes › Moneda. La pone el Store al abrir y al cambiarla. */
         @Volatile var current: Currency = COP
     }

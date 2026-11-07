@@ -282,9 +282,6 @@ struct HomeView: View {
         case .gasto: adding = AddRequest(kind: .gasto, cycle: .puntual)
         case .ingreso: adding = AddRequest(kind: .ingreso, cycle: .puntual)
         case .fijos: route = .fijos
-        case .limites: route = .limites
-        case .ahorro: route = .ahorro
-        case .automatico: route = .automatico
         case .recibo: scanning = true
         case .rapido:
             // Si viene de Más, espera a que la hoja se cierre antes de abrir otra.

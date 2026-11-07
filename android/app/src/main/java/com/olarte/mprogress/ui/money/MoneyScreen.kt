@@ -166,6 +166,7 @@ fun MoneyScreen(store: Store, initialDetail: String? = null) {
                 DebtsSection(ledger, hide) { debts = debts + it }
                 RewardsSection(store, ledger, hide)
             }
+            PlanningSection(ledger)
         }
         DebtScreens(store, debts, hide, onPush = { debts = debts + it }, onPop = { debts = debts.dropLast(1) })
         when (val s = sheet) {

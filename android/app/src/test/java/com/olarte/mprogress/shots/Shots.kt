@@ -122,8 +122,7 @@ class Shots {
         val store = Store.get(ApplicationProvider.getApplicationContext())
         seed(store)
         shot("04a_ajustes") { com.olarte.mprogress.ui.settings.SettingsScreen(store) }
-        shot("04b_apariencia") { com.olarte.mprogress.ui.settings.AppearanceScreen(store) {} }
-        shot("04c_icono") { com.olarte.mprogress.ui.settings.AppIconScreen {} }
+        shot("04b_diseno") { com.olarte.mprogress.ui.settings.DesignScreen(store) {} }
         shot("04d_ajustes_claro", dark = false) { com.olarte.mprogress.ui.settings.SettingsScreen(store) }
     }
 
@@ -192,6 +191,7 @@ class Shots {
         shot("08a_dinero") { com.olarte.mprogress.ui.money.MoneyScreen(store) }
         shot("08b_transferir") { com.olarte.mprogress.ui.money.TransferSheet(store) {} }
         shot("08c_limites") { com.olarte.mprogress.ui.planning.BudgetsScreen(store) {} }
+        shot("08e_limites_y_ahorro") { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.padding(com.olarte.mprogress.ui.theme.Spacing.margen)) { com.olarte.mprogress.ui.money.PlanningSection(store.ledger.value) } }
         shot("08d_ahorro") { com.olarte.mprogress.ui.planning.SavingsScreen(store) {} }
         shot("08e_efectivo") { com.olarte.mprogress.ui.money.MoneyScreen(store, cash) }
     }
@@ -237,6 +237,8 @@ class Shots {
         com.olarte.mprogress.auto.AutoCapture.handle(ctx, "notificacion", "com.google.android.apps.walletnfcrel", "ÉXITO CALLE 80", "\$ 84.300,00 con Visa •••• 4417")
         com.olarte.mprogress.auto.AutoCapture.handle(ctx, "notificacion", "com.nequi.MobileApp", "Nequi", "Pagaste \$45.500 en RAPPI")
         shot("11a_automatico") { com.olarte.mprogress.ui.auto.AutoCaptureScreen(store, {}, {}) {} }
+        shot("11b_automatico_completa") { com.olarte.mprogress.ui.auto.AutoCaptureScreen(store, {}, {}, full = true) {} }
+        shot("11c_automatico_estandar") { com.olarte.mprogress.ui.auto.AutoCaptureScreen(store, {}, {}, full = false) {} }
     }
 
     @Test fun fase10() {

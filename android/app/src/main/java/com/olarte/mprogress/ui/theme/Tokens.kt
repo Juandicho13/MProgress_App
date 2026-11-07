@@ -1,6 +1,11 @@
 package com.olarte.mprogress.ui.theme
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.olarte.mprogress.domain.AccentPresets
+import com.olarte.mprogress.domain.AccentTokens
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -31,10 +36,26 @@ val LightColors = Colors(
 
 val LocalColors = staticCompositionLocalOf { DarkColors }
 
+/** Colores elegidos en Ajustes › Diseño › Colores, como estado de Compose: quien los lea se vuelve a dibujar al cambiar.
+ *  Los guarda Store (SharedPreferences); los widgets no los leen y quedan con los originales. */
+object LiveColors {
+    var accentId by mutableStateOf("original"); private set
+    var incomeId by mutableStateOf("original"); private set
+    var accent by mutableStateOf(AccentTokens.BRASA_ORIGINAL); private set
+    var income by mutableStateOf(AccentTokens.HIELO_ORIGINAL); private set
+
+    fun load(accentId: String?, incomeId: String?) { setAccent(accentId); setIncome(incomeId) }
+    fun setAccent(id: String?) { val p = AccentPresets.accent(id); accentId = p.id; accent = p.tokens }
+    fun setIncome(id: String?) { val p = AccentPresets.income(id); incomeId = p.id; income = p.tokens }
+}
+
+fun rgb(hex: Int) = Color(0xFF000000.toInt() or hex)
+
 object Palette {
-    // Fijos en los dos temas. Texto blanco sobre la brasa (pedido de Juan, contraste suficiente).
-    val brasa = Color(0xFFF55F1F)
-    val sobreBrasa = Color.White
+    // Iguales en los dos temas. El acento sale de LiveColors; el texto encima es blanco u oscuro según el contraste
+    // (con la brasa original es blanco, pedido de Juan).
+    val brasa get() = rgb(LiveColors.accent.fill)
+    val sobreBrasa get() = rgb(LiveColors.accent.onFill)
     val oroRelleno = Color(0xFFF5C451)
     val sobreOro = Color(0xFF2A1F00)
 
@@ -46,10 +67,10 @@ object Palette {
     val linea @Composable get() = LocalColors.current.linea
     val texto1 @Composable get() = LocalColors.current.texto1
     val texto2 @Composable get() = LocalColors.current.texto2
-    val brasaTinta @Composable get() = LocalColors.current.brasaTinta
-    val brasaVelo @Composable get() = LocalColors.current.brasaVelo
-    val hielo @Composable get() = LocalColors.current.hielo
-    val hieloVelo @Composable get() = LocalColors.current.hieloVelo
+    val brasaTinta @Composable get() = LiveColors.accent.let { rgb(if (LocalColors.current.isDark) it.inkDark else it.inkLight) }
+    val brasaVelo @Composable get() = LiveColors.accent.let { rgb(if (LocalColors.current.isDark) it.veilDark else it.veilLight) }
+    val hielo @Composable get() = LiveColors.income.let { rgb(if (LocalColors.current.isDark) it.inkDark else it.inkLight) }
+    val hieloVelo @Composable get() = LiveColors.income.let { rgb(if (LocalColors.current.isDark) it.veilDark else it.veilLight) }
     val peligroVelo @Composable get() = LocalColors.current.peligroVelo
     val oro @Composable get() = LocalColors.current.oro
     val peligro @Composable get() = LocalColors.current.peligro

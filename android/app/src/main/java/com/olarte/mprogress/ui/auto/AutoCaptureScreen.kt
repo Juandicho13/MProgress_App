@@ -77,38 +77,22 @@ fun AutoCaptureScreen(store: Store, onReview: (PendingCapture) -> Unit, onOpenEn
     val detected = ledger.entries.filter { it.source == "notificacion" || it.source == "sms" }.sortedByDescending { it.occurredAt }.take(15)
 
     PlanningPage("Registro automático", onBack) {
-        T("Elige cómo quieres que la app se entere de tus pagos.", Type.cuerpo, Palette.texto2)
-        SectionLabel("Fuentes")
-        if (!full) {
-            Card {
+        T(if (full) "Elige cómo quieres que la app se entere de tus pagos." else "Escanea recibos y anota en segundos con el botón de ajustes rápidos.", Type.cuerpo, Palette.texto2)
+        // La estándar no lee notificaciones ni SMS (Play Protect la bloquearía): solo muestra lo que sí funciona.
+        if (full) {
+            SectionLabel("Notificaciones y SMS")
+            Card(padding = Spacing.s3) {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    T("Leer notificaciones y SMS", Type.titulo3)
-                    T("Esta versión no lee las notificaciones de Wallet ni los SMS del banco: Google Play Protect bloquea instalar por archivo una app que los pide. " +
-                        "Para tenerlo, instala la versión completa desde el Mac con Android Studio o ADB, por cable o con depuración inalámbrica. Tus datos se conservan.",
-                        Type.cuerpo2, Palette.texto2)
-                    T("Mientras tanto puedes escanear recibos y usar el botón de Registro rápido.", Type.cuerpo2, Palette.texto2)
+                    ListRow(icon = Icons.Rounded.Contactless, tint = Palette.brasa, fg = Palette.sobreBrasa, title = "Google Wallet y bancos",
+                        subtitle = "Comercio, monto y tarjeta al pagar", onClick = { AutoCapture.openListenerSettings(context) }) { Status(listener) }
+                    ListRow(icon = Icons.Outlined.Sms, title = "Mensajes del banco", subtitle = "SMS de compra (versión de pruebas)", onClick = {
+                        if (sms) { store.prefs.edit().putBoolean(AutoCapture.KEY_SMS, false).apply(); sms = false }
+                        else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED) {
+                            store.prefs.edit().putBoolean(AutoCapture.KEY_SMS, true).apply(); sms = true
+                        } else smsPermission.launch(Manifest.permission.RECEIVE_SMS)
+                    }) { Status(sms) }
+                    Box0 { ListRow(icon = Icons.Outlined.Email, title = "Correos de compra", subtitle = "Próximamente") }
                 }
-            }
-        }
-        Card(padding = Spacing.s3) {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                if (!full) ListRow(icon = Icons.Outlined.DocumentScanner, title = "Escanear recibo", subtitle = "Total y comercio con la cámara", onClick = onScan) {
-                    T("Abrir", Type.etiqueta, Palette.brasaTinta)
-                }
-                if (full) ListRow(icon = Icons.Rounded.Contactless, tint = Palette.brasa, fg = Palette.sobreBrasa, title = "Google Wallet y bancos",
-                    subtitle = "Comercio, monto y tarjeta al pagar", onClick = { AutoCapture.openListenerSettings(context) }) { Status(listener) }
-                if (full) ListRow(icon = Icons.Outlined.Sms, title = "Mensajes del banco", subtitle = "SMS de compra (versión de pruebas)", onClick = {
-                    if (sms) { store.prefs.edit().putBoolean(AutoCapture.KEY_SMS, false).apply(); sms = false }
-                    else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED) {
-                        store.prefs.edit().putBoolean(AutoCapture.KEY_SMS, true).apply(); sms = true
-                    } else smsPermission.launch(Manifest.permission.RECEIVE_SMS)
-                }) { Status(sms) }
-                ListRow(icon = Icons.Outlined.TouchApp, title = "Registro rápido", subtitle = "Botón de ajustes rápidos", onClick = { tileHelp = !tileHelp }) {
-                    T("Cómo", Type.etiqueta, Palette.brasaTinta)
-                }
-                if (tileHelp) T("Desliza dos veces desde arriba, toca el lápiz de los ajustes rápidos y arrastra \"Registro rápido\" de MProgress a tus botones.", Type.cuerpo2, Palette.texto2,
-                    Modifier.padding(horizontal = Spacing.s2))
-                Box0 { ListRow(icon = Icons.Outlined.Email, title = "Correos de compra", subtitle = "Próximamente") }
             }
         }
         if (full) T("Solo leemos las notificaciones de Wallet y de las apps de bancos y billeteras. El texto no sale del teléfono.", Type.leyenda, Palette.texto2)
@@ -143,7 +127,7 @@ fun AutoCaptureScreen(store: Store, onReview: (PendingCapture) -> Unit, onOpenEn
                 }
             }
         }
-        Card {
+        if (full) Card {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                 T("Así se lee un mensaje", Type.leyenda, Palette.texto2)
                 BasicTextField(sample, { sample = it }, Modifier.appTextField().fillMaxWidth().clip(RoundedCornerShape(Radius.campo)).background(Palette.superficie3).padding(Spacing.s3),
@@ -164,6 +148,24 @@ fun AutoCaptureScreen(store: Store, onReview: (PendingCapture) -> Unit, onOpenEn
             }
         }
         if (full && !listener) PrimaryButton("Permitir leer notificaciones") { AutoCapture.openListenerSettings(context) }
+
+        SectionLabel("Escanear recibos")
+        Card(padding = Spacing.s3) {
+            ListRow(icon = Icons.Outlined.DocumentScanner, title = "Escanear recibo", subtitle = "Total y comercio con la cámara", onClick = onScan) {
+                T("Abrir", Type.etiqueta, Palette.brasaTinta)
+            }
+        }
+
+        SectionLabel("Registro rápido")
+        Card(padding = Spacing.s3) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                ListRow(icon = Icons.Outlined.TouchApp, title = "Botón de ajustes rápidos", subtitle = "Anota un gasto o ingreso sin buscar la app", onClick = { tileHelp = !tileHelp }) {
+                    T("Cómo", Type.etiqueta, Palette.brasaTinta)
+                }
+                if (tileHelp) T("Desliza dos veces desde arriba, toca el lápiz de los ajustes rápidos y arrastra \"Registro rápido\" de MProgress a tus botones.", Type.cuerpo2, Palette.texto2,
+                    Modifier.padding(horizontal = Spacing.s2))
+            }
+        }
     }
 }
 

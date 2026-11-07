@@ -6,10 +6,7 @@ enum class QuickActionKind(val raw: String, val title: String, val shortTitle: S
     INGRESO("ingreso", "Ingreso extra", "Ingreso", "↓"),
     FIJOS("fijos", "Pagos fijos", "Fijos", "≡"),
     RAPIDO("rapido", "Registro rápido", "Rápido", "⚡"),
-    LIMITES("limites", "Límites", "Límites", "◔"),
-    AHORRO("ahorro", "Ahorro", "Ahorro", "◎"),
-    RECIBO("recibo", "Escanear recibo", "Recibo", "▤"),
-    AUTOMATICO("automatico", "Registro automático", "Auto", "✦");
+    RECIBO("recibo", "Escanear recibo", "Recibo", "▤");
 
     companion object { fun from(raw: String) = entries.firstOrNull { it.raw == raw } }
 }
@@ -33,9 +30,9 @@ data class QuickActionLayout private constructor(val order: List<QuickActionKind
         val standard = of(QuickActionKind.entries, listOf(QuickActionKind.GASTO, QuickActionKind.INGRESO, QuickActionKind.FIJOS))
         /**
          * Acciones que existieron y se quitaron (Gasto fijo, Sueldo o fijo y Pago anual repetían Pagos fijos; Historial ya está en
-         * Inicio › Movimientos › Ver todo). Si estaban fijadas, su lugar se llena con las de por defecto.
+         * Inicio › Movimientos › Ver todo; Registro automático vive en Ajustes; Límites y Ahorro, en Dinero). Si estaban fijadas, su lugar se llena con las de por defecto.
          */
-        val retired = setOf("fijo", "sueldo", "anual", "historial")
+        val retired = setOf("fijo", "sueldo", "anual", "historial", "automatico", "limites", "ahorro")
 
         /** Completa las fijadas con las de por defecto, sin repetir, hasta llegar a 3. */
         fun filled(pinned: List<QuickActionKind>): List<QuickActionKind> {

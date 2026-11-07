@@ -67,6 +67,12 @@ struct MoneyView: View {
             .navigationDestination(for: UUID.self) { id in
                 InstitutionDetailView(institutionId: id)
             }
+            .navigationDestination(for: PlanningRoute.self) { route in
+                switch route {
+                case .limites: BudgetsView()
+                case .ahorro: SavingsView()
+                }
+            }
         }
     }
 }
@@ -107,6 +113,7 @@ private struct MoneyContent: View {
                     RewardsSection(wallet: wallet, hideBalances: hideBalances)
                     mostUsedSection
                 }
+                PlanningSection(wallet: wallet)
             }
             .padding(.horizontal, Spacing.margen)
             .padding(.top, Spacing.s4)

@@ -98,18 +98,18 @@ class QuickActionsTest {
     @Test fun porDefectoYGuardado() {
         val l = QuickActionLayout.parse("")
         assertEquals(listOf(QuickActionKind.GASTO, QuickActionKind.INGRESO, QuickActionKind.FIJOS), l.pinned)
-        val m = l.togglePin(QuickActionKind.INGRESO).togglePin(QuickActionKind.AHORRO)
+        val m = l.togglePin(QuickActionKind.INGRESO).togglePin(QuickActionKind.RECIBO)
         assertEquals(m, QuickActionLayout.parse(m.stored))
-        assertEquals(listOf(QuickActionKind.GASTO, QuickActionKind.FIJOS, QuickActionKind.AHORRO), m.pinned)
+        assertEquals(listOf(QuickActionKind.GASTO, QuickActionKind.FIJOS, QuickActionKind.RECIBO), m.pinned)
     }
 
     @Test fun limiteYTolerancia() {
-        assertEquals(QuickActionKind.LIMITES, QuickActionLayout.standard.togglePin(QuickActionKind.LIMITES).pinned.last())
-        val l = QuickActionLayout.parse("ahorro,vieja,gasto|ahorro,ahorro,vieja")
-        assertEquals(listOf(QuickActionKind.AHORRO), l.pinned)
+        assertEquals(QuickActionKind.RAPIDO, QuickActionLayout.standard.togglePin(QuickActionKind.RAPIDO).pinned.last())
+        val l = QuickActionLayout.parse("recibo,vieja,gasto|recibo,recibo,vieja")
+        assertEquals(listOf(QuickActionKind.RECIBO), l.pinned)
         assertTrue(l.order.toSet() == QuickActionKind.entries.toSet())
         // Mismo texto que guarda iOS: se puede leer igual en ambas apps.
-        assertEquals(QuickActionKind.AHORRO, QuickActionLayout.parse("ahorro,gasto|ahorro").pinned.first())
+        assertEquals(QuickActionKind.RECIBO, QuickActionLayout.parse("recibo,gasto|recibo").pinned.first())
     }
 
     @Test fun sinRepetidasDePagosFijos() {
@@ -118,16 +118,34 @@ class QuickActionsTest {
         assertTrue(QuickActionKind.entries.any { it.title == "Pagos fijos" })
     }
 
+    @Test fun sinRegistroAutomaticoEnMas() {
+        // Mismo caso que QuickActionsTests.sinAutomatico de iOS.
+        assertTrue(QuickActionKind.entries.none { it.raw == "automatico" })
+        val viejo = QuickActionLayout.parse("gasto,automatico,recibo,fijos|gasto,automatico,recibo")
+        assertEquals(listOf(QuickActionKind.GASTO, QuickActionKind.RECIBO, QuickActionKind.INGRESO), viejo.pinned)
+        assertTrue("automatico" !in viejo.stored)
+        assertEquals(QuickActionKind.entries.toSet(), viejo.order.toSet())
+    }
+
+    @Test fun sinLimitesNiAhorroEnMas() {
+        // Mismo caso que QuickActionsTests.sinLimitesNiAhorro de iOS.
+        assertTrue(QuickActionKind.entries.none { it.raw == "limites" || it.raw == "ahorro" })
+        val viejo = QuickActionLayout.parse("limites,ahorro,gasto,recibo|limites,ahorro,recibo")
+        assertEquals(listOf(QuickActionKind.RECIBO, QuickActionKind.GASTO, QuickActionKind.INGRESO), viejo.pinned)
+        assertTrue("ahorro" !in viejo.stored && "limites" !in viejo.stored)
+        assertEquals(QuickActionKind.entries.toSet(), viejo.order.toSet())
+    }
+
     @Test fun migraLasFijadasQueSeQuitaron() {
         // Mismos casos que QuickActionsTests.migraFijadas de iOS.
         assertEquals(listOf(QuickActionKind.GASTO, QuickActionKind.INGRESO, QuickActionKind.FIJOS),
             QuickActionLayout.parse("gasto,ingreso,fijo,sueldo,anual,fijos,rapido|gasto,ingreso,fijo").pinned)
         assertEquals(QuickActionLayout.standard.pinned, QuickActionLayout.parse("fijo,sueldo,anual|sueldo,anual,fijo").pinned)
-        val mezcla = QuickActionLayout.parse("ahorro,fijos,historial|historial,ahorro,fijos")
-        assertEquals(listOf(QuickActionKind.AHORRO, QuickActionKind.FIJOS, QuickActionKind.GASTO), mezcla.pinned)
+        val mezcla = QuickActionLayout.parse("recibo,fijos,historial|historial,recibo,fijos")
+        assertEquals(listOf(QuickActionKind.RECIBO, QuickActionKind.FIJOS, QuickActionKind.GASTO), mezcla.pinned)
         assertEquals(QuickActionKind.entries.toSet(), mezcla.order.toSet())
         // Menos de 3 a propósito se respeta.
-        assertEquals(listOf(QuickActionKind.AHORRO), QuickActionLayout.parse("gasto,ahorro|ahorro").pinned)
+        assertEquals(listOf(QuickActionKind.RECIBO), QuickActionLayout.parse("gasto,recibo|recibo").pinned)
     }
 }
 

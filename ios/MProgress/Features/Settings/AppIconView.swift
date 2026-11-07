@@ -32,39 +32,31 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
     var previewName: String { "Vista\(assetSuffix)" }
 }
 
-struct AppIconView: View {
+/// Ícono de la app (pantalla 29, ahora sección de Diseño).
+struct AppIconSection: View {
     @AppStorage(AppIconChoice.storageKey) private var iconRaw = AppIconChoice.trazo.rawValue
     @State private var errorText: String?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.s5) {
-                Text("Ícono de la app").appFont(.titulo1).foregroundStyle(Palette.texto1).accessibilityAddTraits(.isHeader)
-                SectionLabel(text: "Símbolo")
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.s4), count: 4), spacing: Spacing.s5) {
-                    ForEach(AppIconChoice.Symbol.allCases, id: \.self) { symbol in
-                        let choice = AppIconChoice.choice(symbol, white: current.isWhite)
-                        Button { pick(choice) } label: { tile(choice) }.buttonStyle(.plain)
-                    }
+        VStack(alignment: .leading, spacing: Spacing.s5) {
+            SectionLabel(text: "Símbolo")
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Spacing.s4), count: 4), spacing: Spacing.s5) {
+                ForEach(AppIconChoice.Symbol.allCases, id: \.self) { symbol in
+                    let choice = AppIconChoice.choice(symbol, white: current.isWhite)
+                    Button { pick(choice) } label: { tile(choice) }.buttonStyle(.plain)
                 }
-                SectionLabel(text: "Fondo")
-                SegmentedPill(options: [(value: "negro", title: "Negro"), (value: "blanco", title: "Blanco")],
-                              selection: Binding(get: { current.isWhite ? "blanco" : "negro" },
-                                                 set: { pick(AppIconChoice.choice(current.symbol, white: $0 == "blanco")) }))
-                if let errorText {
-                    Text(errorText).appFont(.cuerpo2).foregroundStyle(Palette.peligro)
-                }
-                Text("Qué entra en Premium se decide más adelante; por ahora todos están disponibles.")
-                    .appFont(.leyenda)
-                    .foregroundStyle(Palette.texto2)
             }
-            .padding(.horizontal, Spacing.margen)
-            .padding(.top, Spacing.s2)
-            .padding(.bottom, Spacing.s8)
+            SectionLabel(text: "Fondo")
+            SegmentedPill(options: [(value: "negro", title: "Negro"), (value: "blanco", title: "Blanco")],
+                          selection: Binding(get: { current.isWhite ? "blanco" : "negro" },
+                                             set: { pick(AppIconChoice.choice(current.symbol, white: $0 == "blanco")) }))
+            if let errorText {
+                Text(errorText).appFont(.cuerpo2).foregroundStyle(Palette.peligro)
+            }
+            Text("Qué entra en Premium se decide más adelante; por ahora todos están disponibles.")
+                .appFont(.leyenda)
+                .foregroundStyle(Palette.texto2)
         }
-        .background(Palette.fondo.ignoresSafeArea())
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var current: AppIconChoice { AppIconChoice(rawValue: iconRaw) ?? .trazo }

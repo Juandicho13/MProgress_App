@@ -30,6 +30,8 @@ object AutoCapture {
      */
     val fullCapture get() = com.olarte.mprogress.BuildConfig.CAPTURA_COMPLETA
 
+    /** Lo que Ajustes y Primeros pasos muestran como configurado: en la estándar no hay nada que configurar. */
+    fun configured(context: Context) = !fullCapture || enabled(context) || smsEnabled(context)
     fun enabled(context: Context) = fullCapture && NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
     fun smsEnabled(context: Context) = fullCapture && Store.get(context).prefs.getBoolean(KEY_SMS, false) &&
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED

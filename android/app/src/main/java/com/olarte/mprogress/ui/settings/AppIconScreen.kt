@@ -79,19 +79,14 @@ object AppIcons {
     }
 }
 
-/** Ícono de la app (pantalla 29), igual que AppIconView de iOS. */
+/** Ícono de la app (pantalla 29, ahora sección de Diseño), igual que AppIconSection de iOS. */
 @Composable
-fun AppIconScreen(onBack: () -> Unit) {
+fun AppIconSection() {
     val context = LocalContext.current
     var state by remember { mutableStateOf(AppIcons.current(context)) }
     fun pick(s: IconSymbol, w: Boolean) { AppIcons.set(context, s, w); state = s to w }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(horizontal = Spacing.margen).padding(bottom = Spacing.s8),
-        verticalArrangement = Arrangement.spacedBy(Spacing.s5),
-    ) {
-        BackBar(onBack)
-        T("Ícono de la app", Type.titulo1)
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s5)) {
         SectionLabel("Símbolo")
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s4)) {
             IconSymbol.entries.forEach { s ->

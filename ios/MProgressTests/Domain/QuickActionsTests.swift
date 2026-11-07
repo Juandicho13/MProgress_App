@@ -18,24 +18,24 @@ struct QuickActionsTests {
     func idaYVuelta() {
         var layout = QuickActionLayout.standard
         layout.togglePin(.ingreso)
-        layout.togglePin(.ahorro)
+        layout.togglePin(.recibo)
         let read = QuickActionLayout(stored: layout.stored)
         #expect(read == layout)
-        #expect(read.pinned == [.gasto, .fijos, .ahorro])
+        #expect(read.pinned == [.gasto, .fijos, .recibo])
     }
 
     @Test("Nunca más de 3 fijadas: la nueva reemplaza la última")
     func limite() {
         var layout = QuickActionLayout.standard
-        layout.togglePin(.limites)
-        #expect(layout.pinned == [.gasto, .ingreso, .limites])
+        layout.togglePin(.rapido)
+        #expect(layout.pinned == [.gasto, .ingreso, .rapido])
     }
 
     @Test("Ignora acciones desconocidas y agrega las nuevas al final")
     func tolerante() {
-        let layout = QuickActionLayout(stored: "ahorro,vieja,gasto|ahorro,ahorro,vieja")
-        #expect(layout.order.prefix(2) == [.ahorro, .gasto])
-        #expect(layout.pinned == [.ahorro])
+        let layout = QuickActionLayout(stored: "recibo,vieja,gasto|recibo,recibo,vieja")
+        #expect(layout.order.prefix(2) == [.recibo, .gasto])
+        #expect(layout.pinned == [.recibo])
         #expect(Set(layout.order) == Set(QuickActionKind.allCases))
     }
 
@@ -62,14 +62,33 @@ struct QuickActionsTests {
         #expect(viejo.pinned == [.gasto, .ingreso, .fijos])
         let todas = QuickActionLayout(stored: "fijo,sueldo,anual|sueldo,anual,fijo")
         #expect(todas.pinned == QuickActionLayout.standard.pinned)
-        let mezcla = QuickActionLayout(stored: "ahorro,fijos,historial|historial,ahorro,fijos")
-        #expect(mezcla.pinned == [.ahorro, .fijos, .gasto])
+        let mezcla = QuickActionLayout(stored: "recibo,fijos,historial|historial,recibo,fijos")
+        #expect(mezcla.pinned == [.recibo, .fijos, .gasto])
         #expect(Set(mezcla.order) == Set(QuickActionKind.allCases))
+    }
+
+    @Test("Registro automático sale de Más y vive en Ajustes; quien lo tenía fijado sigue con 3")
+    func sinAutomatico() {
+        #expect(!QuickActionKind.allCases.map(\.rawValue).contains("automatico"))
+        let viejo = QuickActionLayout(stored: "gasto,automatico,recibo,fijos|gasto,automatico,recibo")
+        #expect(viejo.pinned == [.gasto, .recibo, .ingreso])
+        #expect(!viejo.stored.contains("automatico"))
+        #expect(Set(viejo.order) == Set(QuickActionKind.allCases))
+    }
+
+    @Test("Límites y Ahorro pasan a Dinero; quien los tenía fijados sigue con 3")
+    func sinLimitesNiAhorro() {
+        let raws = Set(QuickActionKind.allCases.map(\.rawValue))
+        #expect(raws.isDisjoint(with: ["limites", "ahorro"]))
+        let viejo = QuickActionLayout(stored: "limites,ahorro,gasto,recibo|limites,ahorro,recibo")
+        #expect(viejo.pinned == [.recibo, .gasto, .ingreso])
+        #expect(!viejo.stored.contains("ahorro") && !viejo.stored.contains("limites"))
+        #expect(Set(viejo.order) == Set(QuickActionKind.allCases))
     }
 
     @Test("Si la persona dejó menos de 3 a propósito, se respeta")
     func respetaMenos() {
-        let layout = QuickActionLayout(stored: "gasto,ahorro|ahorro")
-        #expect(layout.pinned == [.ahorro])
+        let layout = QuickActionLayout(stored: "gasto,recibo|recibo")
+        #expect(layout.pinned == [.recibo])
     }
 }

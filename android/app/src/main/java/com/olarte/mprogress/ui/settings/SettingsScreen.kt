@@ -72,8 +72,7 @@ fun SettingsScreen(store: Store) {
     var eraseError by remember { mutableStateOf<String?>(null) }
     when (page) {
         "cuenta" -> { if (cloud != null) { AccountScreen(cloud) { page = null }; return } }
-        "apariencia" -> { AppearanceScreen(store) { page = null }; return }
-        "icono" -> { AppIconScreen { page = null }; return }
+        "diseno" -> { DesignScreen(store) { page = null }; return }
         "avisos" -> { AlertsScreen(store) { page = null }; return }
         "moneda" -> { CurrencyScreen(store) { page = null }; return }
         "respaldo" -> { BackupScreen(store) { page = null }; return }
@@ -85,7 +84,7 @@ fun SettingsScreen(store: Store) {
     val lock by store.lock.collectAsState()
     val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.fragment.app.FragmentActivity
     val context = androidx.compose.ui.platform.LocalContext.current
-    val (iconSymbol, iconWhite) = AppIcons.current(context)
+    val (iconSymbol, _) = AppIcons.current(context)
     val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "1.0" }
 
     val theme by store.theme.collectAsState()
@@ -117,15 +116,10 @@ fun SettingsScreen(store: Store) {
             Divider()
             Row("Moneda", "${currency.code} ${currency.symbol}") { page = "moneda" }
             Divider()
-            Row("Apariencia", "${AppTheme.from(theme).title} · vidrio ${GlassLevel.from(glass).title.lowercase()}") { page = "apariencia" }
+            Row("Diseño", com.olarte.mprogress.domain.AccentPresets.summary(AppTheme.from(theme).title, GlassLevel.from(glass).title, iconSymbol.title,
+                com.olarte.mprogress.ui.theme.LiveColors.accentId, com.olarte.mprogress.ui.theme.LiveColors.incomeId)) { page = "diseno" }
             Divider()
-            Row("Ícono de la app", "${iconSymbol.title} · ${if (iconWhite) "blanco" else "negro"}") { page = "icono" }
-            Divider()
-            Row("Registro automático", when {
-                !com.olarte.mprogress.auto.AutoCapture.fullCapture -> "Recibos y botón rápido"
-                com.olarte.mprogress.auto.AutoCapture.enabled(androidx.compose.ui.platform.LocalContext.current) -> "Activo"
-                else -> "Sin configurar"
-            }) {
+            Row("Registro automático", if (com.olarte.mprogress.auto.AutoCapture.configured(context)) "Configurado" else "Sin configurar") {
                 com.olarte.mprogress.auto.LaunchAction.pending.value = "revisar"
             }
 
@@ -231,18 +225,13 @@ fun BackBar(onBack: () -> Unit) {
     Box(Modifier.padding(top = Spacing.s2)) { CircleIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Volver a Ajustes", onClick = onBack) }
 }
 
-/** Apariencia (pantalla 5): vista previa del vidrio, 4 niveles y tema. Cambia al instante. */
+/** Tema y vidrio (pantalla 5, ahora sección de Diseño): vista previa del vidrio, 4 niveles y tema. Cambia al instante. */
 @Composable
-fun AppearanceScreen(store: Store, onBack: () -> Unit) {
+fun AppearanceSection(store: Store) {
     val theme by store.theme.collectAsState()
     val glass by store.glass.collectAsState()
     val level = GlassLevel.from(glass)
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(horizontal = Spacing.margen).padding(bottom = Spacing.s8),
-        verticalArrangement = Arrangement.spacedBy(Spacing.s5),
-    ) {
-        BackBar(onBack)
-        T("Apariencia", Type.titulo1)
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s5)) {
         Box(
             Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(Radius.tarjeta))
                 .background(Brush.linearGradient(listOf(Palette.brasa, Color(0xFF6CC4F2), Palette.oroRelleno))),
@@ -269,6 +258,5 @@ fun AppearanceScreen(store: Store, onBack: () -> Unit) {
         SectionLabel("Tema")
         Segmented(AppTheme.entries.map { it.raw to it.title }, theme) { store.setTheme(it) }
         T("El texto siempre se mantiene legible: con menos transparencia el vidrio se oscurece y nunca baja del contraste mínimo.", Type.leyenda, Palette.texto2)
-        SignatureFooter()
     }
 }

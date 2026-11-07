@@ -140,32 +140,48 @@ fun AlertsScreen(store: Store, onBack: () -> Unit) {
     if (pickingTime) TimePickDialog(alerts.atMinutes, { pickingTime = false }) { store.setAlerts(alerts.copy(atMinutes = it)); pickingTime = false }
 }
 
-/** Moneda (pantalla 28): buscador y lista con las mismas monedas de iOS. */
+/** Moneda (pantalla 28): buscador, más usadas y todas las de ISO 4217 de la A a la Z, como iOS. */
 @Composable
-fun CurrencyScreen(store: Store, onBack: () -> Unit) {
+fun CurrencyScreen(store: Store, initialQuery: String = "", onBack: () -> Unit) {
     val current by store.currency.collectAsState()
-    var query by remember { mutableStateOf("") }
-    val key = HistoryMath.normalize(query)
-    val items = if (key.isEmpty()) Currency.all else Currency.all.filter { HistoryMath.normalize("${it.code} ${it.name}").contains(key) }
+    var query by remember { mutableStateOf(initialQuery) }
+    val searching = HistoryMath.normalize(query).isNotEmpty()
+    val results = remember(query) { Currency.search(query) }
     SettingsPage("Moneda", onBack) {
         SearchField(query, "Buscar moneda") { query = it }
-        Card(padding = Spacing.s2) {
-            items.forEachIndexed { i, c ->
-                val on = c.code == current.code
-                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { store.setCurrency(c) }.padding(horizontal = Spacing.s2),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-                    T(c.code, Type.titulo3, modifier = Modifier.width(52.dp))
-                    T(c.symbol, Type.cuerpo2, Palette.texto2, Modifier.width(40.dp))
-                    T(c.name, Type.cuerpo, modifier = Modifier.weight(1f))
-                    Box(Modifier.size(22.dp).clip(CircleShape).background(if (on) Palette.brasa else Color.Transparent)
-                        .border(2.dp, if (on) Palette.brasa else Palette.texto2.copy(alpha = 0.6f), CircleShape), contentAlignment = Alignment.Center) {
-                        if (on) Icon(Icons.Rounded.Check, null, Modifier.size(14.dp), tint = Palette.sobreBrasa)
-                    }
-                }
-                if (i < items.lastIndex) FormDivider()
-            }
+        if (searching) {
+            if (results.isEmpty()) T("No hay monedas con ese nombre o código.", Type.cuerpo2, Palette.texto2)
+            else CurrencyList(results, current) { store.setCurrency(it) }
+        } else {
+            T("Más usadas", Type.leyenda, Palette.texto2)
+            CurrencyList(Currency.popular, current) { store.setCurrency(it) }
+            T("Todas de la A a la Z", Type.leyenda, Palette.texto2)
+            CurrencyList(Currency.all, current) { store.setCurrency(it) }
         }
         T("Cada cuenta puede tener su moneda. Un viaje en euros no cambia tu cuenta personal. Cambiar la moneda no convierte los montos ya guardados.", Type.leyenda, Palette.texto2)
+    }
+}
+
+@Composable
+private fun CurrencyList(items: List<Currency>, current: Currency, onPick: (Currency) -> Unit) {
+    Card(padding = Spacing.s2) {
+        items.forEachIndexed { i, c ->
+            val on = c.code == current.code
+            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { onPick(c) }.padding(horizontal = Spacing.s2),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                T(c.flag ?: "🌐", Type.titulo3, modifier = Modifier.width(28.dp))
+                T(c.code, Type.titulo3, modifier = Modifier.width(52.dp))
+                Column(Modifier.weight(1f)) {
+                    T(c.name, Type.cuerpo)
+                    T(c.symbol, Type.cuerpo2, Palette.texto2)
+                }
+                Box(Modifier.size(22.dp).clip(CircleShape).background(if (on) Palette.brasa else Color.Transparent)
+                    .border(2.dp, if (on) Palette.brasa else Palette.texto2.copy(alpha = 0.6f), CircleShape), contentAlignment = Alignment.Center) {
+                    if (on) Icon(Icons.Rounded.Check, null, Modifier.size(14.dp), tint = Palette.sobreBrasa)
+                }
+            }
+            if (i < items.lastIndex) FormDivider()
+        }
     }
 }
 
@@ -268,6 +284,7 @@ private fun Place(title: String, detail: String, on: Boolean) {
 @Composable
 fun WhatsNewScreen(onBack: () -> Unit) {
     val versions = listOf(
+        Triple("1.4", "Nov 2026", listOf("Diseño: tema, vidrio, colores e ícono en una sola pantalla", "Elige el color de acento y el de ingresos, con vista previa y Restablecer", "Todas las monedas del mundo, con buscador, más usadas y banderas")),
         Triple("1.1", "Nov 2026", listOf("Resumen sin predicciones: Este mes con lo que entró, gastaste, fijos que faltan y te quedan", "Los próximos 3 meses solo con tus pagos fijos", "¿Tu sueldo es $ 2? para arreglar un ingreso fijo mal escrito", "Próximos cargos con Ver todos y Ver menos", "El teclado ya no tapa lo que escribes y Samsung Pass no sale en los campos")),
         Triple("1.0", "Nov 2026", listOf("Cuenta y nube: entra con un enlace a tu correo, sin contraseña", "Tus datos se cifran en el teléfono y se sincronizan con tu iPhone y tus otros teléfonos", "Código de recuperación y aprobar dispositivos nuevos")),
         Triple("0.9.1", "Nov 2026", listOf("Dos versiones: la estándar se instala sin que Play Protect la bloquee; la completa, desde el Mac, también lee notificaciones y SMS del banco")),

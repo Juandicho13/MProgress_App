@@ -44,7 +44,7 @@ enum AppTheme: String, CaseIterable, Identifiable {
 }
 
 enum SettingsRoute: Hashable {
-    case apariencia, moneda, icono, respaldo, avisos, novedades, cuenta, comercios
+    case diseno, moneda, respaldo, avisos, novedades, cuenta, comercios, automatico
 }
 
 /// Ajustes (pantalla 13): General, Datos e Información, con la firma al pie.
@@ -62,13 +62,16 @@ struct SettingsView: View {
     @AppStorage(OnboardingModel.doneKey) private var onboardingDone = true
     @AppStorage(Guide.dismissedKey) private var guideHidden = false
     @Environment(UndoCenter.self) private var undo: UndoCenter?
-    @State private var showsBackTap = false
     @State private var confirmsErase = false
     @State private var eraseError: String?
     @State private var erasing = false
     private var cloud: CloudAccount { .shared }
     @Environment(\.modelContext) private var modelContext
     @AppStorage(AutoSetup.dobleToque.storageKey) private var backTapAt: Double = 0
+    @AppStorage(AutoSetup.applePay.storageKey) private var applePayAt: Double = 0
+    @AppStorage(AutoSetup.sms.storageKey) private var smsAt: Double = 0
+    /// Igual que el paso de Primeros pasos: alguno de los atajos ya funciona.
+    private var autoConfigured: Bool { backTapAt > 0 || applePayAt > 0 || smsAt > 0 }
     @Environment(\.calendar) private var calendar
 
     private var space: Space? { spaces.first { $0.kindRaw == "personal" } ?? spaces.first }
@@ -104,12 +107,13 @@ struct SettingsView: View {
                         divider
                         link("Moneda", value: space.map { "\($0.currency.code) \($0.currency.symbol)" } ?? "COP $", route: .moneda)
                         divider
-                        link("Apariencia", value: "\(AppTheme(rawValue: themeRaw)?.title ?? "Oscuro") · vidrio \((GlassLevel(rawValue: glassRaw) ?? .normal).title.lowercased())", route: .apariencia)
+                        link("Diseño", value: AccentPresets.summary(theme: AppTheme(rawValue: themeRaw)?.title ?? "Oscuro",
+                                                                    glass: (GlassLevel(rawValue: glassRaw) ?? .normal).title,
+                                                                    icon: (AppIconChoice(rawValue: iconRaw) ?? .trazo).symbolTitle,
+                                                                    accentId: LiveColors.shared.accentId, incomeId: LiveColors.shared.incomeId),
+                             route: .diseno)
                         divider
-                        link("Ícono de la app", value: AppIconChoice(rawValue: iconRaw)?.title ?? "Trazo · negro", route: .icono)
-                        divider
-                        Button { showsBackTap = true } label: { rowContent("Doble toque atrás", value: backTapAt > 0 ? "Configurado" : "Sin configurar") }
-                            .buttonStyle(.plain)
+                        link("Registro automático", value: autoConfigured ? "Configurado" : "Sin configurar", route: .automatico)
                     }
 
                     SectionLabel(text: "Datos")
@@ -178,7 +182,6 @@ struct SettingsView: View {
             .scrollIndicators(.hidden)
             .background(Palette.fondo.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showsBackTap) { BackTapGuideView() }
             .confirmationDialog("¿Borrar tu cuenta y todos tus datos?", isPresented: $confirmsErase, titleVisibility: .visible) {
                 Button("Borrar todo", role: .destructive) { erase() }
                 Button("Cancelar", role: .cancel) {}
@@ -194,14 +197,14 @@ struct SettingsView: View {
             }
             .navigationDestination(for: SettingsRoute.self) { route in
                 switch route {
-                case .apariencia: AppearanceView()
+                case .diseno: DesignView()
                 case .moneda: CurrencyView()
-                case .icono: AppIconView()
                 case .respaldo: BackupView()
                 case .avisos: AlertsView()
                 case .novedades: WhatsNewView()
                 case .cuenta: AccountView()
                 case .comercios: MerchantAliasesView()
+                case .automatico: AutoCaptureView()
                 }
             }
         }

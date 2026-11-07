@@ -1,12 +1,20 @@
 import SwiftUI
 import SwiftData
 
-/// Registro automático (pantalla 35): fuentes, últimos detectados con Revisar o Guardado y cómo se lee un SMS.
+/// Registro automático (pantalla 35, desde Ajustes y Primeros pasos): una sola pantalla con lo que anota por ti
+/// (Apple Pay y SMS), escanear recibos y el registro rápido (doble toque atrás e isla dinámica).
 struct AutoCaptureView: View {
     @Environment(\.calendar) private var calendar
     @Query(filter: #Predicate<Entry> { $0.deletedAt == nil }, sort: \Entry.createdAt, order: .reverse) private var allEntries: [Entry]
     @Query(filter: #Predicate<Product> { $0.deletedAt == nil }) private var products: [Product]
     @Query(filter: #Predicate<Institution> { $0.deletedAt == nil }) private var institutions: [Institution]
+    @Query(filter: #Predicate<Space> { $0.deletedAt == nil }, sort: \Space.createdAt) private var spaces: [Space]
+    @Environment(\.modelContext) private var context
+    @State private var scanning = false
+    @State private var receipt: HomeView.ReceiptDraft?
+    @AppStorage(QuickAddSettings.opensAppKey) private var opensApp = false
+
+    private var space: Space? { spaces.first { $0.kindRaw == "personal" } ?? spaces.first }
 
     @State private var reviewing: Entry?
     @State private var guide: Guide?
@@ -32,19 +40,11 @@ struct AutoCaptureView: View {
                     Text("Pagas y queda anotado").appFont(.titulo1).foregroundStyle(Palette.texto1).accessibilityAddTraits(.isHeader)
                     Text("Elige cómo quieres que la app se entere de tus pagos.").appFont(.cuerpo).foregroundStyle(Palette.texto2)
                 }
-                SectionLabel(text: "Fuentes")
+                SectionLabel(text: "Pagos con Apple Pay y SMS")
                 Card(padding: Spacing.s3) {
                     VStack(spacing: Spacing.s2) {
                         sourceRow("Apple Pay", "Atajo de Wallet · comercio, monto y tarjeta", "creditcard.fill", Palette.brasa, source: .applePay) { guide = .applePay }
                         sourceRow("Mensajes del banco", "Atajo de Mensajes lee el SMS y lo envía", "message", Palette.superficie3, source: .sms) { guide = .sms }
-                        Button { showsBackTap = true } label: {
-                            ListRow(tile: IconTile(content: .symbol("hand.tap")), title: "Doble toque atrás",
-                                    subtitle: "Toca dos veces el iPhone y anotas al instante") {
-                                status(backTapAt > 0)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
                         ListRow(tile: IconTile(content: .symbol("envelope")), title: "Correos de compra", subtitle: "Próximamente") { EmptyView() }
                             .opacity(0.6)
                     }
@@ -62,6 +62,36 @@ struct AutoCaptureView: View {
                 }
                 sampleCard
                 Button("Configurar paso a paso") { guide = .applePay }.buttonStyle(.secondary)
+
+                SectionLabel(text: "Escanear recibos")
+                Card(padding: Spacing.s3) {
+                    Button { scanning = true } label: {
+                        ListRow(tile: IconTile(content: .symbol("doc.text.viewfinder")), title: "Escanear recibo",
+                                subtitle: "Total y comercio con la cámara") {
+                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.texto2)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                SectionLabel(text: "Registro rápido")
+                Card(padding: Spacing.s3) {
+                    VStack(spacing: Spacing.s2) {
+                        Button { showsBackTap = true } label: {
+                            ListRow(tile: IconTile(content: .symbol("hand.tap")), title: "Doble toque atrás",
+                                    subtitle: "Toca dos veces el iPhone y anotas al instante") {
+                                status(backTapAt > 0)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        ListRow(tile: IconTile(content: .symbol("platter.filled.top.iphone")), title: "Isla dinámica",
+                                subtitle: opensApp ? "Apagada: el doble toque abre la app" : "Muestra lo que anotaste con Deshacer, sin abrir la app") {
+                            EmptyView()
+                        }
+                    }
+                }
             }
             .padding(.horizontal, Spacing.margen)
             .padding(.top, Spacing.s2)
@@ -76,6 +106,21 @@ struct AutoCaptureView: View {
             AddEntryView(editing: entry)
         }
         .sheet(isPresented: $showsBackTap) { BackTapGuideView() }
+        .sheet(isPresented: $scanning) {
+            ReceiptScanView { merchant, amount in
+                let raw = merchant ?? ""
+                let alias = space.flatMap { MerchantAliasStore(context: context).match(raw, spaceId: $0.id) }
+                receipt = HomeView.ReceiptDraft(merchant: raw, amountMinor: amount ?? 0, name: alias?.name ?? raw, categoryId: alias?.categoryId)
+            }
+            .presentationDetents([.medium])
+            .presentationCornerRadius(Radius.hoja)
+        }
+        .sheet(item: $receipt) { draft in
+            if let space {
+                AddEntryView(spaceId: space.id, prefillName: draft.name, amountMinor: draft.amountMinor, source: .recibo, currency: space.currency,
+                             merchant: draft.merchant, categoryId: draft.categoryId)
+            }
+        }
         .sheet(item: $guide) { guide in
             ShortcutGuideView(guide: guide)
         }

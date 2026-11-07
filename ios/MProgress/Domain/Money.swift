@@ -1,7 +1,8 @@
 import Foundation
 
-/// Moneda soportada. `minorDigits` es cuántas cifras tiene la unidad mínima
-/// (centavos) y `shownDigits` cuántas se muestran en pantalla.
+/// Moneda (ISO 4217). `minorDigits` es cuántas cifras tiene la unidad mínima
+/// (centavos) y `shownDigits` cuántas se muestran en pantalla. Dos monedas son
+/// iguales si tienen el mismo código: el nombre y el símbolo son solo para mostrar.
 struct Currency: Hashable, Codable, Sendable {
     let code: String
     let symbol: String
@@ -9,6 +10,15 @@ struct Currency: Hashable, Codable, Sendable {
     let minorDigits: Int
     let shownDigits: Int
 
+    init(code: String, symbol: String, name: String, minorDigits: Int, shownDigits: Int) {
+        self.code = code
+        self.symbol = symbol
+        self.name = name
+        self.minorDigits = minorDigits
+        self.shownDigits = shownDigits
+    }
+
+    // Las de siempre: no cambian (los montos guardados dependen de `minorDigits`).
     static let cop = Currency(code: "COP", symbol: "$", name: "Peso colombiano", minorDigits: 2, shownDigits: 0)
     static let eur = Currency(code: "EUR", symbol: "€", name: "Euro", minorDigits: 2, shownDigits: 2)
     static let usd = Currency(code: "USD", symbol: "US$", name: "Dólar estadounidense", minorDigits: 2, shownDigits: 2)
@@ -18,17 +28,71 @@ struct Currency: Hashable, Codable, Sendable {
     static let clp = Currency(code: "CLP", symbol: "$", name: "Peso chileno", minorDigits: 0, shownDigits: 0)
     static let pen = Currency(code: "PEN", symbol: "S/", name: "Sol peruano", minorDigits: 2, shownDigits: 2)
 
-    static let all: [Currency] = [.cop, .eur, .usd, .mxn, .gbp, .ars, .clp, .pen]
+    static let legacy: [Currency] = [.cop, .eur, .usd, .mxn, .gbp, .ars, .clp, .pen]
 
+    /// Todas las monedas activas, de la A a la Z por nombre.
+    static var all: [Currency] { CurrencyCatalog.shared.sorted }
+
+    /// Las que más se usan, para arriba del selector.
+    static var popular: [Currency] { CurrencyCatalog.popularCodes.compactMap { CurrencyCatalog.shared.byCode[$0] } }
+
+    /// Un código desconocido cae en COP, como antes.
     static func from(code: String) -> Currency {
-        all.first { $0.code == code.uppercased() } ?? .cop
+        known(code: code) ?? .cop
     }
+
+    static func known(code: String) -> Currency? {
+        CurrencyCatalog.shared.byCode[code.trimmingCharacters(in: .whitespaces).uppercased()]
+    }
+
+    /// Busca por código o nombre, sin tildes ni mayúsculas. Vacío devuelve todas.
+    static func search(_ query: String) -> [Currency] {
+        let words = HistoryMath.normalize(query).split(separator: " ").map(String.init)
+        guard !words.isEmpty else { return all }
+        let hits = all.filter { currency in
+            let haystack = HistoryMath.normalize("\(currency.code) \(currency.name)")
+            return words.allSatisfy { haystack.contains($0) }
+        }
+        // El código exacto va primero ("usd" muestra el dólar arriba).
+        let key = words.joined().uppercased()
+        return hits.filter { $0.code == key } + hits.filter { $0.code != key }
+    }
+
+    /// Bandera del país de la moneda, si tiene uno claro.
+    var flag: String? { CurrencyCatalog.flag(for: code) }
 
     /// Unidades mínimas que hay en una unidad (100 para centavos, 1 para CLP).
     var minorPerUnit: Int64 {
         var value: Int64 = 1
         for _ in 0..<minorDigits { value *= 10 }
         return value
+    }
+
+    static func == (lhs: Currency, rhs: Currency) -> Bool { lhs.code == rhs.code }
+    func hash(into hasher: inout Hasher) { hasher.combine(code) }
+
+    private enum CodingKeys: String, CodingKey { case code, symbol, name, minorDigits, shownDigits }
+
+    /// Lo guardado manda por el código: si es conocida se usa la del catálogo.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let code = try c.decode(String.self, forKey: .code)
+        if let known = Currency.known(code: code) { self = known; return }
+        let digits = try c.decodeIfPresent(Int.self, forKey: .minorDigits) ?? 2
+        self.init(code: code.uppercased(),
+                  symbol: try c.decodeIfPresent(String.self, forKey: .symbol) ?? code.uppercased(),
+                  name: try c.decodeIfPresent(String.self, forKey: .name) ?? code.uppercased(),
+                  minorDigits: digits,
+                  shownDigits: try c.decodeIfPresent(Int.self, forKey: .shownDigits) ?? digits)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(code, forKey: .code)
+        try c.encode(symbol, forKey: .symbol)
+        try c.encode(name, forKey: .name)
+        try c.encode(minorDigits, forKey: .minorDigits)
+        try c.encode(shownDigits, forKey: .shownDigits)
     }
 }
 

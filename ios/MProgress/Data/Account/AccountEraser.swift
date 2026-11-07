@@ -42,6 +42,7 @@ enum AccountEraser {
         if let bundle = Bundle.main.bundleIdentifier {
             UserDefaults.standard.removePersistentDomain(forName: bundle)
         }
+        LiveColors.shared.reset()
         if let url = WidgetSnapshot.fileURL { try? FileManager.default.removeItem(at: url) }
 
         // 6. La base queda lista para empezar de cero con el onboarding.

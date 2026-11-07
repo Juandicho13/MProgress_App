@@ -116,6 +116,11 @@ class Store internal constructor(private val file: File, val prefs: SharedPrefer
     /** Se llama después de cada cambio hecho en el teléfono (no de los que bajan de la nube): programa la sincronización. */
     var onLocalChange: (() -> Unit)? = null
 
+    // Colores de Diseño: se guardan aquí y se publican en LiveColors, que Palette lee para que toda la app cambie al instante.
+    init { com.olarte.mprogress.ui.theme.LiveColors.load(prefs.getString(com.olarte.mprogress.domain.AccentPresets.ACCENT_KEY, null), prefs.getString(com.olarte.mprogress.domain.AccentPresets.INCOME_KEY, null)) }
+    fun setAccent(id: String) { prefs.edit().putString(com.olarte.mprogress.domain.AccentPresets.ACCENT_KEY, id).apply(); com.olarte.mprogress.ui.theme.LiveColors.setAccent(id) }
+    fun setIncome(id: String) { prefs.edit().putString(com.olarte.mprogress.domain.AccentPresets.INCOME_KEY, id).apply(); com.olarte.mprogress.ui.theme.LiveColors.setIncome(id) }
+    fun resetColors() { setAccent("original"); setIncome("original") }
     fun setTheme(v: String) { prefs.edit().putString(KEY_THEME, v).apply(); _theme.value = v }
     fun setGlass(v: String) { prefs.edit().putString(KEY_GLASS, v).apply(); _glass.value = v }
     fun setOnboarded(v: Boolean) { prefs.edit().putBoolean(KEY_ONBOARDED, v).apply(); _onboarded.value = v }
@@ -481,6 +486,7 @@ class Store internal constructor(private val file: File, val prefs: SharedPrefer
         Categories.custom = emptyList()
         onChange?.invoke(Ledger())
         _theme.value = "oscuro"; _glass.value = "normal"; _lock.value = false; _alerts.value = AlertSettings()
+        com.olarte.mprogress.ui.theme.LiveColors.load(null, null)
         _currency.value = Currency.COP; Currency.current = Currency.COP
         _actions.value = QuickActionLayout.standard
         _onboarded.value = false
