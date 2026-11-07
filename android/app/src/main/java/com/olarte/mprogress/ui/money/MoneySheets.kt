@@ -44,14 +44,22 @@ import com.olarte.mprogress.ui.theme.Palette
 import com.olarte.mprogress.ui.theme.Spacing
 import java.time.LocalDate
 
-/** Transferir entre productos o pagar una tarjeta (F06-05). No cuenta como gasto ni como ingreso. */
+/**
+ * Transferir entre productos o pagar una tarjeta (F06-05). No cuenta como gasto ni como ingreso.
+ * Pagar tarjeta trae la deuda de hoy como monto, en un campo que se ve editable.
+ */
 @Composable
 fun TransferSheet(store: Store, from: String? = null, to: String? = null, onDone: () -> Unit) {
     val ledger by store.ledger.collectAsState()
     val options = ledger.products.filter { it.kind != ProductKind.DEBITO }
     var fromId by remember { mutableStateOf(from ?: options.firstOrNull { it.kind == ProductKind.CUENTA }?.id ?: options.firstOrNull()?.id) }
     var toId by remember { mutableStateOf(to ?: options.firstOrNull { it.kind == ProductKind.CREDITO }?.id ?: options.drop(1).firstOrNull()?.id) }
-    var amount by remember { mutableStateOf(AmountInput()) }
+    // Pagar tarjeta: la deuda de hoy, lista para cambiarla si pagas otro valor.
+    var amount by remember {
+        val card = ledger.product(toId)?.takeIf { it.kind == ProductKind.CREDITO }
+        mutableStateOf(AmountInput.prefilled(maxOf(0, card?.let { ledger.balance(it) } ?: 0), Currency.current))
+    }
+    var editing by remember { mutableStateOf(amount.text.isEmpty()) }
     var date by remember { mutableStateOf(LocalDate.now()) }
     var picking by remember { mutableStateOf(false) }
     val target = ledger.product(toId)
@@ -69,7 +77,7 @@ fun TransferSheet(store: Store, from: String? = null, to: String? = null, onDone
             }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Spacing.margen, vertical = Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s5)) {
-            AmountDisplay(Currency.current.symbol, amount.display, true, empty = amount.text.isEmpty())
+            EditableAmountField(amount, editing) { editing = true }
             Card(padding = Spacing.s2) {
                 ProductMenuRow("Desde", label(ledger.product(fromId)), options, ledger) { fromId = it }
                 FormDivider()
@@ -80,7 +88,7 @@ fun TransferSheet(store: Store, from: String? = null, to: String? = null, onDone
             if (fromId != null && fromId == toId) T("Elige dos productos distintos.", Type.cuerpo2, Palette.peligro)
             T("Mover plata entre tus productos no cuenta como gasto ni como ingreso.", Type.leyenda, Palette.texto2)
         }
-        Box(Modifier.padding(horizontal = Spacing.margen).padding(bottom = Spacing.s2)) {
+        if (editing) Box(Modifier.padding(horizontal = Spacing.margen).padding(bottom = Spacing.s2)) {
             Keypad(amount.allowsDecimals, { amount = amount.press(it) }, { amount = amount.deleteLast() })
         }
     }

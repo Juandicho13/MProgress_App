@@ -121,6 +121,8 @@ struct Money: Hashable, Codable, Sendable, Comparable {
 struct AmountInput: Equatable, Sendable {
     private(set) var text: String = ""
     let currency: Currency
+    /// Monto ya puesto (Pagar tarjeta, Marcar pagado): la primera tecla lo reemplaza, como si estuviera seleccionado.
+    private(set) var replacesOnNextKey = false
 
     init(currency: Currency = .cop, text: String = "") {
         self.currency = currency
@@ -144,9 +146,21 @@ struct AmountInput: Equatable, Sendable {
         self.text = text
     }
 
+    /// Arranca con un monto que se puede cambiar de una vez: la primera tecla escribe un monto nuevo y borrar lo deja vacío.
+    static func prefilled(minor: Int64, currency: Currency) -> AmountInput {
+        var input = AmountInput(minor: minor, currency: currency)
+        input.replacesOnNextKey = !input.text.isEmpty
+        return input
+    }
+
     var allowsDecimals: Bool { currency.shownDigits > 0 }
 
     mutating func press(_ key: String) {
+        let isDigit = key.count == 1 && key.first?.isNumber == true
+        if replacesOnNextKey, isDigit || (key == "," && allowsDecimals) {
+            replacesOnNextKey = false
+            text = ""
+        }
         switch key {
         case ",":
             guard allowsDecimals, !text.contains(",") else { return }
@@ -166,6 +180,11 @@ struct AmountInput: Equatable, Sendable {
     }
 
     mutating func deleteLast() {
+        if replacesOnNextKey {
+            replacesOnNextKey = false
+            text = ""
+            return
+        }
         guard !text.isEmpty else { return }
         text.removeLast()
         if text == "0" { text = "" }

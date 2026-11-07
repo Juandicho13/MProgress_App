@@ -155,6 +155,18 @@ final class LedgerStore {
         try context.save()
     }
 
+    /// Arregla el monto de unos movimientos (el sueldo de $ 2 que debía ser $ 2.000.000) sin tocar lo demás.
+    func setEntryAmounts(_ entries: [Entry], amountMinor: Int64, now: Date = .now) throws {
+        precondition(amountMinor > 0, "El monto va siempre positivo")
+        for entry in entries {
+            if entry.deletedAt == nil { adjustPoints(for: entry, sign: -1) }
+            entry.amountMinor = amountMinor
+            entry.touch(now)
+            if entry.deletedAt == nil { adjustPoints(for: entry, sign: 1) }
+        }
+        try context.save()
+    }
+
     func recurring(spaceId: UUID) throws -> [Recurring] {
         try context.fetch(FetchDescriptor<Recurring>(
             predicate: #Predicate<Recurring> { $0.spaceId == spaceId && $0.deletedAt == nil },
@@ -165,9 +177,11 @@ final class LedgerStore {
     /// Marca pagado un pago fijo: crea el movimiento, suma una cuota y mueve la próxima fecha (HANDOFF 8.2).
     /// Un pago puntual, uno que llegó a su última cuota o uno cuya siguiente fecha pasa del fin queda inactivo
     /// (terminado). Para saber si terminó por su fin: `finishedByEnd` después de llamar.
+    /// `amountMinor`: lo que se pagó de verdad, si no fue lo planeado (el pago fijo conserva su monto).
     @discardableResult
-    func markPaid(_ item: Recurring, on date: Date = .now, by userId: UUID? = nil) throws -> Entry {
-        let entry = try addEntry(spaceId: item.spaceId, kind: item.kind, amountMinor: item.amountMinor, name: item.name,
+    func markPaid(_ item: Recurring, on date: Date = .now, by userId: UUID? = nil, amountMinor: Int64? = nil) throws -> Entry {
+        let paid = amountMinor.flatMap { $0 > 0 ? $0 : nil } ?? item.amountMinor
+        let entry = try addEntry(spaceId: item.spaceId, kind: item.kind, amountMinor: paid, name: item.name,
                                  occurredAt: date, categoryId: item.categoryId, productId: item.productId, createdBy: userId)
         entry.recurringId = item.id
         entry.icon = item.icon

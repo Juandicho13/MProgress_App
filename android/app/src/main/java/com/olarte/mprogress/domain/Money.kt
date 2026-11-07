@@ -69,10 +69,13 @@ data class Money(val minor: Long, val currency: Currency = Currency.current) : C
 }
 
 /** Lo que se escribe en el teclado numérico de Agregar: dígitos y una coma decimal. */
-data class AmountInput(val currency: Currency = Currency.current, val text: String = "") {
+data class AmountInput(val currency: Currency = Currency.current, val text: String = "",
+                       /** Monto ya puesto (Pagar tarjeta, Marcar pagado): la primera tecla lo reemplaza, como si estuviera seleccionado. */
+                       val replaceNext: Boolean = false) {
     val allowsDecimals get() = currency.shownDigits > 0
 
     fun press(key: Char): AmountInput {
+        if (replaceNext && (key.isDigit() || (key == ',' && allowsDecimals))) return AmountInput(currency).press(key)
         if (key == ',') {
             if (!allowsDecimals || text.contains(',')) return this
             return copy(text = if (text.isEmpty()) "0," else "$text,")
@@ -90,6 +93,7 @@ data class AmountInput(val currency: Currency = Currency.current, val text: Stri
     }
 
     fun deleteLast(): AmountInput {
+        if (replaceNext) return AmountInput(currency)
         if (text.isEmpty()) return this
         val t = text.dropLast(1)
         return copy(text = if (t == "0") "" else t)
@@ -124,5 +128,8 @@ data class AmountInput(val currency: Currency = Currency.current, val text: Stri
             }
             return AmountInput(currency, text)
         }
+
+        /** Arranca con un monto que se puede cambiar de una vez: la primera tecla escribe un monto nuevo y borrar lo deja vacío. */
+        fun prefilled(minor: Long, currency: Currency): AmountInput = fromMinor(minor, currency).let { it.copy(replaceNext = it.text.isNotEmpty()) }
     }
 }

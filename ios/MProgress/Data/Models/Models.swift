@@ -170,6 +170,8 @@ final class Recurring: SyncTracked {
     var amountMinor: Int64 = 0
     var cycleRaw: String = "mensual"
     var intervalDays: Int?
+    /// Meses entre cobros de un pago mensual: 1 es cada mes, 3 trimestral (1 a 24). Los de antes quedan en 1.
+    var intervalMonths: Int = 1
     var nextDate: Date = Date.now
     var anchorDay: Int = 1
     var anchorMonth: Int = 1
@@ -197,10 +199,11 @@ final class Recurring: SyncTracked {
     }
 
     var cycle: Cycle {
-        get { Cycle(rawValue: cycleRaw, intervalDays: intervalDays) }
+        get { Cycle(rawValue: cycleRaw, intervalDays: intervalDays, intervalMonths: intervalMonths) }
         set {
             cycleRaw = newValue.rawValue
             intervalDays = newValue.intervalDays
+            intervalMonths = newValue.intervalMonths
         }
     }
 
@@ -227,6 +230,7 @@ final class Recurring: SyncTracked {
         self.amountMinor = amountMinor
         self.cycleRaw = cycle.rawValue
         self.intervalDays = cycle.intervalDays
+        self.intervalMonths = cycle.intervalMonths
         self.nextDate = nextDate
         let anchor = CycleAnchor(date: nextDate, calendar: calendar)
         self.anchorDay = anchor.day
@@ -469,5 +473,33 @@ final class RewardProgram: SyncTracked {
 
     var record: RewardRecord {
         RewardRecord(id: id, name: name, kind: kind, balance: balance, valuePerPoint: valuePerPoint, expiresAt: expiresAt)
+    }
+}
+
+/// Nombre de comercio aprendido: el texto del banco normalizado ("PEPEPOLLO") con el nombre y la categoría
+/// que le dio la persona ("El Corral", Salidas). Se usa al llegar otro pago del mismo comercio.
+@Model
+final class MerchantAlias: SyncTracked {
+    var id: UUID = UUID()
+    var spaceId: UUID = UUID()
+    /// Comercio normalizado con `MerchantAliasMath.normalize`. Uno por espacio (lo cuida la store).
+    var merchantKey: String = ""
+    var name: String = ""
+    var categoryId: UUID?
+    var createdAt: Date = Date.now
+    var updatedAt: Date = Date.now
+    var deletedAt: Date?
+    var syncStateRaw: String = SyncState.local.rawValue
+
+    init(id: UUID = UUID(), spaceId: UUID, key: String, name: String, categoryId: UUID? = nil) {
+        self.id = id
+        self.spaceId = spaceId
+        self.merchantKey = key
+        self.name = name
+        self.categoryId = categoryId
+    }
+
+    var rule: MerchantAliasRule {
+        MerchantAliasRule(id: id, key: merchantKey, name: name, categoryId: categoryId)
     }
 }

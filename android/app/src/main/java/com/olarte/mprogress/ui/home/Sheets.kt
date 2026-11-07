@@ -86,16 +86,39 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-data class AddRequest(val kind: EntryKind, val cycle: Cycle, val name: String = "", val amountMinor: Long = 0, val source: String = "manual", val productId: String? = null)
+/**
+ * Lo que abre Agregar. `merchant` es el comercio tal como llegó (registro automático o recibo) y `categoryId` la categoría
+ * aprendida de ese comercio, si hay.
+ */
+data class AddRequest(val kind: EntryKind, val cycle: Cycle, val name: String = "", val amountMinor: Long = 0, val source: String = "manual", val productId: String? = null,
+                      val merchant: String? = null, val categoryId: String? = null)
 
 enum class CycleChoice(val title: String) { PUNTUAL("Puntual"), MENSUAL("Mensual"), ANUAL("Anual"), OTRA("Otra") }
 
-fun CycleChoice.cycle(every: Int): Cycle = when (this) {
-    CycleChoice.PUNTUAL -> Cycle.Puntual; CycleChoice.MENSUAL -> Cycle.Mensual; CycleChoice.ANUAL -> Cycle.Anual; CycleChoice.OTRA -> Cycle.CadaDias(maxOf(1, every))
+/** `monthly`: el ciclo de Mensual según "Cada cuánto" (mensual, trimestral, cada N meses). */
+fun CycleChoice.cycle(every: Int, monthly: Cycle = Cycle.Mensual): Cycle = when (this) {
+    CycleChoice.PUNTUAL -> Cycle.Puntual; CycleChoice.MENSUAL -> monthly; CycleChoice.ANUAL -> Cycle.Anual; CycleChoice.OTRA -> Cycle.CadaDias(maxOf(1, every))
 }
 
 fun choiceOf(c: Cycle) = when (c) {
-    Cycle.Mensual, Cycle.Semanal -> CycleChoice.MENSUAL; Cycle.Anual -> CycleChoice.ANUAL; is Cycle.CadaDias -> CycleChoice.OTRA; else -> CycleChoice.PUNTUAL
+    Cycle.Mensual, Cycle.Semanal, is Cycle.CadaMeses -> CycleChoice.MENSUAL; Cycle.Anual -> CycleChoice.ANUAL; is Cycle.CadaDias -> CycleChoice.OTRA; else -> CycleChoice.PUNTUAL
+}
+
+/** Cada cuánto se repite un pago mensual: Mensual, Cada 2 meses, Trimestral, Semestral, Anual o Cada N meses (1 a 24), como en iOS. */
+@Composable
+fun MonthIntervalPicker(interval: MonthInterval, months: Int, onInterval: (MonthInterval) -> Unit, onMonths: (Int) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Column {
+        Box {
+            FormRow("Cada cuánto", interval.title, onClick = { open = true })
+            androidx.compose.material3.DropdownMenu(open, { open = false }, containerColor = Palette.superficie2) {
+                MonthInterval.entries.forEach { option ->
+                    androidx.compose.material3.DropdownMenuItem({ T(option.title, Type.cuerpo) }, { onInterval(option); open = false })
+                }
+            }
+        }
+        if (interval == MonthInterval.OTRO) Stepper("Cada $months ${if (months == 1) "mes" else "meses"}", months, MonthInterval.RANGE, onMonths)
+    }
 }
 
 private fun summary(c: Cycle, date: LocalDate): String = when (c) {
@@ -104,6 +127,7 @@ private fun summary(c: Cycle, date: LocalDate): String = when (c) {
     Cycle.Anual -> "Anual · cada ${date.dayOfMonth} de ${DueText.monthName(date)}"
     Cycle.Semanal -> "Semanal"
     is Cycle.CadaDias -> "Cada ${c.days} días"
+    is Cycle.CadaMeses -> "${MonthInterval.title(c.months)} · el ${date.dayOfMonth}"
 }
 
 /** "Termina" de un pago fijo (Paso 2): nunca, en una fecha o después de N cuotas. */
@@ -144,7 +168,9 @@ fun AddEntryContent(store: Store, request: AddRequest, editing: EntryRecord? = n
     var date by remember { mutableStateOf(editing?.occurredAt ?: today) }
     var atMinutes by remember { mutableStateOf(editing?.atMinutes) }
     var productId by remember { mutableStateOf(editing?.productId ?: request.productId) }
-    var categoryId by remember { mutableStateOf(editing?.categoryId) }
+    var categoryId by remember { mutableStateOf(editing?.categoryId ?: request.categoryId) }
+    var monthInterval by remember { mutableStateOf(MonthInterval.MENSUAL) }
+    var everyMonths by remember { mutableStateOf(4) }
     var notes by remember { mutableStateOf(editing?.notes ?: "") }
     var end by remember { mutableStateOf(EndChoice.NUNCA) }
     var pickedDay by remember { mutableStateOf<Int?>(null) }
@@ -156,7 +182,7 @@ fun AddEntryContent(store: Store, request: AddRequest, editing: EntryRecord? = n
     var pickingTime by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
     val context = androidx.compose.ui.platform.LocalContext.current
-    val cycle = if (editing != null) Cycle.Puntual else choice.cycle(everyDays)
+    val cycle = if (editing != null) Cycle.Puntual else choice.cycle(everyDays, MonthInterval.cycle(monthInterval, everyMonths))
     val canSave = amount.money.minor > 0
     val anyFocused = nameFocused || notesFocused
 
@@ -168,7 +194,8 @@ fun AddEntryContent(store: Store, request: AddRequest, editing: EntryRecord? = n
         }
         val before = BudgetMath.statuses(ledger.budgets, ledger.entries, today)
         val created = store.add(kind, name.trim(), amount.money.minor, cycle, date, productId, today, categoryId, notes.trim(), atMinutes, source = request.source,
-            endDate = if (cycle.repeats && end == EndChoice.FECHA) endDate else null, totalCount = if (cycle.repeats && end == EndChoice.CUOTAS) count else null)
+            endDate = if (cycle.repeats && end == EndChoice.FECHA) endDate else null, totalCount = if (cycle.repeats && end == EndChoice.CUOTAS) count else null,
+            merchant = request.merchant ?: request.name.takeIf { request.source != "manual" })
         val l = store.ledger.value
         val crossing = if (created != null && store.alerts.value.budgets) BudgetMath.crossings(before, BudgetMath.statuses(l.budgets, l.entries, today)).firstOrNull() else null
         if (crossing != null) {
@@ -217,6 +244,7 @@ fun AddEntryContent(store: Store, request: AddRequest, editing: EntryRecord? = n
                     SectionLabel("Ciclo de cobro")
                     Segmented(CycleChoice.entries.map { it.name to it.title }, choice.name) { choice = CycleChoice.valueOf(it) }
                     if (choice == CycleChoice.OTRA) Card(padding = Spacing.s2) { Stepper("Cada $everyDays días", everyDays, 1..365) { everyDays = it } }
+                    if (choice == CycleChoice.MENSUAL) Card(padding = Spacing.s2) { MonthIntervalPicker(monthInterval, everyMonths, { monthInterval = it }, { everyMonths = it }) }
                     if (cycle.repeats) EndPicker(end, endDate, count, { end = it }, { endDate = it }, { count = it })
                 }
                 if (editing == null && choice == CycleChoice.MENSUAL) Card {

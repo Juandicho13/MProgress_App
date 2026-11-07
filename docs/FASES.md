@@ -6,7 +6,7 @@ Las pantallas citadas están en `docs/PANTALLAS.md` y en el PDF de diseño.
 
 **Fase en curso (2026-11-06): F10 en iPhone y F14 (Android) en paralelo.** F12B (pasos 1 a 4 de `docs/PLAN_F12B.md`) está hecho en iPhone y en curso en Android. F08 espera SMS reales; F00-06 espera el archivo del CI; widgets con datos, iCloud y Apple Watch esperan la cuenta paga de Apple.
 
-Android dejó de ser un esqueleto: app real en `android/` (Kotlin, Compose, Archivo, mismos tokens y pantallas que iOS), con APKs de prueba (0.1 a 0.7). Ver F14 abajo.
+Android dejó de ser un esqueleto: app real en `android/` (Kotlin, Compose, Archivo, mismos tokens y pantallas que iOS), con APKs de prueba (0.1 a 1.2). Ver F14 abajo.
 
 ---
 
@@ -149,6 +149,7 @@ Plan detallado: `docs/PLAN_F10.md` (cifrado de extremo a extremo: Supabase solo 
 - [x] F14-02 Todas las pestañas y pantallas con el mismo diseño de iOS (verificado con capturas Robolectric).
 - [~] F14-03 Paridad de funciones (ver F12B).
 - [~] F14-04 Cuentas, nube y cifrado con los mismos formatos de iOS (F10). Hecho en el APK 1.0: enlace mágico con PKCE, sesión y llaves cifradas con el Android Keystore, sobres AES-GCM y llaves X25519 iguales byte por byte a iOS (vectores en `android/app/src/test/vectors`), sincronización con PostgREST, código de recuperación, aprobar dispositivos y borrar la cuenta remota. Falta: probar en el teléfono de Juan contra Supabase real y con el iPhone.
+- [~] F14-06 Nombres de comercios, montos editables (Pagar tarjeta, Marcar pagado, Transferir) y pagos fijos cada N meses en iPhone y Android (APK 1.2). Hecho: Android con pruebas y APK; dominio de iOS con pruebas en Linux. Falta: compilar iOS en Xcode, aplicar `20261109000000_interval_months.sql` y probar en los teléfonos.
 - [x] F14-05 Dos versiones del APK: `estandar` (sin SMS ni lector de notificaciones, para que Play Protect no bloquee la instalación) y `completo` (todo el registro automático, se instala desde el Mac).
 
 ## Después de F12 (por planear, no se programa todavía)

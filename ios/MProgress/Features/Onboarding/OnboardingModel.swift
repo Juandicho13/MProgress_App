@@ -232,14 +232,18 @@ final class OnboardingModel {
         if salary.minor > 0 {
             let plan = OnboardingPlan.salaryPlan(payday: payday, now: now, calendar: calendar)
             let target = incomeProductId.flatMap { realIds[$0] }
+            var firstSalary: Entry?
             if let registerOn = plan.registerOn {
-                try ledger.addEntry(spaceId: space.id, kind: .ingreso, amountMinor: salary.minor, name: "Sueldo",
-                                    occurredAt: registerOn, categoryId: categoryId("Finanzas"), productId: target, createdBy: user)
+                firstSalary = try ledger.addEntry(spaceId: space.id, kind: .ingreso, amountMinor: salary.minor, name: "Sueldo",
+                                                  occurredAt: registerOn, categoryId: categoryId("Finanzas"), productId: target, createdBy: user)
             }
             let item = try ledger.addRecurring(spaceId: space.id, kind: .ingreso, name: "Sueldo", amountMinor: salary.minor,
                                                cycle: .mensual, nextDate: plan.nextDate, categoryId: categoryId("Finanzas"),
                                                productId: target, createdBy: user)
             item.icon = "banknote"
+            // El sueldo de este mes queda enlazado a su pago fijo: si se arregla el monto, se arreglan los dos.
+            firstSalary?.recurringId = item.id
+            firstSalary?.icon = "banknote"
         }
 
         // 3. Fijos: con día, o sin fecha para ponerla después en Pagos fijos.

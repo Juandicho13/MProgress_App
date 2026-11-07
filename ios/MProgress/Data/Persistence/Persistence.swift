@@ -9,6 +9,7 @@ enum Persistence {
     static let schema = Schema([
         Space.self, SpendCategory.self, Institution.self, Product.self, Recurring.self, Entry.self,
         Split.self, Transfer.self, Reminder.self, Budget.self, SavingsGoal.self, GoalContribution.self, RewardProgram.self,
+        MerchantAlias.self,
     ])
 
     @MainActor private static var sharedContainer: ModelContainer?

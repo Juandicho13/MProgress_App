@@ -61,6 +61,8 @@ data class Ledger(
     val contributions: List<ContributionRecord> = emptyList(),
     val rewards: List<RewardRecord> = emptyList(),
     val captures: List<PendingCapture> = emptyList(),
+    /** Nombres de comercios aprendidos (Ajustes › Nombres de comercios). */
+    val merchantAliases: List<MerchantAliasRule> = emptyList(),
 ) {
     val productRecords get() = products.map { it.record }
     fun balance(p: Product) = MoneyCalculator.currentBalance(p.record, productRecords, entries, transfers)
@@ -178,7 +180,7 @@ class Store internal constructor(private val file: File, val prefs: SharedPrefer
     /** Guarda lo de Agregar siguiendo AddPlan, igual que iOS. Devuelve el movimiento creado, si hubo. */
     fun add(kind: EntryKind, name: String, amountMinor: Long, cycle: Cycle, date: LocalDate, productId: String?, today: LocalDate = LocalDate.now(),
             categoryId: String? = null, notes: String? = null, atMinutes: Int? = null, source: String = "manual",
-            endDate: LocalDate? = null, totalCount: Int? = null, alert: AlertRule = AlertRule()): EntryRecord? {
+            endDate: LocalDate? = null, totalCount: Int? = null, alert: AlertRule = AlertRule(), merchant: String? = null): EntryRecord? {
         val plan = AddPlan.decide(cycle, date, today)
         var created: EntryRecord? = null
         update { l ->
@@ -197,22 +199,54 @@ class Store internal constructor(private val file: File, val prefs: SharedPrefer
             plan.entryDate?.let {
                 val points = pointsFor(l, kind, amountMinor, productId)
                 val e = EntryRecord(kind = kind, amountMinor = amountMinor, occurredAt = it, name = name, productId = productId, recurringId = recurringId,
-                    categoryId = categoryId, notes = notes?.ifBlank { null }, atMinutes = atMinutes, source = source, pointsEarned = points)
+                    categoryId = categoryId, notes = notes?.ifBlank { null }, atMinutes = atMinutes, source = source, pointsEarned = points,
+                    merchant = merchant?.trim()?.ifEmpty { null }.takeIf { MerchantAliasMath.isAutomatic(source) })
                 created = e
-                out = addPoints(out.copy(entries = out.entries + e), productId, points)
+                out = learned(addPoints(out.copy(entries = out.entries + e), productId, points), e)
             }
             out
         }
         return created
     }
 
-    /** Editar un movimiento ya guardado. */
+    /** Editar un movimiento ya guardado. Si llegó solo y la persona le cambió el nombre, se aprende el comercio. */
     fun updateEntry(e: EntryRecord) = update { l ->
         val old = l.entries.firstOrNull { it.id == e.id } ?: return@update l
         var out = addPoints(l, old.productId, -old.pointsEarned)
         val points = pointsFor(out, e.kind, e.amountMinor, e.productId)
-        out = out.copy(entries = out.entries.map { if (it.id == e.id) e.copy(pointsEarned = points) else it })
-        addPoints(out, e.productId, points)
+        val saved = e.copy(pointsEarned = points)
+        out = out.copy(entries = out.entries.map { if (it.id == e.id) saved else it })
+        learned(addPoints(out, e.productId, points), saved)
+    }
+
+    // ---------- Nombres de comercios ----------
+
+    /** La regla del comercio que llega, si hay una. */
+    fun merchantAlias(raw: String?): MerchantAliasRule? = MerchantAliasMath.match(raw, _ledger.value.merchantAliases)
+
+    /** Lo que aprende un movimiento que llegó solo: crea la regla o cambia la de la misma clave; si no cambió nada, no la toca. */
+    private fun learned(l: Ledger, e: EntryRecord): Ledger {
+        val rule = MerchantAliasMath.learn(e.merchant, MerchantAliasMath.isAutomatic(e.source), e.name, e.categoryId) ?: return l
+        return withAlias(l, rule)
+    }
+
+    private fun withAlias(l: Ledger, rule: MerchantAliasRule): Ledger {
+        val existing = l.merchantAliases.firstOrNull { it.key == rule.key }
+        if (existing == null) return l.copy(merchantAliases = l.merchantAliases + rule)
+        if (existing.name == rule.name && existing.categoryId == rule.categoryId) return l
+        return l.copy(merchantAliases = l.merchantAliases.map { if (it.key == rule.key) it.copy(name = rule.name, categoryId = rule.categoryId) else it })
+    }
+
+    /** Cambiar el nombre o la categoría desde Ajustes. */
+    fun updateMerchantAlias(id: String, name: String, categoryId: String?) {
+        val clean = name.trim()
+        if (clean.isEmpty()) return
+        update { l -> l.copy(merchantAliases = l.merchantAliases.map { if (it.id == id) it.copy(name = clean, categoryId = categoryId) else it }) }
+    }
+
+    fun deleteMerchantAlias(id: String) = update { l -> l.copy(merchantAliases = l.merchantAliases.filter { it.id != id }) }
+    fun restoreMerchantAlias(rule: MerchantAliasRule) = update { l ->
+        if (l.merchantAliases.any { it.id == rule.id || it.key == rule.key }) l else l.copy(merchantAliases = l.merchantAliases + rule)
     }
 
     fun deleteEntry(id: String) = update { l ->
@@ -232,13 +266,17 @@ class Store internal constructor(private val file: File, val prefs: SharedPrefer
 
     // ---------- Pagos fijos ----------
 
-    /** Marca pagado: crea el movimiento de hoy, suma una cuota y mueve el fijo. Devuelve el movimiento y si terminó. */
-    fun markPaid(recurringId: String, today: LocalDate = LocalDate.now()): Pair<EntryRecord, Boolean>? {
+    /**
+     * Marca pagado: crea el movimiento de hoy, suma una cuota y mueve el fijo. Devuelve el movimiento y si terminó.
+     * `amountMinor`: lo que se pagó de verdad, si no fue lo planeado (el pago fijo conserva su monto).
+     */
+    fun markPaid(recurringId: String, today: LocalDate = LocalDate.now(), amountMinor: Long? = null): Pair<EntryRecord, Boolean>? {
         var result: Pair<EntryRecord, Boolean>? = null
         update { l ->
             val r = l.recurring.firstOrNull { it.id == recurringId } ?: return@update l
-            val points = pointsFor(l, r.kind, r.amountMinor, r.productId)
-            val entry = EntryRecord(kind = r.kind, amountMinor = r.amountMinor, occurredAt = today, name = r.name, productId = r.productId,
+            val paid = amountMinor?.takeIf { it > 0 } ?: r.amountMinor
+            val points = pointsFor(l, r.kind, paid, r.productId)
+            val entry = EntryRecord(kind = r.kind, amountMinor = paid, occurredAt = today, name = r.name, productId = r.productId,
                 recurringId = r.id, categoryId = r.categoryId, pointsEarned = points)
             val updated = if (r.cycle == Cycle.Puntual) null else RecurringMath.afterPaid(r)
             result = entry to (updated?.finished == true)
@@ -259,6 +297,12 @@ class Store internal constructor(private val file: File, val prefs: SharedPrefer
     fun setRecurringAmount(id: String, amountMinor: Long) {
         require(amountMinor > 0) { "El monto va siempre positivo" }
         update { l -> l.copy(recurring = l.recurring.map { if (it.id == id) it.copy(amountMinor = amountMinor) else it }) }
+    }
+    /** Arregla el monto de unos movimientos (el sueldo de $ 2 que debía ser $ 2.000.000) sin tocar lo demás. */
+    fun setEntryAmounts(ids: Collection<String>, amountMinor: Long) {
+        require(amountMinor > 0) { "El monto va siempre positivo" }
+        if (ids.isEmpty()) return
+        update { l -> l.copy(entries = l.entries.map { if (it.id in ids) it.copy(amountMinor = amountMinor) else it }) }
     }
     fun deleteRecurring(id: String) = update { l -> l.copy(recurring = l.recurring.filter { it.id != id }) }
     fun restoreRecurring(r: RecurringRecord) = update { l -> l.copy(recurring = l.recurring + r) }

@@ -25,6 +25,37 @@ object IncomeCheck {
     fun fixTitle(amountMinor: Long, factor: Long, currency: Currency = Currency.current) =
         "Es ${Money(amountMinor * factor, currency).formatted()}"
 
+    /** Movimientos que nacieron de este ingreso fijo con el monto mal escrito: los enlazados a él, o los que no
+     *  tienen enlace pero se llaman igual. Se arreglan junto con el pago fijo para que "Te quedan" cambie de una vez. */
+    fun entriesToFix(entries: List<EntryRecord>, recurring: RecurringRecord, oldAmountMinor: Long): List<String> =
+        entries.filter { e ->
+            e.kind == recurring.kind && e.amountMinor == oldAmountMinor &&
+                (e.recurringId == recurring.id || (e.recurringId == null && sameName(e.name, recurring.name)))
+        }.map { it.id }
+
+    /** Un movimiento que quedó con el monto viejo cuando el pago fijo ya se arregló (por mil o por un millón). */
+    data class StaleEntry(val entryId: String, val name: String, val amountMinor: Long, val fixedAmountMinor: Long)
+
+    /** Movimientos de ingreso con un monto sospechoso cuyo pago fijo ya tiene ese monto por mil o por un millón. */
+    fun staleEntries(entries: List<EntryRecord>, recurring: List<RecurringRecord>, currency: Currency, dismissed: Set<String>): List<StaleEntry> {
+        val limit = THRESHOLD_UNITS * currency.minorPerUnit
+        return entries.mapNotNull { e ->
+            if (e.kind != EntryKind.INGRESO || e.amountMinor <= 0 || e.amountMinor >= limit || e.id in dismissed) return@mapNotNull null
+            val fixed = recurring.firstOrNull { r ->
+                r.kind == EntryKind.INGRESO &&
+                    (e.recurringId == r.id || (e.recurringId == null && sameName(e.name, r.name))) &&
+                    factors.any { e.amountMinor * it == r.amountMinor }
+            } ?: return@mapNotNull null
+            StaleEntry(e.id, e.name, e.amountMinor, fixed.amountMinor)
+        }
+    }
+
+    /** "Sueldo" y " sueldo " son el mismo nombre. */
+    fun sameName(a: String, b: String): Boolean {
+        val x = a.trim().lowercase()
+        return x.isNotEmpty() && x == b.trim().lowercase()
+    }
+
     /** El nombre dentro de la frase: con minúscula inicial, salvo siglas ("SENA"). */
     fun phrase(name: String): String {
         val trimmed = name.trim()

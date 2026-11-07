@@ -55,11 +55,12 @@ object BackupCodec {
             .put("hidden", it.hidden).opt("rewardProgramId", it.rewardProgramId).opt("pointsPerThousand", it.pointsPerThousand)) }))
         put("recurring", JSONArray(l.recurring.map { stamps(JSONObject().put("id", it.id).put("spaceId", SPACE).put("kindRaw", it.kind.name.lowercase()).put("name", it.name)
             .opt("icon", null).put("amountMinor", it.amountMinor).put("cycleRaw", it.cycle.raw).opt("intervalDays", it.cycle.intervalDays).put("nextDate", iso(it.nextDate))
+            .put("intervalMonths", it.cycle.intervalMonths)
             .put("anchorDay", it.anchor.day).put("anchorMonth", it.anchor.month).opt("categoryId", it.categoryId).opt("productId", it.productId).opt("responsibleId", null)
             .put("active", it.active).opt("createdBy", null).put("dateUnset", it.dateUnset).opt("endDate", it.endDate?.let(::iso)).opt("totalCount", it.totalCount)
             .put("paidCount", it.paidCount)) }))
         put("entries", JSONArray(l.entries.map { stamps(JSONObject().put("id", it.id).put("spaceId", SPACE).put("kindRaw", it.kind.name.lowercase())
-            .put("amountMinor", it.amountMinor).put("occurredAt", iso(it.occurredAt)).put("name", it.name).opt("merchant", null).opt("icon", null)
+            .put("amountMinor", it.amountMinor).put("occurredAt", iso(it.occurredAt)).put("name", it.name).opt("merchant", it.merchant).opt("icon", null)
             .opt("categoryId", it.categoryId).opt("productId", it.productId).opt("recurringId", it.recurringId).opt("paidBy", null).opt("methodRaw", null)
             .put("sourceRaw", when (it.source) { "sms", "notificacion" -> "sms"; "recibo" -> "recibo"; else -> "manual" }).put("needsReview", false)
             .opt("notes", it.notes).opt("createdBy", null)) }))
@@ -76,6 +77,8 @@ object BackupCodec {
         put("rewards", JSONArray(l.rewards.map { stamps(JSONObject().put("id", it.id).put("spaceId", SPACE).put("name", it.name).put("kindRaw", it.kind.raw)
             .put("balance", it.balance).opt("valuePerPoint", it.valuePerPoint).opt("expiresAt", it.expiresAt?.let(::iso)).opt("productId", null).opt("colorHex", null)
             .put("balanceAt", now())) }))
+        put("merchantAliases", JSONArray(l.merchantAliases.map { stamps(JSONObject().put("id", it.id).put("spaceId", SPACE).put("key", it.key).put("name", it.name)
+            .opt("categoryId", it.categoryId)) }))
     }
 
     class NotMProgress : Exception("Este archivo no es un respaldo de MProgress.")
@@ -99,7 +102,7 @@ object BackupCodec {
             recurring = o.optJSONArray("recurring").rows {
                 val rem = reminders[it.getString("id")]
                 RecurringRecord(id = it.getString("id"), kind = kind(it.getString("kindRaw")), name = it.getString("name"), amountMinor = it.getLong("amountMinor"),
-                    cycle = Cycle.from(it.getString("cycleRaw"), it.int("intervalDays")), nextDate = day(it.getString("nextDate")),
+                    cycle = Cycle.from(it.getString("cycleRaw"), it.int("intervalDays"), it.int("intervalMonths")), nextDate = day(it.getString("nextDate")),
                     anchor = CycleAnchor(it.getInt("anchorDay"), it.getInt("anchorMonth")), active = it.optBoolean("active", true), dateUnset = it.optBoolean("dateUnset", false),
                     categoryId = it.str("categoryId"), productId = it.str("productId"), endDate = it.str("endDate")?.let(::day), totalCount = it.int("totalCount"),
                     paidCount = it.optInt("paidCount", 0),
@@ -109,13 +112,14 @@ object BackupCodec {
             entries = o.optJSONArray("entries").rows {
                 EntryRecord(id = it.getString("id"), kind = kind(it.getString("kindRaw")), amountMinor = it.getLong("amountMinor"), occurredAt = day(it.getString("occurredAt")),
                     name = it.optString("name"), categoryId = it.str("categoryId"), productId = it.str("productId"), recurringId = it.str("recurringId"),
-                    notes = it.str("notes"), source = it.str("sourceRaw").let { s -> if (s == "applePay") "sms" else s ?: "manual" })
+                    notes = it.str("notes"), source = it.str("sourceRaw").let { s -> if (s == "applePay") "sms" else s ?: "manual" }, merchant = it.str("merchant"))
             },
             transfers = o.optJSONArray("transfers").rows { TransferRecord(it.getString("id"), it.getString("fromProductId"), it.getString("toProductId"), it.getLong("amountMinor"), day(it.getString("occurredAt")), it.str("notes")) },
             budgets = o.optJSONArray("budgets").rows { BudgetRecord(it.getString("id"), it.str("categoryId"), it.getLong("monthlyLimitMinor")) },
             goals = o.optJSONArray("goals").rows { GoalRecord(it.getString("id"), it.getString("name"), it.getLong("targetAmountMinor"), it.str("targetDate")?.let(::day), it.str("productId")) },
             contributions = o.optJSONArray("contributions").rows { ContributionRecord(it.getString("id"), it.getString("goalId"), it.getLong("amountMinor"), day(it.getString("occurredAt"))) },
             rewards = o.optJSONArray("rewards").rows { RewardRecord(it.getString("id"), it.getString("name"), RewardKind.from(it.str("kindRaw")), it.optLong("balance"), it.dbl("valuePerPoint"), it.str("expiresAt")?.let(::day)) },
+            merchantAliases = o.optJSONArray("merchantAliases").rows { MerchantAliasRule(it.getString("id"), it.getString("key"), it.getString("name"), it.str("categoryId")) },
         )
         return ledger to currency
     }

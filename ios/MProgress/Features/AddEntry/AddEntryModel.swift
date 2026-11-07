@@ -34,6 +34,11 @@ final class AddEntryModel {
     var method: PayMethod?
     /// De dónde viene: manual o un recibo escaneado.
     var source: EntrySource = .manual
+    /// Comercio tal como llegó (recibo), para aprender el nombre que le da la persona.
+    private(set) var rawMerchant: String?
+    /// Cada cuánto se repite un pago mensual (mensual, trimestral, cada N meses).
+    var monthInterval: MonthInterval = .mensual
+    var everyMonths = 4
     /// Pagos fijos mensuales: día elegido en la cuadrícula de 1 a 31 (nil: el de `date`) y, si ya pasó
     /// este mes, si ya se pagó. La cuadrícula escribe en `date`, que sigue siendo la fecha que se guarda.
     private(set) var pickedDay: Int?
@@ -68,12 +73,17 @@ final class AddEntryModel {
     }
 
     /// Borrador desde un recibo escaneado (F08-05): nombre y monto ya puestos, todo editable.
-    init(prefillName: String, amountMinor: Int64, source: EntrySource, currency: Currency = .cop) {
+    /// `merchant` es el comercio leído (si el nombre ya viene de un nombre aprendido) y `categoryId` la categoría aprendida.
+    init(prefillName: String, amountMinor: Int64, source: EntrySource, currency: Currency = .cop,
+         merchant: String? = nil, categoryId: UUID? = nil) {
         self.kind = .gasto
         self.cycleChoice = .puntual
         self.name = prefillName
         self.amount = AmountInput(minor: amountMinor, currency: currency)
         self.source = source
+        self.categoryId = categoryId
+        let raw = (merchant ?? prefillName).trimmingCharacters(in: .whitespaces)
+        self.rawMerchant = source == .manual || raw.isEmpty ? nil : raw
     }
 
     var isEditing: Bool { editing != nil }
@@ -81,7 +91,7 @@ final class AddEntryModel {
     var cycle: Cycle {
         switch cycleChoice {
         case .puntual: .puntual
-        case .mensual: .mensual
+        case .mensual: MonthInterval.cycle(monthInterval, months: everyMonths)
         case .anual: .anual
         case .otra: .cadaDias(max(1, everyDays))
         }
@@ -138,6 +148,7 @@ final class AddEntryModel {
         switch cycle {
         case .puntual: return "Puntual"
         case .mensual: return "Mensual · el \(day) de cada mes"
+        case .cadaMeses(let months): return "\(MonthInterval.title(months: months)) · el \(day)"
         case .anual: return "Anual · cada \(day) de \(DueText.monthName(date, calendar: calendar))"
         case .semanal: return "Semanal"
         case .cadaDias(let days): return "Cada \(days) días"
@@ -158,6 +169,8 @@ final class AddEntryModel {
             try ledger.update(editing, kind: kind, amountMinor: amount.money.minor, name: cleanName, occurredAt: date,
                               categoryId: categoryId, icon: icon, notes: cleanNotes.isEmpty ? nil : cleanNotes,
                               productId: productId, method: method?.rawValue, now: now)
+            // Lo que llegó solo y la persona renombró queda aprendido para el próximo pago del mismo comercio.
+            try MerchantAliasStore(context: context).learn(from: editing, now: now)
             return editing
         }
 
@@ -168,6 +181,7 @@ final class AddEntryModel {
                                             method: method?.rawValue, source: source.rawValue, createdBy: user)
             entry.icon = icon
             entry.notes = cleanNotes.isEmpty ? nil : cleanNotes
+            entry.merchant = rawMerchant
             created = entry
         }
         if let next = plan.recurringNext {
@@ -183,6 +197,7 @@ final class AddEntryModel {
             createdRecurring = true
         }
         try context.save()
+        if let created { try MerchantAliasStore(context: context).learn(from: created, now: now) }
         return created
     }
 }

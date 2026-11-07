@@ -210,8 +210,10 @@ fun RootScreen(store: Store) {
             route == Route.FIJOS -> FixedScreen(store, onBack = { route = null }, onAdd = { k -> adding = AddRequest(k, Cycle.Mensual) }, onEdit = { recurringEdit = it })
             route == Route.HISTORIAL -> com.olarte.mprogress.ui.history.HistoryScreen(store, onAdd = { adding = AddRequest(EntryKind.GASTO, Cycle.Puntual) }, onOpenEntry = { entryDetail = it }) { route = null }
             route == Route.AUTOMATICO -> com.olarte.mprogress.ui.auto.AutoCaptureScreen(store, onReview = { c ->
-                adding = AddRequest(c.kind, Cycle.Puntual, c.merchant ?: c.bank.orEmpty(), c.amountMinor, c.source,
-                    com.olarte.mprogress.auto.AutoCapture.matchProduct(store.ledger.value, com.olarte.mprogress.domain.ParsedCharge(c.kind, c.amountMinor, c.merchant, c.last4, c.bank)))
+                val alias = store.merchantAlias(c.merchant)
+                adding = AddRequest(c.kind, Cycle.Puntual, alias?.name ?: c.merchant ?: c.bank.orEmpty(), c.amountMinor, c.source,
+                    com.olarte.mprogress.auto.AutoCapture.matchProduct(store.ledger.value, com.olarte.mprogress.domain.ParsedCharge(c.kind, c.amountMinor, c.merchant, c.last4, c.bank)),
+                    merchant = c.merchant, categoryId = alias?.categoryId)
                 store.removeCapture(c.id)
             }, onOpenEntry = { entryDetail = it }, onScan = { scanning = true }) { route = null }
             route == Route.LIMITES -> com.olarte.mprogress.ui.planning.BudgetsScreen(store) { route = null }
@@ -231,7 +233,9 @@ fun RootScreen(store: Store) {
         entryDetail?.let { id -> com.olarte.mprogress.ui.components.SheetPanel({ entryDetail = null }) { com.olarte.mprogress.ui.home.EntryDetailSheet(store, id) { entryDetail = null } } }
         recurringEdit?.let { id -> com.olarte.mprogress.ui.home.RecurringEditSheet(store, id) { recurringEdit = null } }
         if (scanning) com.olarte.mprogress.ui.auto.ReceiptScanSheet({ scanning = false }) { merchant, amount ->
-            scanning = false; adding = AddRequest(EntryKind.GASTO, Cycle.Puntual, merchant.orEmpty(), amount ?: 0, "recibo")
+            val alias = store.merchantAlias(merchant)
+            scanning = false
+            adding = AddRequest(EntryKind.GASTO, Cycle.Puntual, alias?.name ?: merchant.orEmpty(), amount ?: 0, "recibo", merchant = merchant, categoryId = alias?.categoryId)
         }
         com.olarte.mprogress.ui.components.UndoToast(undo, Size.barra + Spacing.s4) { store.clearUndo() }
     }

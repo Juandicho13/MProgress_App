@@ -78,6 +78,7 @@ fun SettingsScreen(store: Store) {
         "moneda" -> { CurrencyScreen(store) { page = null }; return }
         "respaldo" -> { BackupScreen(store) { page = null }; return }
         "novedades" -> { WhatsNewScreen { page = null }; return }
+        "comercios" -> { MerchantAliasesScreen(store) { page = null }; return }
     }
     val alerts by store.alerts.collectAsState()
     val currency by store.currency.collectAsState()
@@ -135,6 +136,9 @@ fun SettingsScreen(store: Store) {
             Row("Espacios compartidos", "Pronto", enabled = false)
             Divider()
             Row("Avisos", if (!alerts.enabled) "Apagados" else if (alerts.daysBefore == 0) "El mismo día" else "${alerts.daysBefore} días antes") { page = "avisos" }
+            Divider()
+            val aliasCount = store.ledger.collectAsState().value.merchantAliases.size
+            Row("Nombres de comercios", if (aliasCount == 0) "Ninguno" else "$aliasCount ${if (aliasCount == 1) "comercio" else "comercios"}") { page = "comercios" }
         }
         SectionLabel("Información")
         Card(padding = Spacing.s2) {

@@ -56,14 +56,9 @@ struct CalendarView: View {
         .sheet(item: $selectedEntry) { entry in
             EntryDetailView(entry: entry, currency: currency)
         }
-        .confirmationDialog(paying.map { "¿Marcar \($0.name) como \($0.kind == .ingreso ? "recibido" : "pagado")?" } ?? "",
-                            isPresented: Binding(get: { paying != nil }, set: { if !$0 { paying = nil } }), titleVisibility: .visible) {
-            Button(paying?.kind == .ingreso ? "Marcar recibido" : "Marcar pagado") { markPaid() }
-            Button("Cancelar", role: .cancel) { paying = nil }
-        } message: {
-            if let paying {
-                Text("Se registra \(Money(minor: paying.amountMinor, currency: currency).formatted()) hoy y pasa al siguiente cobro.")
-            }
+        .sheet(item: $paying) { item in
+            MarkPaidSheet(item: item, currency: currency) { minor in markPaid(item, amountMinor: minor) }
+                .presentationCornerRadius(Radius.hoja)
         }
         .alert("No se pudo guardar", isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
             Button("Entendido", role: .cancel) {}
@@ -202,13 +197,12 @@ struct CalendarView: View {
         }
     }
 
-    private func markPaid() {
-        guard let item = paying else { return }
+    private func markPaid(_ item: Recurring, amountMinor: Int64) {
         let ledger = LedgerStore(context: context, calendar: calendar)
         let previousNext = item.nextDate
         let wasActive = item.active
         do {
-            let entry = try ledger.markPaid(item, by: LocalIdentity.userId)
+            let entry = try ledger.markPaid(item, by: LocalIdentity.userId, amountMinor: amountMinor)
             // Con la última cuota o al pasar la fecha final el pago queda terminado.
             let message = ledger.finishedByEnd(item)
                 ? RecurringEnd.finishedMessage(name: item.name, kind: item.kind)
@@ -220,7 +214,6 @@ struct CalendarView: View {
         } catch {
             errorText = error.localizedDescription
         }
-        paying = nil
     }
 }
 

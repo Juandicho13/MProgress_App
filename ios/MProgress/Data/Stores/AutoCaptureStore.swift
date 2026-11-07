@@ -26,6 +26,8 @@ final class AutoCaptureStore {
         }
         let product = try product(last4: charge.last4, spaceId: space.id)
         let ledger = LedgerStore(context: context, calendar: calendar)
+        // Nombre de comercio aprendido: "PEPEPOLLO SAS 123" llega como "El Corral" con su categoría.
+        let alias = MerchantAliasStore(context: context).match(charge.merchant, spaceId: space.id)
 
         let window = DateInterval(start: now.addingTimeInterval(-600), end: now.addingTimeInterval(60))
         if let existing = try ledger.entries(spaceId: space.id, in: window).first(where: {
@@ -40,7 +42,8 @@ final class AutoCaptureStore {
             }
             if existing.merchant == nil, let merchant = charge.merchant {
                 existing.merchant = merchant
-                if existing.name == "Gasto" || existing.name == "Ingreso" { existing.name = merchant }
+                if existing.name == "Gasto" || existing.name == "Ingreso" { existing.name = alias?.name ?? merchant }
+                if existing.categoryId == nil, let categoryId = alias?.categoryId { existing.categoryId = categoryId }
             }
             existing.needsReview = existing.productId == nil
             existing.touch(now)
@@ -48,9 +51,9 @@ final class AutoCaptureStore {
             return .duplicate(existing)
         }
 
-        let name = charge.merchant ?? (charge.kind == .ingreso ? "Ingreso" : "Gasto")
+        let name = alias?.name ?? charge.merchant ?? (charge.kind == .ingreso ? "Ingreso" : "Gasto")
         let entry = try ledger.addEntry(spaceId: space.id, kind: charge.kind, amountMinor: charge.amountMinor, name: name,
-                                        occurredAt: now, productId: product?.id,
+                                        occurredAt: now, categoryId: alias?.categoryId, productId: product?.id,
                                         method: source == .applePay ? PayMethod.applePay.rawValue : nil,
                                         source: source.rawValue, createdBy: LocalIdentity.userId)
         entry.merchant = charge.merchant

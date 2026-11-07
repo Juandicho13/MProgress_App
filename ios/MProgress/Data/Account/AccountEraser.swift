@@ -17,6 +17,7 @@ enum AccountEraser {
         try context.delete(model: GoalContribution.self)
         try context.delete(model: SavingsGoal.self)
         try context.delete(model: RewardProgram.self)
+        try context.delete(model: MerchantAlias.self)
         try context.delete(model: Product.self)
         try context.delete(model: Institution.self)
         try context.delete(model: SpendCategory.self)

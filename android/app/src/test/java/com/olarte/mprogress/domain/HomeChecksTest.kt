@@ -37,4 +37,28 @@ class HomeChecksTest {
         assertEquals("Ver todos (5)", UpcomingFold.toggleTitle(5, expanded = false))
         assertEquals("Ver menos", UpcomingFold.toggleTitle(5, expanded = true))
     }
+
+    @Test fun arregla_movimientos_con_el_sueldo() {
+        val sueldo = ingreso("Sueldo", pesos(2))
+        val d = LocalDate.of(2026, 11, 1)
+        val enlazado = EntryRecord(kind = EntryKind.INGRESO, amountMinor = pesos(2), occurredAt = d, name = "Pago", recurringId = sueldo.id)
+        val mismoNombre = EntryRecord(kind = EntryKind.INGRESO, amountMinor = pesos(2), occurredAt = d, name = " sueldo")
+        val otroMonto = EntryRecord(kind = EntryKind.INGRESO, amountMinor = pesos(3), occurredAt = d, name = "Sueldo")
+        val deOtroFijo = EntryRecord(kind = EntryKind.INGRESO, amountMinor = pesos(2), occurredAt = d, name = "Sueldo", recurringId = "otro")
+        val gasto = EntryRecord(kind = EntryKind.GASTO, amountMinor = pesos(2), occurredAt = d, name = "Sueldo")
+        assertEquals(listOf(enlazado.id, mismoNombre.id),
+            IncomeCheck.entriesToFix(listOf(enlazado, mismoNombre, otroMonto, deOtroFijo, gasto), sueldo, pesos(2)))
+    }
+
+    @Test fun movimiento_viejo_se_pregunta() {
+        val sueldo = ingreso("Sueldo", pesos(2_000_000))
+        val d = LocalDate.of(2026, 11, 1)
+        val viejo = EntryRecord(kind = EntryKind.INGRESO, amountMinor = pesos(2), occurredAt = d, name = "Sueldo")
+        val rapido = EntryRecord(kind = EntryKind.INGRESO, amountMinor = pesos(2_000), occurredAt = d, name = "Ingreso rápido")
+        val raro = EntryRecord(kind = EntryKind.INGRESO, amountMinor = pesos(7), occurredAt = d, name = "Sueldo")
+        val lista = IncomeCheck.staleEntries(listOf(viejo, rapido, raro), listOf(sueldo), Currency.COP, emptySet())
+        assertEquals(listOf(viejo.id), lista.map { it.entryId })
+        assertEquals(pesos(2_000_000), lista.first().fixedAmountMinor)
+        assertTrue(IncomeCheck.staleEntries(listOf(viejo), listOf(sueldo), Currency.COP, setOf(viejo.id)).isEmpty())
+    }
 }

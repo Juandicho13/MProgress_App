@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 
 /// Transferir entre productos o pagar una tarjeta (F06-05). No cuenta como gasto ni como ingreso.
+/// Pagar tarjeta trae la deuda de hoy como monto, en un campo que se ve editable.
 struct TransferView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -11,6 +12,8 @@ struct TransferView: View {
     @State private var fromId: UUID?
     @State private var toId: UUID?
     @State private var amount: AmountInput
+    /// El teclado está abierto. Con un monto ya puesto se abre al tocar el campo.
+    @State private var editing: Bool
     @State private var date = Date.now
     @State private var errorText: String?
 
@@ -18,8 +21,14 @@ struct TransferView: View {
         self.wallet = wallet
         let options = wallet.products.filter { $0.kind != .debito }
         _fromId = State(initialValue: from ?? options.first { $0.kind == .cuenta }?.id ?? options.first?.id)
-        _toId = State(initialValue: to ?? options.first { $0.kind == .credito }?.id ?? options.dropFirst().first?.id)
-        _amount = State(initialValue: AmountInput(currency: wallet.currency))
+        let target = to ?? options.first { $0.kind == .credito }?.id ?? options.dropFirst().first?.id
+        _toId = State(initialValue: target)
+        // Pagar tarjeta: la deuda de hoy, lista para cambiarla si pagas otro valor.
+        let card = options.first { $0.id == target && $0.kind == .credito }
+        let debt = card.map { wallet.balance($0) } ?? 0
+        let start = AmountInput.prefilled(minor: max(0, debt), currency: wallet.currency)
+        _amount = State(initialValue: start)
+        _editing = State(initialValue: start.text.isEmpty)
     }
 
     private var options: [Product] { wallet.products.filter { $0.kind != .debito } }
@@ -42,7 +51,7 @@ struct TransferView: View {
 
             ScrollView {
                 VStack(spacing: Spacing.s5) {
-                    AmountDisplay(input: amount, active: true)
+                    EditableAmountField(input: amount, editing: editing) { editing = true }
                     Card(padding: Spacing.s2) {
                         VStack(spacing: 0) {
                             productPicker("Desde", selection: $fromId)
@@ -67,10 +76,14 @@ struct TransferView: View {
                 .padding(.horizontal, Spacing.margen)
                 .padding(.vertical, Spacing.s4)
             }
-            NumericKeypad(input: $amount)
-                .padding(.horizontal, Spacing.margen)
-                .padding(.bottom, Spacing.s2)
+            if editing {
+                NumericKeypad(input: $amount)
+                    .padding(.horizontal, Spacing.margen)
+                    .padding(.bottom, Spacing.s2)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .animation(.snappy, value: editing)
         .background(Palette.superficie2.ignoresSafeArea())
         .alert("No se pudo guardar", isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
             Button("Entendido", role: .cancel) {}

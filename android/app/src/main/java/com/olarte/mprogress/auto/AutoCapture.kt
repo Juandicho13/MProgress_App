@@ -61,11 +61,15 @@ object AutoCapture {
                 bank = parsed.bank, source = source, text = raw, receivedAt = today))
             Notifier.show(context, "mp.auto.$key", "Revisa un pago", "${signedAmount(parsed)} · ${parsed.merchant ?: parsed.bank ?: "sin comercio"}. Tócalo para confirmarlo.", Notifier.CHANNEL_REGISTRO, "revisar")
         } else {
-            store.add(parsed.kind, parsed.merchant ?: parsed.bank ?: "Pago", parsed.amountMinor, Cycle.Puntual, today, productId, today, source = source)
+            // Nombre de comercio aprendido: "PEPEPOLLO SAS 123" llega como "El Corral" con su categoría.
+            val alias = store.merchantAlias(parsed.merchant)
+            val name = alias?.name ?: parsed.merchant ?: parsed.bank ?: "Pago"
+            store.add(parsed.kind, name, parsed.amountMinor, Cycle.Puntual, today, productId, today, categoryId = alias?.categoryId, source = source,
+                merchant = parsed.merchant)
             val l = store.ledger.value
             val remaining = BalanceCalculator.monthSummary(l.entries, l.recurring.filter { it.active }, today).remainingMinor
             Notifier.show(context, "mp.auto.$key", if (parsed.kind == EntryKind.INGRESO) "Ingreso registrado" else "Gasto registrado",
-                "${signedAmount(parsed)} en ${parsed.merchant ?: parsed.bank} · ${if (remaining < 0) "te pasaste ${Money(-remaining).formatted()}" else "te quedan ${Money(remaining).formatted()}"}",
+                "${signedAmount(parsed)} en $name · ${if (remaining < 0) "te pasaste ${Money(-remaining).formatted()}" else "te quedan ${Money(remaining).formatted()}"}",
                 Notifier.CHANNEL_REGISTRO)
         }
         return true

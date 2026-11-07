@@ -62,7 +62,7 @@ struct SyncEngine {
     static let maxAttempts = 3
     /// Orden de las tablas: primero lo que otras filas referencian.
     static let tables = ["spaces", "categories", "institutions", "reward_programs", "products", "recurring", "entries", "splits",
-                         "transfers", "reminders", "budgets", "savings_goals", "goal_contributions"]
+                         "transfers", "reminders", "budgets", "savings_goals", "goal_contributions", "merchant_alias"]
 
     struct Report: Equatable, Sendable {
         var pushed = 0

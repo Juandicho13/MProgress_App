@@ -75,12 +75,14 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
     val checkedIncomes by store.checkedIncomes.collectAsState()
     val upcomingExpanded by store.upcomingExpanded.collectAsState()
     var charge by remember { mutableStateOf<UpcomingCharge?>(null) }
+    var payingId by remember { mutableStateOf<String?>(null) }
     val today = LocalDate.now()
     val active = ledger.recurring.filter { it.active }
     val summary = BalanceCalculator.monthSummary(ledger.entries, active, today)
     // Todos los próximos cargos (hasta 20); la tarjeta muestra 3 si está cerrada.
     val upcoming = BalanceCalculator.upcoming(active, today, kind = null, limit = UpcomingFold.EXPANDED_LIMIT)
     val suspicious = IncomeCheck.suspicious(active, currency, checkedIncomes)
+    val staleEntries = IncomeCheck.staleEntries(ledger.entries, active, currency, checkedIncomes)
     val recent = ledger.entries.sortedByDescending { it.occurredAt }.take(5)
     val isEmpty = ledger.entries.isEmpty() && active.isEmpty()
 
@@ -146,7 +148,8 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
                 }
             }
         } else {
-            suspicious.forEach { r -> IncomeCheckCard(store, r) }
+            suspicious.forEach { r -> IncomeCheckCard(store, r, ledger.entries) }
+            staleEntries.forEach { stale -> StaleEntryCard(store, stale) }
             if (upcoming.isNotEmpty()) {
                 Card {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -208,16 +211,17 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
             onDismissRequest = { charge = null },
             title = { T(c.name, Type.titulo3) },
             text = { T("${Money(c.amountMinor).formatted()} · ${DueText.describe(c.date, today)}", Type.cuerpo2, Palette.texto2) },
-            confirmButton = { TextButton({ com.olarte.mprogress.ui.home.markPaidWithUndo(store, c.recurringId); charge = null }) { T("Marcar pagado", Type.etiqueta, Palette.brasaTinta) } },
+            confirmButton = { TextButton({ payingId = c.recurringId; charge = null }) { T(if (c.kind == EntryKind.INGRESO) "Marcar recibido" else "Marcar pagado", Type.etiqueta, Palette.brasaTinta) } },
             dismissButton = { TextButton({ charge = null }) { T("Cancelar", Type.etiqueta) } },
             containerColor = Palette.superficie2,
         )
     }
+    payingId?.let { id -> MarkPaidSheet(store, id) { payingId = null } }
 }
 
 /** "¿Tu sueldo es $ 2?": arreglo rápido de un ingreso fijo que parece mal escrito (igual que iOS). */
 @Composable
-private fun IncomeCheckCard(store: Store, r: RecurringRecord) {
+private fun IncomeCheckCard(store: Store, r: RecurringRecord, entries: List<com.olarte.mprogress.domain.EntryRecord>) {
     Card {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
@@ -231,11 +235,42 @@ private fun IncomeCheckCard(store: Store, r: RecurringRecord) {
                 IncomeCheck.factors.forEach { factor ->
                     SecondaryButton(IncomeCheck.fixTitle(r.amountMinor, factor)) {
                         val previous = r.amountMinor
+                        // También los movimientos ya anotados con ese monto, así "Te quedan" cambia de una vez.
+                        val linked = IncomeCheck.entriesToFix(entries, r, previous)
                         store.setRecurringAmount(r.id, previous * factor)
-                        store.showUndo("${r.name} quedó en ${Money(previous * factor).formatted()}") { store.setRecurringAmount(r.id, previous) }
+                        store.setEntryAmounts(linked, previous * factor)
+                        store.showUndo("${r.name} quedó en ${Money(previous * factor).formatted()}") {
+                            store.setRecurringAmount(r.id, previous)
+                            store.setEntryAmounts(linked, previous)
+                        }
                     }
                 }
                 SecondaryButton("Sí, es correcto") { store.markIncomeChecked(r.id) }
+            }
+        }
+    }
+}
+
+/** "Tu movimiento Sueldo sigue en $ 2": se arregla igual que el pago fijo (igual que iOS). */
+@Composable
+private fun StaleEntryCard(store: Store, stale: IncomeCheck.StaleEntry) {
+    Card {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                IconTile(Icons.Rounded.QuestionMark, Palette.oro.copy(alpha = 0.16f), Palette.oro)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                    T("Tu movimiento ${stale.name} sigue en ${Money(stale.amountMinor).formatted()}", Type.titulo3)
+                    T("En Pagos fijos ya quedó en ${Money(stale.fixedAmountMinor).formatted()}. ¿Lo cambiamos también aquí?", Type.cuerpo2, Palette.texto2)
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                SecondaryButton("Cambiar a ${Money(stale.fixedAmountMinor).formatted()}") {
+                    store.setEntryAmounts(listOf(stale.entryId), stale.fixedAmountMinor)
+                    store.showUndo("${stale.name} quedó en ${Money(stale.fixedAmountMinor).formatted()}") {
+                        store.setEntryAmounts(listOf(stale.entryId), stale.amountMinor)
+                    }
+                }
+                SecondaryButton("Dejarlo así") { store.markIncomeChecked(stale.entryId) }
             }
         }
     }

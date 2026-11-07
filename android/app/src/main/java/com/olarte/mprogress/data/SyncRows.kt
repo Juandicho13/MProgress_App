@@ -24,7 +24,7 @@ object SyncRows {
 
     /** Tablas que Android lee y escribe, en el orden del SyncEngine. `categories` y `splits` no: Android no las tiene. */
     val TABLES = listOf("spaces", "institutions", "reward_programs", "products", "recurring", "entries", "transfers", "reminders",
-        "budgets", "savings_goals", "goal_contributions")
+        "budgets", "savings_goals", "goal_contributions", "merchant_alias")
 
     private val uuid = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
     /** iOS solo lee UUID válidos: lo que no lo es (datos de prueba) no se sube. */
@@ -65,13 +65,13 @@ object SyncRows {
         .opt("icon", null).put("amountMinor", it.amountMinor).put("cycleRaw", it.cycle.raw).opt("intervalDays", it.cycle.intervalDays).put("nextDate", ctx.date(noon(it.nextDate)))
         .put("anchorDay", it.anchor.day).put("anchorMonth", it.anchor.month).opt("categoryId", it.categoryId).opt("productId", it.productId).opt("responsibleId", null)
         .put("active", it.active).opt("createdBy", null).put("dateUnset", it.dateUnset).opt("endDate", it.endDate?.let { d -> ctx.date(noon(d)) }).opt("totalCount", it.totalCount)
-        .put("paidCount", it.paidCount)
+        .put("paidCount", it.paidCount).put("intervalMonths", it.cycle.intervalMonths)
 
     /** La hora opcional de Android va dentro de la fecha; sin hora, al mediodía UTC (el mismo día en Colombia). */
     fun occurred(e: EntryRecord): Instant = e.atMinutes?.let { e.occurredAt.atTime(LocalTime.of(it / 60, it % 60)).atZone(ZoneId.systemDefault()).toInstant() } ?: noon(e.occurredAt)
 
     fun entry(it: EntryRecord, ctx: Ctx) = JSONObject().put("id", it.id).put("spaceId", ctx.spaceId).put("kindRaw", it.kind.name.lowercase())
-        .put("amountMinor", it.amountMinor).put("occurredAt", ctx.date(occurred(it))).put("name", it.name).opt("merchant", null).opt("icon", null)
+        .put("amountMinor", it.amountMinor).put("occurredAt", ctx.date(occurred(it))).put("name", it.name).opt("merchant", it.merchant).opt("icon", null)
         .opt("categoryId", it.categoryId).opt("productId", it.productId).opt("recurringId", it.recurringId).opt("paidBy", null).opt("methodRaw", null)
         .put("sourceRaw", when (it.source) { "sms", "notificacion" -> "sms"; "recibo" -> "recibo"; else -> "manual" }).put("needsReview", false)
         .opt("notes", it.notes).opt("createdBy", null)
@@ -95,6 +95,9 @@ object SyncRows {
         .put("balance", it.balance).opt("valuePerPoint", it.valuePerPoint).opt("expiresAt", it.expiresAt?.let { d -> ctx.date(noon(d)) }).opt("productId", null).opt("colorHex", null)
         .put("balanceAt", ctx.date(balanceAt))
 
+    fun merchantAlias(it: MerchantAliasRule, ctx: Ctx) = JSONObject().put("id", it.id).put("spaceId", ctx.spaceId).put("key", it.key).put("name", it.name)
+        .opt("categoryId", it.categoryId)
+
     // ---------- De la fila al registro ----------
 
     private fun kind(raw: String?) = if (raw == "ingreso") EntryKind.INGRESO else EntryKind.GASTO
@@ -107,7 +110,7 @@ object SyncRows {
 
     fun recurringFrom(o: JSONObject, alert: AlertRule = AlertRule()): RecurringRecord {
         val r = RecurringRecord(id = o.getString("id").lowercase(), kind = kind(o.getString("kindRaw")), name = o.getString("name"), amountMinor = o.getLong("amountMinor"),
-            cycle = Cycle.from(o.getString("cycleRaw"), o.int("intervalDays")), nextDate = day(o.getString("nextDate")) ?: LocalDate.now(),
+            cycle = Cycle.from(o.getString("cycleRaw"), o.int("intervalDays"), o.int("intervalMonths")), nextDate = day(o.getString("nextDate")) ?: LocalDate.now(),
             anchor = CycleAnchor(o.getInt("anchorDay"), o.getInt("anchorMonth")), active = o.optBoolean("active", true), dateUnset = o.optBoolean("dateUnset", false),
             categoryId = o.id("categoryId"), productId = o.id("productId"), endDate = day(o.str("endDate")), totalCount = o.int("totalCount"),
             paidCount = o.optInt("paidCount", 0), alert = alert)
@@ -119,7 +122,8 @@ object SyncRows {
 
     fun entryFrom(o: JSONObject) = EntryRecord(id = o.getString("id").lowercase(), kind = kind(o.getString("kindRaw")), amountMinor = o.getLong("amountMinor"),
         occurredAt = day(o.getString("occurredAt")) ?: LocalDate.now(), name = o.optString("name"), categoryId = o.id("categoryId"), productId = o.id("productId"),
-        recurringId = o.id("recurringId"), notes = o.str("notes"), source = o.str("sourceRaw").let { s -> if (s == "applePay" || s == "wallet") "sms" else s ?: "manual" })
+        recurringId = o.id("recurringId"), notes = o.str("notes"), source = o.str("sourceRaw").let { s -> if (s == "applePay" || s == "wallet") "sms" else s ?: "manual" },
+        merchant = o.str("merchant"))
 
     fun transferFrom(o: JSONObject) = TransferRecord(o.getString("id").lowercase(), o.getString("fromProductId").lowercase(), o.getString("toProductId").lowercase(),
         o.getLong("amountMinor"), day(o.getString("occurredAt")) ?: LocalDate.now(), o.str("notes"))
@@ -128,6 +132,8 @@ object SyncRows {
     fun goalFrom(o: JSONObject) = GoalRecord(o.getString("id").lowercase(), o.getString("name"), o.getLong("targetAmountMinor"), day(o.str("targetDate")), o.id("productId"))
     fun contributionFrom(o: JSONObject) = ContributionRecord(o.getString("id").lowercase(), o.getString("goalId").lowercase(), o.getLong("amountMinor"),
         day(o.getString("occurredAt")) ?: LocalDate.now())
+    fun merchantAliasFrom(o: JSONObject) = MerchantAliasRule(o.getString("id").lowercase(), o.getString("key"), o.getString("name"), o.id("categoryId"))
+
     fun rewardFrom(o: JSONObject) = RewardRecord(o.getString("id").lowercase(), o.getString("name"), RewardKind.from(o.str("kindRaw")), o.optLong("balance"),
         o.dbl("valuePerPoint"), day(o.str("expiresAt")))
 
@@ -149,6 +155,7 @@ object SyncRows {
         "budgets" to l.budgets.associateBy { it.id },
         "savings_goals" to l.goals.associateBy { it.id },
         "goal_contributions" to l.contributions.associateBy { it.id },
+        "merchant_alias" to l.merchantAliases.associateBy { it.id },
     ).mapValues { (_, m) -> m.filterKeys { it == SPACE_KEY || isUuid(it) } }
 
     /** La fila de un registro del estado de `snapshot`. */
@@ -167,6 +174,7 @@ object SyncRows {
         "budgets" -> budget(value as BudgetRecord, ctx)
         "savings_goals" -> goal(value as GoalRecord, ctx)
         "goal_contributions" -> contribution(value as ContributionRecord, ctx)
+        "merchant_alias" -> merchantAlias(value as MerchantAliasRule, ctx)
         else -> error("Tabla desconocida: $table")
     }
 
@@ -184,6 +192,7 @@ object SyncRows {
             goals = l.goals.map { it.copy(id = it.id.c(), productId = it.productId.c()) },
             contributions = l.contributions.map { it.copy(id = it.id.c(), goalId = it.goalId.c()) },
             rewards = l.rewards.map { it.copy(id = it.id.c()) },
+            merchantAliases = l.merchantAliases.map { it.copy(id = it.id.c(), categoryId = it.categoryId.c()) },
         )
     }
 

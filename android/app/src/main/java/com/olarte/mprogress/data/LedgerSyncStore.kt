@@ -174,6 +174,10 @@ class LedgerSyncStore(private val store: Store, private val spaceId: String, pri
         "budgets" -> SyncRows.budgetFrom(o).let { l.copy(budgets = l.budgets.upsertBy(it) { x -> x.id }) to it }
         "savings_goals" -> SyncRows.goalFrom(o).let { l.copy(goals = l.goals.upsertBy(it) { x -> x.id }) to it }
         "goal_contributions" -> SyncRows.contributionFrom(o).let { l.copy(contributions = l.contributions.upsertBy(it) { x -> x.id }) to it }
+        "merchant_alias" -> SyncRows.merchantAliasFrom(o).let { rule ->
+            // Una sola regla por comercio: si este teléfono ya aprendió la misma clave con otro id, gana la que llega.
+            l.copy(merchantAliases = l.merchantAliases.filter { it.key != rule.key || it.id == rule.id }.upsertBy(rule) { x -> x.id }) to rule
+        }
         else -> l to null
     }
 
@@ -192,6 +196,7 @@ class LedgerSyncStore(private val store: Store, private val spaceId: String, pri
         "budgets" -> l.copy(budgets = l.budgets.filter { it.id != id })
         "savings_goals" -> l.copy(goals = l.goals.filter { it.id != id })
         "goal_contributions" -> l.copy(contributions = l.contributions.filter { it.id != id })
+        "merchant_alias" -> l.copy(merchantAliases = l.merchantAliases.filter { it.id != id })
         else -> l
     }
 

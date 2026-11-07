@@ -54,4 +54,31 @@ struct HomeChecksTests {
         #expect(UpcomingFold.toggleTitle(total: 5, expanded: false) == "Ver todos (5)")
         #expect(UpcomingFold.toggleTitle(total: 5, expanded: true) == "Ver menos")
     }
+
+    @Test("Al arreglar el sueldo también se arreglan sus movimientos con el monto viejo")
+    func arreglaMovimientos() {
+        let sueldo = ingreso("Sueldo", pesos(2))
+        let enlazado = EntryRecord(kind: .ingreso, amountMinor: pesos(2), occurredAt: fecha(2026, 11, 1), name: "Pago",
+                                   recurringId: sueldo.id)
+        let mismoNombre = EntryRecord(kind: .ingreso, amountMinor: pesos(2), occurredAt: fecha(2026, 11, 1), name: " sueldo")
+        let otroMonto = EntryRecord(kind: .ingreso, amountMinor: pesos(3), occurredAt: fecha(2026, 11, 1), name: "Sueldo")
+        let deOtroFijo = EntryRecord(kind: .ingreso, amountMinor: pesos(2), occurredAt: fecha(2026, 11, 1), name: "Sueldo",
+                                     recurringId: UUID())
+        let gasto = EntryRecord(kind: .gasto, amountMinor: pesos(2), occurredAt: fecha(2026, 11, 1), name: "Sueldo")
+        let ids = IncomeCheck.entriesToFix([enlazado, mismoNombre, otroMonto, deOtroFijo, gasto], recurring: sueldo,
+                                           oldAmountMinor: pesos(2))
+        #expect(ids == [enlazado.id, mismoNombre.id])
+    }
+
+    @Test("Un movimiento que quedó en $ 2 con el pago fijo ya en $ 2.000.000 se pregunta")
+    func movimientoViejo() {
+        let sueldo = ingreso("Sueldo", pesos(2_000_000))
+        let viejo = EntryRecord(kind: .ingreso, amountMinor: pesos(2), occurredAt: fecha(2026, 11, 1), name: "Sueldo")
+        let rapido = EntryRecord(kind: .ingreso, amountMinor: pesos(2_000), occurredAt: fecha(2026, 11, 6), name: "Ingreso rápido")
+        let raro = EntryRecord(kind: .ingreso, amountMinor: pesos(7), occurredAt: fecha(2026, 11, 1), name: "Sueldo")
+        let lista = IncomeCheck.staleEntries([viejo, rapido, raro], recurring: [sueldo], currency: .cop, dismissed: [])
+        #expect(lista.map(\.entryId) == [viejo.id])
+        #expect(lista.first?.fixedAmountMinor == pesos(2_000_000))
+        #expect(IncomeCheck.staleEntries([viejo], recurring: [sueldo], currency: .cop, dismissed: [viejo.id]).isEmpty)
+    }
 }

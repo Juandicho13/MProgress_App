@@ -94,7 +94,7 @@ class SyncEngine(private val local: LocalSyncStore, private val remote: RemoteSy
         const val MAX_ATTEMPTS = 3
         /** Orden de las tablas: primero lo que otras filas referencian. */
         val TABLES = listOf("spaces", "categories", "institutions", "reward_programs", "products", "recurring", "entries", "splits",
-            "transfers", "reminders", "budgets", "savings_goals", "goal_contributions")
+            "transfers", "reminders", "budgets", "savings_goals", "goal_contributions", "merchant_alias")
 
         /** Gana el `updatedAt` más reciente; si empatan, gana el servidor para que todos los teléfonos terminen igual. */
         fun remoteWins(remote: SyncRecord, local: SyncRecord) = remote.updatedAt >= local.updatedAt

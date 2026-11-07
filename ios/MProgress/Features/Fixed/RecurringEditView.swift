@@ -18,6 +18,8 @@ struct RecurringEditView: View {
     @State private var amount: Int64
     @State private var cycle: AddEntryModel.CycleChoice
     @State private var everyDays: Int
+    @State private var monthInterval: MonthInterval
+    @State private var everyMonths: Int
     @State private var hasDate: Bool
     @State private var date: Date
     @State private var productId: UUID?
@@ -47,6 +49,9 @@ struct RecurringEditView: View {
         }
         _cycle = State(initialValue: choice)
         _everyDays = State(initialValue: item.cycle.intervalDays ?? 15)
+        let months = item.cycle.intervalMonths
+        _monthInterval = State(initialValue: MonthInterval.of(months: months))
+        _everyMonths = State(initialValue: MonthInterval.of(months: months) == .otro ? months : 4)
         _hasDate = State(initialValue: !item.dateUnset)
         _date = State(initialValue: item.nextDate)
         _productId = State(initialValue: item.productId)
@@ -60,7 +65,7 @@ struct RecurringEditView: View {
     private var resolvedCycle: Cycle {
         switch cycle {
         case .puntual: .puntual
-        case .mensual: .mensual
+        case .mensual: MonthInterval.cycle(monthInterval, months: everyMonths)
         case .anual: .anual
         case .otra: .cadaDias(max(1, everyDays))
         }
@@ -92,6 +97,9 @@ struct RecurringEditView: View {
                     }
                     if cycle == .otra {
                         Stepper("Cada \(everyDays) días", value: $everyDays, in: 1...365)
+                    }
+                    if cycle == .mensual {
+                        MonthIntervalPicker(interval: $monthInterval, months: $everyMonths)
                     }
                     Toggle("Ya sé la fecha", isOn: $hasDate).tint(Palette.brasa)
                     if hasDate {
@@ -172,7 +180,7 @@ struct RecurringEditView: View {
     /// (así un cobro vencido sin pagar no se salta).
     private var resolvedDate: Date {
         guard cycle == .mensual else { return date }
-        if dayOfMonth == item.anchorDay && !item.dateUnset && item.cycle == .mensual { return item.nextDate }
+        if dayOfMonth == item.anchorDay && !item.dateUnset && item.cycle.isMonthly { return item.nextDate }
         return OnboardingPlan.nextDate(day: dayOfMonth, from: .now, calendar: calendar)
     }
 

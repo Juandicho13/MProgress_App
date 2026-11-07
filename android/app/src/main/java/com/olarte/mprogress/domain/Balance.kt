@@ -80,6 +80,7 @@ object FixedMath {
         Cycle.Semanal -> amountMinor * 52 / 12
         Cycle.Anual -> amountMinor / 12
         is Cycle.CadaDias -> amountMinor * 365 / (12L * maxOf(1, cycle.days))
+        is Cycle.CadaMeses -> amountMinor / maxOf(1, cycle.months)
     }
 
     data class Totals(val expenseMinor: Long = 0, val incomeMinor: Long = 0, val withoutDate: Int = 0, val paused: Int = 0)
@@ -105,7 +106,7 @@ object FixedMath {
 
     fun scheduleText(cycle: Cycle, nextDate: LocalDate, dateUnset: Boolean, today: LocalDate): String = when {
         dateUnset -> "${cycle.title} · sin fecha"
-        cycle == Cycle.Mensual -> "Mensual · el ${nextDate.dayOfMonth}"
+        cycle.isMonthly -> "${cycle.title} · el ${nextDate.dayOfMonth}"
         cycle == Cycle.Anual -> "Anual · ${DueText.shortDate(nextDate, today)}"
         else -> cycle.title
     }

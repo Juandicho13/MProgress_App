@@ -29,7 +29,7 @@ object LedgerJson {
         })
         put("recurring", arr(l.recurring) {
             JSONObject().put("id", it.id).put("kind", it.kind.name).put("name", it.name).put("amountMinor", it.amountMinor)
-                .put("cycle", it.cycle.raw).opt("intervalDays", it.cycle.intervalDays)
+                .put("cycle", it.cycle.raw).opt("intervalDays", it.cycle.intervalDays).put("intervalMonths", it.cycle.intervalMonths)
                 .put("nextDate", it.nextDate.toString()).put("anchorDay", it.anchor.day).put("anchorMonth", it.anchor.month)
                 .put("active", it.active).put("dateUnset", it.dateUnset).opt("productId", it.productId).opt("categoryId", it.categoryId)
                 .opt("endDate", it.endDate?.toString()).opt("totalCount", it.totalCount).put("paidCount", it.paidCount).put("finished", it.finished)
@@ -39,6 +39,7 @@ object LedgerJson {
             JSONObject().put("id", it.id).put("kind", it.kind.name).put("amountMinor", it.amountMinor).put("occurredAt", it.occurredAt.toString())
                 .put("name", it.name).opt("productId", it.productId).opt("recurringId", it.recurringId).opt("categoryId", it.categoryId)
                 .opt("notes", it.notes).opt("atMinutes", it.atMinutes).put("source", it.source).put("pointsEarned", it.pointsEarned)
+                .opt("merchant", it.merchant)
         })
         put("transfers", arr(l.transfers) {
             JSONObject().put("id", it.id).put("from", it.fromProductId).put("to", it.toProductId).put("amountMinor", it.amountMinor)
@@ -57,6 +58,7 @@ object LedgerJson {
             JSONObject().put("id", it.id).put("kind", it.kind.name).put("amountMinor", it.amountMinor).opt("merchant", it.merchant).opt("last4", it.last4)
                 .opt("bank", it.bank).put("source", it.source).put("text", it.text).put("receivedAt", it.receivedAt.toString())
         })
+        put("merchantAliases", arr(l.merchantAliases) { JSONObject().put("id", it.id).put("key", it.key).put("name", it.name).opt("categoryId", it.categoryId) })
     }
 
     fun decode(o: JSONObject) = Ledger(
@@ -68,7 +70,7 @@ object LedgerJson {
         },
         recurring = o.optJSONArray("recurring").list {
             RecurringRecord(id = it.getString("id"), kind = EntryKind.valueOf(it.getString("kind")), name = it.getString("name"),
-                amountMinor = it.getLong("amountMinor"), cycle = Cycle.from(it.getString("cycle"), it.int("intervalDays")),
+                amountMinor = it.getLong("amountMinor"), cycle = Cycle.from(it.getString("cycle"), it.int("intervalDays"), it.int("intervalMonths")),
                 nextDate = LocalDate.parse(it.getString("nextDate")), anchor = CycleAnchor(it.getInt("anchorDay"), it.getInt("anchorMonth")),
                 active = it.optBoolean("active", true), dateUnset = it.optBoolean("dateUnset", false), productId = it.str("productId"),
                 categoryId = it.str("categoryId"), endDate = it.date("endDate"), totalCount = it.int("totalCount"), paidCount = it.optInt("paidCount", 0),
@@ -79,7 +81,7 @@ object LedgerJson {
             EntryRecord(id = it.getString("id"), kind = EntryKind.valueOf(it.getString("kind")), amountMinor = it.getLong("amountMinor"),
                 occurredAt = LocalDate.parse(it.getString("occurredAt")), name = it.optString("name"),
                 productId = it.str("productId"), recurringId = it.str("recurringId"), categoryId = it.str("categoryId"), notes = it.str("notes"),
-                atMinutes = it.int("atMinutes"), source = it.str("source") ?: "manual", pointsEarned = it.optLong("pointsEarned", 0))
+                atMinutes = it.int("atMinutes"), source = it.str("source") ?: "manual", pointsEarned = it.optLong("pointsEarned", 0), merchant = it.str("merchant"))
         },
         transfers = o.optJSONArray("transfers").list {
             TransferRecord(it.getString("id"), it.getString("from"), it.getString("to"), it.getLong("amountMinor"), LocalDate.parse(it.getString("occurredAt")), it.str("note"))
@@ -94,5 +96,6 @@ object LedgerJson {
             PendingCapture(it.getString("id"), EntryKind.valueOf(it.getString("kind")), it.getLong("amountMinor"), it.str("merchant"), it.str("last4"),
                 it.str("bank"), it.optString("source"), it.optString("text"), it.date("receivedAt") ?: LocalDate.now())
         },
+        merchantAliases = o.optJSONArray("merchantAliases").list { MerchantAliasRule(it.getString("id"), it.getString("key"), it.getString("name"), it.str("categoryId")) },
     )
 }

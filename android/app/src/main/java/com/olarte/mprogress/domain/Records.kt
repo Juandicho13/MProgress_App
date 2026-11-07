@@ -28,6 +28,8 @@ data class EntryRecord(
     val source: String = "manual",
     /** Puntos que sumó este gasto al programa de su tarjeta (se restan al borrarlo). */
     val pointsEarned: Long = 0,
+    /** Comercio tal como llegó del banco o del recibo (registro automático), para aprender el nombre que le da la persona. */
+    val merchant: String? = null,
 ) { val signedMinor get() = kind.sign * amountMinor }
 
 data class RecurringRecord(

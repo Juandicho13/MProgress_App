@@ -8,12 +8,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.NotificationsActive
@@ -147,6 +149,9 @@ fun RecurringEditSheet(store: Store, recurringId: String, onDismiss: () -> Unit)
     var amount by remember { mutableStateOf(item.amountMinor) }
     var choice by remember { mutableStateOf(choiceOf(item.cycle)) }
     var everyDays by remember { mutableStateOf(item.cycle.intervalDays ?: 15) }
+    var monthInterval by remember { mutableStateOf(MonthInterval.of(item.cycle.intervalMonths)) }
+    var everyMonths by remember { mutableStateOf(item.cycle.intervalMonths.takeIf { MonthInterval.of(it) == MonthInterval.OTRO } ?: 4) }
+    var paying by remember { mutableStateOf(false) }
     var hasDate by remember { mutableStateOf(!item.dateUnset) }
     var date by remember { mutableStateOf(item.nextDate) }
     var productId by remember { mutableStateOf(item.productId) }
@@ -166,7 +171,7 @@ fun RecurringEditSheet(store: Store, recurringId: String, onDismiss: () -> Unit)
 
     Box(Modifier.fillMaxSize()) {
         FormSheet("Pago fijo", onDismiss, canConfirm = canSave, onConfirm = {
-            val cycle = choice.cycle(everyDays)
+            val cycle = choice.cycle(everyDays, MonthInterval.cycle(monthInterval, everyMonths))
             val total = if (end == EndChoice.CUOTAS) maxOf(count, item.paidCount + 1) else null
             var updated = item.copy(kind = kind, name = name.trim(), amountMinor = amount, cycle = cycle, nextDate = date,
                 anchor = if (hasDate) CycleAnchor.of(date) else item.anchor, dateUnset = !hasDate, productId = productId, categoryId = categoryId,
@@ -183,6 +188,7 @@ fun RecurringEditSheet(store: Store, recurringId: String, onDismiss: () -> Unit)
             FormGroup("Cuándo") {
                 Segmented(CycleChoice.entries.filter { it != CycleChoice.PUNTUAL }.map { it.name to it.title }, choice.name) { choice = CycleChoice.valueOf(it) }
                 if (choice == CycleChoice.OTRA) Stepper("Cada $everyDays días", everyDays, 1..365) { everyDays = it }
+                if (choice == CycleChoice.MENSUAL) MonthIntervalPicker(monthInterval, everyMonths, { monthInterval = it }, { everyMonths = it })
                 FormToggle("Ya sé la fecha", hasDate) { hasDate = it }
                 if (hasDate) {
                     FormDivider()
@@ -202,7 +208,7 @@ fun RecurringEditSheet(store: Store, recurringId: String, onDismiss: () -> Unit)
                 FormRow("Aviso", alertText(alert, store.alerts.value), enabled = hasDate && active, onClick = { reminder = true })
             }
             if (item.active && !item.dateUnset) SecondaryButton(if (item.kind == EntryKind.INGRESO) "Marcar recibido hoy" else "Marcar pagado hoy") {
-                markPaidWithUndo(store, item.id); onDismiss()
+                paying = true
             }
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                 SecondaryButton("Borrar pago fijo", danger = true) { confirmDelete = true }
@@ -211,6 +217,7 @@ fun RecurringEditSheet(store: Store, recurringId: String, onDismiss: () -> Unit)
         }
         if (payWith) PayWithSheet(store, kind, productId, { payWith = false }) { productId = it }
         if (categories) CategoryPickerSheet(ledger.entries, categoryId, { categories = false }) { categoryId = it; categories = false }
+        if (paying) MarkPaidSheet(store, item.id) { paying = false; onDismiss() }
         if (reminder) AlertEditSheet(store, item.copy(name = name, amountMinor = amount, kind = kind), alert, { reminder = false }) { alert = it; reminder = false }
         if (pickDay) DayGridSheet("¿Qué día se paga ${name.ifBlank { "este pago" }}?", date.dayOfMonth, { pickDay = false }) { d ->
             val today = LocalDate.now()
@@ -234,12 +241,56 @@ fun RecurringEditSheet(store: Store, recurringId: String, onDismiss: () -> Unit)
     }
 }
 
-/** Marca pagado con Deshacer; si era la última cuota avisa "Terminaste de pagar X". */
-fun markPaidWithUndo(store: Store, recurringId: String) {
+/** Marca pagado con Deshacer; si era la última cuota avisa "Terminaste de pagar X". `amountMinor`: lo que se pagó de verdad. */
+fun markPaidWithUndo(store: Store, recurringId: String, amountMinor: Long? = null) {
     val before = store.ledger.value.recurring.firstOrNull { it.id == recurringId } ?: return
-    val (entry, finished) = store.markPaid(recurringId) ?: return
+    val (entry, finished) = store.markPaid(recurringId, amountMinor = amountMinor) ?: return
     val verb = if (before.kind == EntryKind.INGRESO) "recibido" else "pagado"
     store.showUndo(if (finished) "Terminaste de pagar ${before.name}" else "${before.name} quedó $verb") { store.undoPaid(before, entry) }
+}
+
+/**
+ * Marcar pagado (o recibido) un pago fijo con el monto a la vista, igual que MarkPaidSheet de iOS: viene el planeado y se puede
+ * cambiar, porque lo que se pagó de verdad puede ser otro valor. Se guarda lo que la persona escribió.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun MarkPaidSheet(store: Store, recurringId: String, onDismiss: () -> Unit) {
+    val ledger by store.ledger.collectAsState()
+    val currency by store.currency.collectAsState()
+    val item = ledger.recurring.firstOrNull { it.id == recurringId } ?: run { onDismiss(); return }
+    val income = item.kind == EntryKind.INGRESO
+    var amount by remember { mutableStateOf(AmountInput.prefilled(item.amountMinor, currency)) }
+    var editing by remember { mutableStateOf(false) }
+    val canSave = amount.money.minor > 0
+    fun save() {
+        if (!canSave) return
+        markPaidWithUndo(store, item.id, amount.money.minor)
+        onDismiss()
+    }
+    // Hoja de ventana (como Agregar): queda encima de la barra de pestañas en cualquier pantalla.
+    androidx.compose.material3.ModalBottomSheet(onDismiss, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        dragHandle = null, containerColor = Palette.superficie2, shape = RoundedCornerShape(topStart = Radius.hoja, topEnd = Radius.hoja)) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.margen).padding(top = Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
+                CircleIconButton(Icons.Rounded.Close, "Cerrar", onClick = onDismiss)
+                T(if (income) "Marcar recibido" else "Marcar pagado", Type.titulo3, modifier = Modifier.weight(1f), align = TextAlign.Center)
+                CircleIconButton(Icons.Rounded.Check, "Guardar", filled = true, enabled = canSave) { save() }
+            }
+            Column(Modifier.padding(horizontal = Spacing.margen, vertical = Spacing.s4), horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(Spacing.s5)) {
+                T(item.name, Type.titulo2, align = TextAlign.Center)
+                EditableAmountField(amount, editing) { editing = true }
+                if (amount.money.minor != item.amountMinor) T("Planeado: ${Money(item.amountMinor).formatted()}", Type.cuerpo2, Palette.texto2)
+                T(if (income) "Se registra hoy lo que te llegó y pasa al siguiente pago." else "Se registra hoy lo que pagaste y pasa al siguiente cobro.",
+                    Type.leyenda, Palette.texto2, align = TextAlign.Center)
+                PrimaryButton(if (income) "Marcar recibido" else "Marcar pagado", enabled = canSave) { save() }
+            }
+            if (editing) Box(Modifier.padding(horizontal = Spacing.margen).padding(bottom = Spacing.s2)) {
+                Keypad(amount.allowsDecimals, { amount = amount.press(it) }, { amount = amount.deleteLast() })
+            }
+        }
+    }
 }
 
 fun alertText(rule: AlertRule, general: AlertSettings): String = when (rule.mode) {

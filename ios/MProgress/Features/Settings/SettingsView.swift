@@ -44,12 +44,13 @@ enum AppTheme: String, CaseIterable, Identifiable {
 }
 
 enum SettingsRoute: Hashable {
-    case apariencia, moneda, icono, respaldo, avisos, novedades, cuenta
+    case apariencia, moneda, icono, respaldo, avisos, novedades, cuenta, comercios
 }
 
 /// Ajustes (pantalla 13): General, Datos e Información, con la firma al pie.
 struct SettingsView: View {
     @Query(filter: #Predicate<Space> { $0.deletedAt == nil }, sort: \Space.createdAt) private var spaces: [Space]
+    @Query(filter: #Predicate<MerchantAlias> { $0.deletedAt == nil }) private var merchantAliases: [MerchantAlias]
     @AppStorage(LockGate.enabledKey) private var faceID = false
     @AppStorage(AppTheme.storageKey) private var themeRaw = AppTheme.oscuro.rawValue
     @AppStorage(GlassLevel.storageKey) private var glassRaw = GlassLevel.normal.rawValue
@@ -112,6 +113,8 @@ struct SettingsView: View {
                         row("Espacios compartidos", value: "Pronto")
                         divider
                         link("Avisos", value: AlertSettings.summary(enabled: alertsEnabled, daysBefore: daysBefore, atMinutes: alertsMinutes), route: .avisos)
+                        divider
+                        link("Nombres de comercios", value: merchantAliasesText, route: .comercios)
                     }
 
                     SectionLabel(text: "Información")
@@ -183,6 +186,7 @@ struct SettingsView: View {
                 case .avisos: AlertsView()
                 case .novedades: WhatsNewView()
                 case .cuenta: AccountView()
+                case .comercios: MerchantAliasesView()
                 }
             }
         }
@@ -211,6 +215,12 @@ struct SettingsView: View {
                 eraseError = "Intenta de nuevo. Si sigue pasando, reinicia la app."
             }
         }
+    }
+
+    /// "Ninguno", "1 comercio", "3 comercios".
+    private var merchantAliasesText: String {
+        let count = merchantAliases.filter { $0.spaceId == space?.id }.count
+        return count == 0 ? "Ninguno" : "\(count) \(count == 1 ? "comercio" : "comercios")"
     }
 
     private var lastBackupText: String {

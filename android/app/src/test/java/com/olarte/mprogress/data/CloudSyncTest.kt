@@ -229,6 +229,30 @@ class CloudSyncTest {
         assertEquals("personal", open(server.rows[space]!!).getString("kindRaw"))
     }
 
+    @Test fun merchantNamesAndMonthIntervalsTravelLikeIOS() {
+        val a = newStore("a")
+        val e = a.add(EntryKind.GASTO, "Pepepollo Sas 123", 32_000_00, Cycle.Puntual, LocalDate.of(2026, 11, 2), null, source = "notificacion",
+            merchant = "Pepepollo Sas 123")!!
+        a.updateEntry(a.ledger.value.entries.first { it.id == e.id }.copy(name = "El Corral", categoryId = Categories.byName("Salidas")!!.id))
+        a.add(EntryKind.GASTO, "Seguro", 300_000_00, Cycle.CadaMeses(3), LocalDate.of(2026, 12, 10), null, today = LocalDate.of(2026, 11, 6))
+        run(a)
+        val alias = open(server.rows.values.single { it.entity == "merchant_alias" })
+        for (k in "id spaceId key name categoryId createdAt updatedAt".split(" ")) assertTrue("merchant_alias sin $k", alias.has(k) && !alias.isNull(k))
+        assertEquals("PEPEPOLLO", alias.getString("key"))
+        assertEquals(3, open(server.rows.values.single { it.entity == "recurring" }).getInt("intervalMonths"))
+        assertEquals("Pepepollo Sas 123", open(server.rows.values.single { it.entity == "entries" }).getString("merchant"))
+
+        val b = newStore("b"); run(b)
+        assertEquals(a.ledger.value.merchantAliases, b.ledger.value.merchantAliases)
+        assertEquals(Cycle.CadaMeses(3), b.ledger.value.recurring.single().cycle)
+        assertEquals("El Corral", b.merchantAlias("PEPEPOLLO SAS 456")?.name)
+
+        // B borra la regla y A la deja de usar.
+        b.deleteMerchantAlias(b.ledger.value.merchantAliases.single().id)
+        run(b); run(a)
+        assertTrue(a.ledger.value.merchantAliases.isEmpty())
+    }
+
     @Test fun authSessionAndCallbackParsing() {
         val s = AuthClient.session("""{"access_token":"a","refresh_token":"r","expires_at":1893456000,"user":{"id":"ABCDEF00-0000-4000-8000-000000000001","email":"juan@correo.com"}}""", null)
         assertEquals("abcdef00-0000-4000-8000-000000000001", s.userId)

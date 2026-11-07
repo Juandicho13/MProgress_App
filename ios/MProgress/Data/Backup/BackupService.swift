@@ -23,6 +23,7 @@ enum BackupService {
         s.goals = try context.fetch(FetchDescriptor<SavingsGoal>()).map { BackupRows.row($0) }
         s.contributions = try context.fetch(FetchDescriptor<GoalContribution>()).map { BackupRows.row($0) }
         s.rewards = try context.fetch(FetchDescriptor<RewardProgram>()).map { BackupRows.row($0) }
+        s.merchantAliases = try context.fetch(FetchDescriptor<MerchantAlias>()).map { BackupRows.row($0) }
         return s
     }
 
@@ -41,6 +42,7 @@ enum BackupService {
         try context.delete(model: SavingsGoal.self)
         try context.delete(model: GoalContribution.self)
         try context.delete(model: RewardProgram.self)
+        try context.delete(model: MerchantAlias.self)
 
         let pending = SyncState.pending.rawValue
         for r in s.spaces { let m = BackupRows.make(r); m.syncStateRaw = pending; context.insert(m) }
@@ -55,6 +57,7 @@ enum BackupService {
         for r in s.goals { let m = BackupRows.make(r); m.syncStateRaw = pending; context.insert(m) }
         for r in s.contributions { let m = BackupRows.make(r); m.syncStateRaw = pending; context.insert(m) }
         for r in s.rewards ?? [] { let m = BackupRows.make(r); m.syncStateRaw = pending; context.insert(m) }
+        for r in s.merchantAliases ?? [] { let m = BackupRows.make(r); m.syncStateRaw = pending; context.insert(m) }
         try context.save()
     }
 

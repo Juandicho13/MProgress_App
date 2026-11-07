@@ -16,6 +16,7 @@ struct HomeView: View {
     @State private var selected: Entry?
     @State private var payingCard: CardDue?
     @State private var chargeActions: Recurring?
+    @State private var paying: Recurring?
     @State private var reminderFor: Recurring?
     @State private var route: HomeRoute?
     @State private var scanning = false
@@ -29,6 +30,9 @@ struct HomeView: View {
         let id = UUID()
         var merchant: String
         var amountMinor: Int64
+        /// Nombre y categoría aprendidos de este comercio (Ajustes › Nombres de comercios), si hay.
+        var name: String
+        var categoryId: UUID?
     }
     @Query(filter: #Predicate<Product> { $0.deletedAt == nil }) private var allProducts: [Product]
     @Query(filter: #Predicate<Transfer> { $0.deletedAt == nil }) private var allTransfers: [Transfer]
@@ -62,6 +66,12 @@ struct HomeView: View {
         return recurring.filter { ids.contains($0.id) }
     }
 
+    /// Movimientos que siguen con el monto mal escrito aunque el pago fijo ya se arregló.
+    private var staleIncomeEntries: [IncomeCheck.StaleEntry] {
+        IncomeCheck.staleEntries(entries.map(\.record), recurring: recurring.map(\.record), currency: currency,
+                                 dismissed: IncomeCheck.dismissed(from: checkedIncomesRaw))
+    }
+
     private var cardDues: [CardDue] {
         let id = space?.id
         return WalletMath.cardDues(products: allProducts.filter { $0.spaceId == id }.map(\.record),
@@ -83,6 +93,7 @@ struct HomeView: View {
                     emptyCard
                 } else {
                     ForEach(suspiciousIncomes, id: \.id) { item in incomeCheckCard(item) }
+                    ForEach(staleIncomeEntries) { stale in staleEntryCard(stale) }
                     if !upcoming.isEmpty {
                         upcomingCard
                     } else if !recurring.isEmpty {
@@ -136,22 +147,29 @@ struct HomeView: View {
         }
         .sheet(isPresented: $scanning) {
             ReceiptScanView { merchant, amount in
-                receipt = ReceiptDraft(merchant: merchant ?? "", amountMinor: amount ?? 0)
+                let raw = merchant ?? ""
+                let alias = space.flatMap { MerchantAliasStore(context: context).match(raw, spaceId: $0.id) }
+                receipt = ReceiptDraft(merchant: raw, amountMinor: amount ?? 0, name: alias?.name ?? raw, categoryId: alias?.categoryId)
             }
             .presentationDetents([.medium])
             .presentationCornerRadius(Radius.hoja)
         }
         .sheet(item: $receipt) { draft in
             if let space {
-                AddEntryView(spaceId: space.id, prefillName: draft.merchant, amountMinor: draft.amountMinor, source: .recibo, currency: currency)
+                AddEntryView(spaceId: space.id, prefillName: draft.name, amountMinor: draft.amountMinor, source: .recibo, currency: currency,
+                             merchant: draft.merchant, categoryId: draft.categoryId)
             }
         }
         .sheet(item: $reminderFor) { item in
             ReminderEditView(recurring: item, currency: currency)
         }
+        .sheet(item: $paying) { item in
+            MarkPaidSheet(item: item, currency: currency) { minor in markPaid(item, amountMinor: minor) }
+                .presentationCornerRadius(Radius.hoja)
+        }
         .confirmationDialog(chargeActions?.name ?? "", isPresented: Binding(get: { chargeActions != nil }, set: { if !$0 { chargeActions = nil } }), titleVisibility: .visible) {
             if let item = chargeActions {
-                Button(item.kind == .ingreso ? "Marcar recibido" : "Marcar pagado") { markPaid(item) }
+                Button(item.kind == .ingreso ? "Marcar recibido" : "Marcar pagado") { paying = item }
                 Button("Configurar aviso") { reminderFor = item }
             }
             Button("Cancelar", role: .cancel) {}
@@ -357,15 +375,65 @@ struct HomeView: View {
     }
 
     /// Multiplica el monto con el store (así se sincroniza) y deja deshacer.
+    /// También arregla los movimientos que ya se anotaron con ese monto (el sueldo de este mes), así
+    /// "Te quedan" cambia de una vez.
     private func fixIncome(_ item: Recurring, factor: Int64) {
         let ledger = LedgerStore(context: context, calendar: calendar)
         let previous = item.amountMinor
+        let ids = Set(IncomeCheck.entriesToFix(entries.map(\.record), recurring: item.record, oldAmountMinor: previous))
+        let linked = entries.filter { ids.contains($0.id) }
         do {
             try ledger.setRecurringAmount(item, amountMinor: previous * factor)
+            try ledger.setEntryAmounts(linked, amountMinor: previous * factor)
             undo.show("\(item.name) quedó en \(Money(minor: item.amountMinor, currency: currency).formatted())") {
                 try? ledger.setRecurringAmount(item, amountMinor: previous)
+                try? ledger.setEntryAmounts(linked, amountMinor: previous)
             }
             Task { await NotificationScheduler.reschedule(context: context) }
+        } catch {
+            errorText = error.localizedDescription
+        }
+    }
+
+    /// "Tu movimiento Sueldo sigue en $ 2": se arregla igual que el pago fijo.
+    private func staleEntryCard(_ stale: IncomeCheck.StaleEntry) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                HStack(alignment: .top, spacing: Spacing.s3) {
+                    IconTile(content: .symbol("questionmark"), tint: Palette.oroVelo, foreground: Palette.oro)
+                    VStack(alignment: .leading, spacing: Spacing.s1) {
+                        Text("Tu movimiento \(stale.name) sigue en \(Money(minor: stale.amountMinor, currency: currency).formatted())")
+                            .appFont(.titulo3)
+                            .foregroundStyle(Palette.texto1)
+                        Text("En Pagos fijos ya quedó en \(Money(minor: stale.fixedAmountMinor, currency: currency).formatted()). ¿Lo cambiamos también aquí?")
+                            .appFont(.cuerpo2)
+                            .foregroundStyle(Palette.texto2)
+                    }
+                }
+                VStack(spacing: Spacing.s2) {
+                    Button("Cambiar a \(Money(minor: stale.fixedAmountMinor, currency: currency).formatted())") {
+                        fixStaleEntry(stale)
+                    }
+                    .buttonStyle(.secondary)
+                    Button("Dejarlo así") {
+                        var ids = IncomeCheck.dismissed(from: checkedIncomesRaw)
+                        ids.insert(stale.entryId)
+                        checkedIncomesRaw = IncomeCheck.stored(ids)
+                    }
+                    .buttonStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func fixStaleEntry(_ stale: IncomeCheck.StaleEntry) {
+        guard let entry = entries.first(where: { $0.id == stale.entryId }) else { return }
+        let ledger = LedgerStore(context: context, calendar: calendar)
+        do {
+            try ledger.setEntryAmounts([entry], amountMinor: stale.fixedAmountMinor)
+            undo.show("\(stale.name) quedó en \(Money(minor: stale.fixedAmountMinor, currency: currency).formatted())") {
+                try? ledger.setEntryAmounts([entry], amountMinor: stale.amountMinor)
+            }
         } catch {
             errorText = error.localizedDescription
         }
@@ -459,12 +527,12 @@ struct HomeView: View {
         Money(minor: kind == .ingreso ? minor : -minor, currency: currency).formatted(sign: true)
     }
 
-    private func markPaid(_ item: Recurring) {
+    private func markPaid(_ item: Recurring, amountMinor: Int64) {
         let ledger = LedgerStore(context: context, calendar: calendar)
         let previousNext = item.nextDate
         let wasActive = item.active
         do {
-            let entry = try ledger.markPaid(item, by: LocalIdentity.userId)
+            let entry = try ledger.markPaid(item, by: LocalIdentity.userId, amountMinor: amountMinor)
             // Con la última cuota o al pasar la fecha final el pago queda terminado.
             let message = ledger.finishedByEnd(item)
                 ? RecurringEnd.finishedMessage(name: item.name, kind: item.kind)

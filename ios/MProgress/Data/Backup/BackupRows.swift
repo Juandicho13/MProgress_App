@@ -130,12 +130,12 @@ enum BackupRows {
               cycleRaw: m.cycleRaw, intervalDays: m.intervalDays, nextDate: m.nextDate, anchorDay: m.anchorDay, anchorMonth: m.anchorMonth,
               categoryId: m.categoryId, productId: m.productId, responsibleId: m.responsibleId, active: m.active, createdBy: m.createdBy,
               createdAt: m.createdAt, updatedAt: m.updatedAt, deletedAt: m.deletedAt, dateUnset: m.dateUnset,
-              endDate: m.endDate, totalCount: m.totalCount, paidCount: m.paidCount)
+              endDate: m.endDate, totalCount: m.totalCount, paidCount: m.paidCount, intervalMonths: m.intervalMonths)
     }
 
     static func make(_ r: S.RecurringRow) -> Recurring {
         let m = Recurring(id: r.id, spaceId: r.spaceId, kind: EntryKind(rawValue: r.kindRaw) ?? .gasto, name: r.name, amountMinor: r.amountMinor,
-                          cycle: Cycle(rawValue: r.cycleRaw, intervalDays: r.intervalDays), nextDate: r.nextDate)
+                          cycle: Cycle(rawValue: r.cycleRaw, intervalDays: r.intervalDays, intervalMonths: r.intervalMonths), nextDate: r.nextDate)
         fill(m, r)
         return m
     }
@@ -149,6 +149,7 @@ enum BackupRows {
         m.amountMinor = r.amountMinor
         m.cycleRaw = r.cycleRaw
         m.intervalDays = r.intervalDays
+        m.intervalMonths = min(24, max(1, r.intervalMonths ?? 1))
         m.nextDate = r.nextDate
         m.anchorDay = r.anchorDay
         m.anchorMonth = r.anchorMonth
@@ -345,6 +346,28 @@ enum BackupRows {
         m.productId = r.productId
         m.colorHex = r.colorHex
         m.balanceAt = r.balanceAt
+        stamp(m, r.createdAt, r.updatedAt, r.deletedAt)
+    }
+
+    // MARK: Nombres de comercios
+
+    static func row(_ m: MerchantAlias) -> S.MerchantAliasRow {
+        .init(id: m.id, spaceId: m.spaceId, key: m.merchantKey, name: m.name, categoryId: m.categoryId,
+              createdAt: m.createdAt, updatedAt: m.updatedAt, deletedAt: m.deletedAt)
+    }
+
+    static func make(_ r: S.MerchantAliasRow) -> MerchantAlias {
+        let m = MerchantAlias(id: r.id, spaceId: r.spaceId, key: r.key, name: r.name, categoryId: r.categoryId)
+        fill(m, r)
+        return m
+    }
+
+    static func fill(_ m: MerchantAlias, _ r: S.MerchantAliasRow) {
+        m.id = r.id
+        m.spaceId = r.spaceId
+        m.merchantKey = r.key
+        m.name = r.name
+        m.categoryId = r.categoryId
         stamp(m, r.createdAt, r.updatedAt, r.deletedAt)
     }
 

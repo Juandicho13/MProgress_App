@@ -83,6 +83,7 @@ final class SwiftDataSyncStore: LocalSyncStore {
         case "budgets": try upsert(record, as: S.BudgetRow.self, make: { BackupRows.make($0) }, fill: { BackupRows.fill($0, $1) })
         case "savings_goals": try upsert(record, as: S.GoalRow.self, make: { BackupRows.make($0) }, fill: { BackupRows.fill($0, $1) })
         case "goal_contributions": try upsert(record, as: S.ContributionRow.self, make: { BackupRows.make($0) }, fill: { BackupRows.fill($0, $1) })
+        case "merchant_alias": try upsert(record, as: S.MerchantAliasRow.self, make: { BackupRows.make($0) }, fill: { BackupRows.fill($0, $1) })
         default: return
         }
     }
@@ -162,6 +163,8 @@ final class SwiftDataSyncStore: LocalSyncStore {
             return try context.fetch(FetchDescriptor<SavingsGoal>()).map { try record(table, $0, BackupRows.row($0), space: $0.spaceId) }
         case "goal_contributions":
             return try context.fetch(FetchDescriptor<GoalContribution>()).map { try record(table, $0, BackupRows.row($0), space: $0.spaceId) }
+        case "merchant_alias":
+            return try context.fetch(FetchDescriptor<MerchantAlias>()).map { try record(table, $0, BackupRows.row($0), space: $0.spaceId) }
         default:
             return []
         }
@@ -187,6 +190,7 @@ final class SwiftDataSyncStore: LocalSyncStore {
         case "budgets": return try context.fetch(FetchDescriptor<Budget>())
         case "savings_goals": return try context.fetch(FetchDescriptor<SavingsGoal>())
         case "goal_contributions": return try context.fetch(FetchDescriptor<GoalContribution>())
+        case "merchant_alias": return try context.fetch(FetchDescriptor<MerchantAlias>())
         default: return []
         }
     }
@@ -253,6 +257,7 @@ enum SpaceAdoption {
         for m in try context.fetch(FetchDescriptor<SavingsGoal>()) where m.spaceId == old { m.spaceId = newId; m.syncStateRaw = pending }
         for m in try context.fetch(FetchDescriptor<GoalContribution>()) where m.spaceId == old { m.spaceId = newId; m.syncStateRaw = pending }
         for m in try context.fetch(FetchDescriptor<RewardProgram>()) where m.spaceId == old { m.spaceId = newId; m.syncStateRaw = pending }
+        for m in try context.fetch(FetchDescriptor<MerchantAlias>()) where m.spaceId == old { m.spaceId = newId; m.syncStateRaw = pending }
         try context.save()
     }
 }

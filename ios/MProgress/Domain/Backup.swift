@@ -21,6 +21,8 @@ struct BackupSnapshot: Codable, Equatable, Sendable {
     var contributions: [ContributionRow] = []
     /// Opcional: los respaldos de antes no lo traen.
     var rewards: [RewardRow]? = nil
+    /// Nombres de comercios aprendidos. Opcional: los respaldos de antes no lo traen.
+    var merchantAliases: [MerchantAliasRow]? = nil
 
     struct SpaceRow: Codable, Equatable, Sendable {
         var id: UUID; var ownerId: UUID; var name: String; var kindRaw: String; var currencyCode: String
@@ -59,6 +61,8 @@ struct BackupSnapshot: Codable, Equatable, Sendable {
         var endDate: Date? = nil
         var totalCount: Int? = nil
         var paidCount: Int? = nil
+        /// Meses entre cobros de un pago mensual (1 a 24). Opcional: los respaldos de antes son mensuales (1).
+        var intervalMonths: Int? = nil
     }
 
     struct EntryRow: Codable, Equatable, Sendable {
@@ -98,6 +102,12 @@ struct BackupSnapshot: Codable, Equatable, Sendable {
     struct RewardRow: Codable, Equatable, Sendable {
         var id: UUID; var spaceId: UUID; var name: String; var kindRaw: String; var balance: Int64; var valuePerPoint: Decimal?
         var expiresAt: Date?; var productId: UUID?; var colorHex: String?; var balanceAt: Date
+        var createdAt: Date; var updatedAt: Date; var deletedAt: Date?
+    }
+
+    /// Comercio del banco ya normalizado con el nombre y la categoría que le dio la persona.
+    struct MerchantAliasRow: Codable, Equatable, Sendable {
+        var id: UUID; var spaceId: UUID; var key: String; var name: String; var categoryId: UUID?
         var createdAt: Date; var updatedAt: Date; var deletedAt: Date?
     }
 

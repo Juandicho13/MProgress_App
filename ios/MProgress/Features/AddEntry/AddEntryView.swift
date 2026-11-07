@@ -26,10 +26,12 @@ struct AddEntryView: View {
         _model = State(initialValue: AddEntryModel(kind: kind, cycle: cycle, currency: currency))
     }
 
-    /// Borrador con nombre y monto (recibo escaneado).
-    init(spaceId: UUID, prefillName: String, amountMinor: Int64, source: EntrySource, currency: Currency = .cop) {
+    /// Borrador con nombre y monto (recibo escaneado). `merchant` es el comercio leído y `categoryId` la categoría aprendida.
+    init(spaceId: UUID, prefillName: String, amountMinor: Int64, source: EntrySource, currency: Currency = .cop,
+         merchant: String? = nil, categoryId: UUID? = nil) {
         self.spaceId = spaceId
-        _model = State(initialValue: AddEntryModel(prefillName: prefillName, amountMinor: amountMinor, source: source, currency: currency))
+        _model = State(initialValue: AddEntryModel(prefillName: prefillName, amountMinor: amountMinor, source: source, currency: currency,
+                                                   merchant: merchant, categoryId: categoryId))
     }
 
     /// Editar un movimiento ya guardado (F04-02).
@@ -67,6 +69,12 @@ struct AddEntryView: View {
                         Stepper("Cada \(model.everyDays) días", value: $model.everyDays, in: 1...365)
                             .appFont(.cuerpo)
                             .foregroundStyle(Palette.texto1)
+                    }
+                    if !model.isEditing && model.cycleChoice == .mensual {
+                        Card(padding: Spacing.s2) {
+                            MonthIntervalPicker(interval: $model.monthInterval, months: $model.everyMonths)
+                                .padding(.horizontal, Spacing.s2)
+                        }
                     }
                     whenCard
                     if !model.isEditing && model.cycleChoice != .puntual {

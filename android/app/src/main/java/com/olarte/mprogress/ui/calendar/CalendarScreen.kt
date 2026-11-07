@@ -141,17 +141,7 @@ fun CalendarScreen(store: Store, today: LocalDate = LocalDate.now(), onOpenEntry
         }
     }
 
-    paying?.let { item ->
-        val income = item.kind == EntryKind.INGRESO
-        AlertDialog(
-            onDismissRequest = { paying = null },
-            title = { T("¿Marcar ${item.name} como ${if (income) "recibido" else "pagado"}?", Type.titulo3) },
-            text = { T("Se registra ${Money(item.amountMinor).formatted()} hoy y pasa al siguiente cobro.", Type.cuerpo2, Palette.texto2) },
-            confirmButton = { TextButton({ com.olarte.mprogress.ui.home.markPaidWithUndo(store, item.id); paying = null }) { T(if (income) "Marcar recibido" else "Marcar pagado", Type.etiqueta, Palette.brasaTinta) } },
-            dismissButton = { TextButton({ paying = null }) { T("Cancelar", Type.etiqueta) } },
-            containerColor = Palette.superficie2,
-        )
-    }
+    paying?.let { item -> com.olarte.mprogress.ui.home.MarkPaidSheet(store, item.id) { paying = null } }
 }
 
 @Composable
