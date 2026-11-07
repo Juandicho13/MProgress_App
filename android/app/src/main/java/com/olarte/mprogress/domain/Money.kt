@@ -17,13 +17,15 @@ data class Currency(val code: String, val symbol: String, val name: String, val 
         val PEN = Currency("PEN", "S/", "Sol peruano", 2, 2)
         val all = listOf(COP, EUR, USD, MXN, GBP, ARS, CLP, PEN)
         fun from(code: String) = all.firstOrNull { it.code == code.uppercase() } ?: COP
+        /** Moneda del espacio elegida en Ajustes › Moneda. La pone el Store al abrir y al cambiarla. */
+        @Volatile var current: Currency = COP
     }
 }
 
 internal fun pow10(n: Int): Long { var v = 1L; repeat(n) { v *= 10 }; return v }
 
 /** Monto en enteros de la unidad mínima. Nunca Double (HANDOFF 7). */
-data class Money(val minor: Long, val currency: Currency = Currency.COP) : Comparable<Money> {
+data class Money(val minor: Long, val currency: Currency = Currency.current) : Comparable<Money> {
     operator fun plus(o: Money): Money { require(currency == o.currency); return Money(minor + o.minor, currency) }
     operator fun minus(o: Money): Money { require(currency == o.currency); return Money(minor - o.minor, currency) }
     operator fun unaryMinus() = Money(-minor, currency)
@@ -67,7 +69,7 @@ data class Money(val minor: Long, val currency: Currency = Currency.COP) : Compa
 }
 
 /** Lo que se escribe en el teclado numérico de Agregar: dígitos y una coma decimal. */
-data class AmountInput(val currency: Currency = Currency.COP, val text: String = "") {
+data class AmountInput(val currency: Currency = Currency.current, val text: String = "") {
     val allowsDecimals get() = currency.shownDigits > 0
 
     fun press(key: Char): AmountInput {

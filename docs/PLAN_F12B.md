@@ -56,14 +56,24 @@ En Agregar y editar: botones Hoy, Ayer, Mañana y "Otra fecha" que abre un calen
 - Botón "Registro rápido" en los ajustes rápidos (Quick Settings tile) que abre Agregar encima.
 - Widgets de pantalla de inicio iguales a los de iOS: Próximo cargo (pequeño), Te quedan (mediano con + Gasto), Calendario (grande). Pantalla de bloqueo solo donde el teléfono lo permita.
 
-## Paso 4 · Predicciones (las dos apps)
+## Paso 4 · Este mes y próximos meses, sin predicciones inventadas (las dos apps)
 
-Funciones puras de dominio, con pruebas:
-- `variablePace`: gasto del mes en curso que no viene de pagos fijos (sin `recurringId`) dividido por el día del mes (mínimo 1).
-- `projectedEndOfMonth = remaining − variablePace × daysLeft`, donde `remaining` y `daysLeft` salen de `monthSummary`.
-- `nextMonths(3)`: para cada uno de los 3 meses siguientes, ingresos fijos, gastos fijos (respetando `endDate` y cuotas) y gasto variable estimado (promedio del gasto variable de los últimos 3 meses completos con datos; si no hay, `variablePace × días del mes`). `net = ingresos − fijos − variable`.
-- Alerta "A este ritmo terminas el mes en − $ X" si `projectedEndOfMonth < 0`.
-- Pantalla: en Resumen una tarjeta "Así vas a terminar" y una sección "Los próximos 3 meses" con barras; en Inicio, una línea bajo "Te quedan" solo si la proyección es negativa.
+Cambio pedido por Juan el 2026-11-06: nada de proyecciones con el ritmo de gasto (el iPhone decía "Así vas a terminar noviembre: − $ 783.998" el día 6 por una sola compra grande y un sueldo mal escrito). Solo datos reales y pagos fijos programados. Se quitaron `variablePace`, `projectedEndOfMonth`, `endOfMonth`, `variableAverage`, `variableSpent` y sus textos y pruebas.
+
+Funciones puras de dominio (`Forecast` en `Domain/Forecast.swift` y `domain/Forecast.kt`), con pruebas iguales:
+- `monthFacts`: sale de `monthSummary`. `entered` (ingresos registrados del mes), `pendingIncome` (fijos de ingreso que faltan), `spent`, `pendingFixed` (fijos de gasto que faltan) y `remaining = ingresos − gastado − fijos pendientes`, el mismo Te quedan de Inicio.
+- `overText(remaining)`: "Te pasaste $ |W| de lo que entra este mes", solo si `remaining < 0`.
+- `nextMonths(3, recurring)`: para cada uno de los 3 meses siguientes, ingresos fijos y gastos fijos (respetando `endDate` y cuotas) y `net = ingresos fijos − gastos fijos`. `netText`: "Quedan $ X". Nota fija: "Solo cuenta tus pagos fijos".
+
+Pantallas:
+- Resumen: tarjeta "Este mes" con Entró, Por entrar (solo si hay), Gastaste, Fijos que faltan y Te quedan. Si Te quedan es negativo va en rojo con "Te pasaste $ X de lo que entra este mes". "Los próximos 3 meses" con barras de ingresos fijos y gastos fijos (sin barra de variable), "Quedan $ X" por mes y la nota.
+- Inicio: bajo Te quedan, la línea roja "Te pasaste $ X de lo que entra este mes" solo si Te quedan ya es negativo. Ningún otro aviso.
+
+### Revisión del sueldo en Inicio
+`IncomeCheck` (`Domain/HomeChecks.swift`, `domain/HomeChecks.kt`): un ingreso fijo activo de menos de 1.000 unidades de la moneda (`1_000 × minorPerUnit`) saca la tarjeta "¿Tu sueldo es $ 2?" (con el nombre del fijo en minúscula inicial, salvo siglas) y los botones "Es $ 2.000" (× 1.000), "Es $ 2.000.000" (× 1.000.000) y "Sí, es correcto". Arreglar cambia el monto con el store (iOS `LedgerStore.setRecurringAmount`, Android `Store.setRecurringAmount`), así queda pendiente de sincronizar, con aviso de Deshacer. "Sí, es correcto" guarda el id en este dispositivo (`inicio.ingresosRevisados`) y la tarjeta no vuelve a salir para ese fijo.
+
+### Próximos cargos plegables
+`UpcomingFold`: Inicio pide hasta 20 próximos cargos y muestra 3; si hay más, "Ver todos (N)" abre la lista completa y "Ver menos" la cierra. La elección se guarda en el dispositivo (`inicio.proximosAbiertos`).
 
 ## Reglas de siempre
 

@@ -24,6 +24,14 @@ robolectric = { module = "org.robolectric:robolectric", version = "4.16" }
 roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version = "1.52.0" }
 androidx-test-core = { module = "androidx.test:core", version = "1.7.0" }
 junit = { module = "junit:junit", version.ref = "junit" }
+androidx-biometric = { module = "androidx.biometric:biometric", version = "1.1.0" }
+camera-camera2 = { module = "androidx.camera:camera-camera2", version = "1.4.2" }
+camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version = "1.4.2" }
+camera-view = { module = "androidx.camera:camera-view", version = "1.4.2" }
+glance-appwidget = { module = "androidx.glance:glance-appwidget", version = "1.1.1" }
+mlkit-text = { module = "com.google.mlkit:text-recognition", version = "16.0.1" }
+# F10: X25519 (minSdk 26 no lo trae). HKDF, AES-GCM y SHA-256 salen de javax.crypto.
+tink-android = { module = "com.google.crypto.tink:tink-android", version = "1.17.0" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

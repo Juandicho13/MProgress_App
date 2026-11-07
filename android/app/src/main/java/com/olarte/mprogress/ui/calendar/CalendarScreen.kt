@@ -57,7 +57,7 @@ import java.time.YearMonth
 
 /** Calendario (pantalla 12), igual que CalendarView de iOS: puntos por día, detalle del día y marcar pagado. */
 @Composable
-fun CalendarScreen(store: Store, today: LocalDate = LocalDate.now()) {
+fun CalendarScreen(store: Store, today: LocalDate = LocalDate.now(), onOpenEntry: (String) -> Unit = {}) {
     val ledger by store.ledger.collectAsState()
     var month by remember { mutableStateOf(YearMonth.from(today)) }
     var selected by remember { mutableStateOf(today) }
@@ -134,7 +134,7 @@ fun CalendarScreen(store: Store, today: LocalDate = LocalDate.now()) {
                                 }
                             }
                         }
-                        info.entries.forEach { e -> EntryRow(e.name, e.kind, e.amountMinor, "Registrado") }
+                        info.entries.forEach { e -> EntryRow(e.name, e.kind, e.amountMinor, "Registrado", onClick = { onOpenEntry(e.id) }) }
                     }
                 }
             }
@@ -147,7 +147,7 @@ fun CalendarScreen(store: Store, today: LocalDate = LocalDate.now()) {
             onDismissRequest = { paying = null },
             title = { T("¿Marcar ${item.name} como ${if (income) "recibido" else "pagado"}?", Type.titulo3) },
             text = { T("Se registra ${Money(item.amountMinor).formatted()} hoy y pasa al siguiente cobro.", Type.cuerpo2, Palette.texto2) },
-            confirmButton = { TextButton({ store.markPaid(item.id); paying = null }) { T(if (income) "Marcar recibido" else "Marcar pagado", Type.etiqueta, Palette.brasaTinta) } },
+            confirmButton = { TextButton({ com.olarte.mprogress.ui.home.markPaidWithUndo(store, item.id); paying = null }) { T(if (income) "Marcar recibido" else "Marcar pagado", Type.etiqueta, Palette.brasaTinta) } },
             dismissButton = { TextButton({ paying = null }) { T("Cancelar", Type.etiqueta) } },
             containerColor = Palette.superficie2,
         )

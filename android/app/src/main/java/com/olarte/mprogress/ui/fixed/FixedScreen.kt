@@ -60,14 +60,15 @@ import java.time.LocalDate
 
 /** Pagos fijos, igual que FixedView de iOS: total al mes y listas Falta la fecha, Gastos e Ingresos. */
 @Composable
-fun FixedScreen(store: Store, onBack: () -> Unit, onAdd: (EntryKind) -> Unit) {
+fun FixedScreen(store: Store, onBack: () -> Unit, onAdd: (EntryKind) -> Unit, onEdit: (String) -> Unit = {}) {
     val ledger by store.ledger.collectAsState()
     val today = LocalDate.now()
     val items = ledger.recurring.filter { it.cycle != Cycle.Puntual }.sortedBy { it.nextDate }
     val totals = FixedMath.totals(items)
-    val withoutDate = items.filter { it.dateUnset && it.active }
-    val expenses = items.filter { it.kind == EntryKind.GASTO && !(it.dateUnset && it.active) }
-    val incomes = items.filter { it.kind == EntryKind.INGRESO && !(it.dateUnset && it.active) }
+    val withoutDate = items.filter { it.dateUnset && it.active && !it.finished }
+    val expenses = items.filter { it.kind == EntryKind.GASTO && !(it.dateUnset && it.active) && !it.finished }
+    val incomes = items.filter { it.kind == EntryKind.INGRESO && !(it.dateUnset && it.active) && !it.finished }
+    val done = items.filter { it.finished }
     var menu by remember { mutableStateOf(false) }
     var paying by remember { mutableStateOf<RecurringRecord?>(null) }
 
@@ -107,7 +108,7 @@ fun FixedScreen(store: Store, onBack: () -> Unit, onAdd: (EntryKind) -> Unit) {
                     actions = { PrimaryButton("Agregar pago fijo") { onAdd(EntryKind.GASTO) } })
             }
         }
-        listOf(Triple("Falta la fecha", withoutDate, true), Triple("Gastos", expenses, false), Triple("Ingresos", incomes, false)).forEach { (title, list, highlight) ->
+        listOf(Triple("Falta la fecha", withoutDate, true), Triple("Gastos", expenses, false), Triple("Ingresos", incomes, false), Triple("Terminados", done, false)).forEach { (title, list, highlight) ->
             if (list.isNotEmpty()) {
                 SectionLabel(title)
                 Card(padding = Spacing.s3) {
@@ -115,12 +116,13 @@ fun FixedScreen(store: Store, onBack: () -> Unit, onAdd: (EntryKind) -> Unit) {
                         list.forEach { item ->
                             val product = ledger.products.firstOrNull { it.id == item.productId }
                             val paidWith = product?.let { p -> p.last4?.let { "${p.name} ·· $it" } ?: p.name }
-                            val subtitle = listOfNotNull(FixedMath.scheduleText(item.cycle, item.nextDate, item.dateUnset, today), paidWith).joinToString(" · ")
-                            Box(Modifier.alpha(if (item.active) 1f else 0.55f)) {
-                                EntryRow(item.name, item.kind, item.amountMinor, subtitle, onClick = { if (!item.dateUnset) paying = item }) {
+                            val subtitle = listOfNotNull(FixedMath.scheduleText(item, today), paidWith).joinToString(" · ")
+                            Box(Modifier.alpha(if (item.active && !item.finished) 1f else 0.55f)) {
+                                EntryRow(item.name, item.kind, item.amountMinor, subtitle, onClick = { onEdit(item.id) }) {
                                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         T(signedAmount(item.amountMinor, item.kind), Type.cifra, if (item.kind == EntryKind.INGRESO) Palette.hielo else Palette.texto1)
                                         when {
+                                            item.finished -> Badge("Terminado", Palette.superficie3, Palette.texto2)
                                             !item.active -> Badge("Pausado", Palette.superficie3, Palette.texto2)
                                             highlight -> Badge("Poner fecha", Palette.oroRelleno, Palette.sobreOro)
                                             else -> T(DueText.describe(item.nextDate, today), Type.leyenda, Palette.texto2)
@@ -141,7 +143,7 @@ fun FixedScreen(store: Store, onBack: () -> Unit, onAdd: (EntryKind) -> Unit) {
             onDismissRequest = { paying = null },
             title = { T("¿Marcar ${item.name} como ${if (income) "recibido" else "pagado"}?", Type.titulo3) },
             text = { T("Se registra ${Money(item.amountMinor).formatted()} hoy y pasa al siguiente cobro.", Type.cuerpo2, Palette.texto2) },
-            confirmButton = { TextButton({ store.markPaid(item.id); paying = null }) { T(if (income) "Marcar recibido" else "Marcar pagado", Type.etiqueta, Palette.brasaTinta) } },
+            confirmButton = { TextButton({ com.olarte.mprogress.ui.home.markPaidWithUndo(store, item.id); paying = null }) { T(if (income) "Marcar recibido" else "Marcar pagado", Type.etiqueta, Palette.brasaTinta) } },
             dismissButton = { TextButton({ paying = null }) { T("Cancelar", Type.etiqueta) } },
             containerColor = Palette.superficie2,
         )

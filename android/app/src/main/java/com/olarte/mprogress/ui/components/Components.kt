@@ -17,12 +17,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -122,11 +125,14 @@ fun SecondaryButton(title: String, modifier: Modifier = Modifier, enabled: Boole
 /** Hoja inferior dibujada encima de la pantalla (sirve igual en la app y en las capturas). */
 @Composable
 fun OverlaySheet(onDismiss: () -> Unit, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    androidx.activity.compose.BackHandler(onBack = onDismiss)
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).clickable(interactionSource = null, indication = null, onClick = onDismiss)) {
         Column(
             modifier.align(Alignment.BottomCenter).fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = Radius.hoja, topEnd = Radius.hoja)).background(Palette.superficie2)
-                .clickable(interactionSource = null, indication = null) {}.navigationBarsPadding(),
+                .clickable(interactionSource = null, indication = null) {}.navigationBarsPadding()
+                // El teclado empuja la hoja hacia arriba; el contenido que se desplaza deja ver el campo que tiene el foco.
+                .imePadding(),
         ) {
             Box(Modifier.padding(top = Spacing.s2).align(Alignment.CenterHorizontally).width(36.dp).height(5.dp).clip(CircleShape).background(Palette.texto2.copy(alpha = 0.4f)))
             content()
@@ -351,9 +357,35 @@ fun SearchField(text: String, prompt: String, onChange: (String) -> Unit) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
         Box(Modifier.weight(1f)) {
             if (text.isEmpty()) T(prompt, Type.cuerpo, Palette.texto2, maxLines = 1)
-            androidx.compose.foundation.text.BasicTextField(text, onChange, Modifier.fillMaxWidth(), textStyle = Type.cuerpo.copy(color = Palette.texto1),
+            androidx.compose.foundation.text.BasicTextField(text, onChange, Modifier.appTextField().fillMaxWidth(), textStyle = Type.cuerpo.copy(color = Palette.texto1),
                 cursorBrush = androidx.compose.ui.graphics.SolidColor(Palette.brasa), singleLine = true)
         }
         if (text.isNotEmpty()) Icon(androidx.compose.material.icons.Icons.Rounded.Cancel, "Borrar búsqueda", Modifier.size(20.dp).clickable { onChange("") }, tint = Palette.texto2)
+    }
+}
+
+/** Hoja casi de pantalla completa para detalles (Detalle, Pago fijo), dibujada encima de todo. */
+@Composable
+fun SheetPanel(onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    androidx.activity.compose.BackHandler(onBack = onDismiss)
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)).clickable(interactionSource = null, indication = null, onClick = onDismiss)) {
+        Box(Modifier.fillMaxSize().statusBarsPaddingCompat().padding(top = Spacing.s5).clip(RoundedCornerShape(topStart = Radius.hoja, topEnd = Radius.hoja))
+            .background(Palette.superficie2).clickable(interactionSource = null, indication = null) {}.navigationBarsPadding().imePadding()) { content() }
+    }
+}
+
+private fun Modifier.statusBarsPaddingCompat() = this.then(Modifier.statusBarsPadding())
+
+/** Aviso con Deshacer abajo, como UndoCenter de iOS. Se cierra solo a los 5 segundos. */
+@Composable
+fun UndoToast(message: com.olarte.mprogress.data.UndoMessage?, bottom: androidx.compose.ui.unit.Dp, onClose: () -> Unit) {
+    if (message == null) return
+    androidx.compose.runtime.LaunchedEffect(message.id) { kotlinx.coroutines.delay(5000); onClose() }
+    Box(Modifier.fillMaxSize().padding(bottom = bottom).navigationBarsPadding().padding(horizontal = Spacing.s4), contentAlignment = Alignment.BottomCenter) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.boton)).background(Palette.superficie3).padding(start = Spacing.s4, end = Spacing.s2).heightIn(min = 52.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            T(message.text, Type.cuerpo2, modifier = Modifier.weight(1f).padding(vertical = Spacing.s2))
+            message.undo?.let { u -> T("Deshacer", Type.etiqueta, Palette.brasaTinta, Modifier.clip(CircleShape).clickable { u(); onClose() }.padding(Spacing.s3)) }
+        }
     }
 }

@@ -44,12 +44,12 @@ import java.time.YearMonth
 
 /** Historial (pantalla 11) por mes con total y buscador, igual que HistoryView de iOS. Tocar uno permite borrarlo. */
 @Composable
-fun HistoryScreen(store: Store, onAdd: () -> Unit = {}, onBack: () -> Unit) {
+fun HistoryScreen(store: Store, onAdd: () -> Unit = {}, onOpenEntry: ((String) -> Unit)? = null, onBack: () -> Unit) {
     val ledger by store.ledger.collectAsState()
     var query by remember { mutableStateOf("") }
     var deleting by remember { mutableStateOf<EntryRecord?>(null) }
     val today = LocalDate.now()
-    val filtered = HistoryMath.filter(ledger.entries, query)
+    val filtered = HistoryMath.filter(ledger.entries, query) { com.olarte.mprogress.domain.Categories.byId(it)?.name }
     val months = filtered.groupBy { YearMonth.from(it.occurredAt) }.toSortedMap(compareByDescending { it })
 
     Column(
@@ -85,7 +85,8 @@ fun HistoryScreen(store: Store, onAdd: () -> Unit = {}, onBack: () -> Unit) {
                                     SectionLabel(when (day.day) { today -> "Hoy"; today.minusDays(1) -> "Ayer"; else -> DueText.shortDate(day.day, today) })
                                 }
                                 day.entries.forEach { e ->
-                                    EntryRow(e.name, e.kind, e.amountMinor, if (e.recurringId != null) "Pago fijo" else "Sin categoría", onClick = { deleting = e })
+                                    val sub = listOfNotNull(com.olarte.mprogress.domain.Categories.byId(e.categoryId)?.name, if (e.recurringId != null) "Pago fijo" else null).joinToString(" · ").ifEmpty { "Sin categoría" }
+                                    EntryRow(e.name, e.kind, e.amountMinor, sub, onClick = { if (onOpenEntry != null) onOpenEntry(e.id) else deleting = e })
                                 }
                             }
                         }

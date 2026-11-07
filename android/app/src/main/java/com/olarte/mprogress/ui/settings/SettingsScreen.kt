@@ -52,15 +52,37 @@ import com.olarte.mprogress.ui.theme.AppTheme
 import com.olarte.mprogress.ui.theme.GlassLevel
 import com.olarte.mprogress.ui.theme.Palette
 import com.olarte.mprogress.ui.theme.Spacing
+import kotlinx.coroutines.launch
+
+/** Para abrir una página de Ajustes desde fuera (el enlace del correo abre Cuenta y nube). */
+object SettingsNav { val page = kotlinx.coroutines.flow.MutableStateFlow<String?>(null) }
 
 /** Ajustes (pantalla 13): General, Datos, Información y Cuenta, con la firma al pie, igual que iOS. */
 @Composable
 fun SettingsScreen(store: Store) {
-    var appearance by remember { mutableStateOf(false) }
-    var icon by remember { mutableStateOf(false) }
-    androidx.activity.compose.BackHandler(enabled = appearance || icon) { appearance = false; icon = false }
-    if (appearance) { AppearanceScreen(store) { appearance = false }; return }
-    if (icon) { AppIconScreen { icon = false }; return }
+    var page by remember { mutableStateOf<String?>(null) }
+    val requested by SettingsNav.page.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(requested) { requested?.let { page = it; SettingsNav.page.value = null } }
+    androidx.activity.compose.BackHandler(enabled = page != null) { page = null }
+    val context0 = androidx.compose.ui.platform.LocalContext.current
+    val cloud = remember { runCatching { com.olarte.mprogress.data.cloud.CloudAccount.get(context0) }.getOrNull() }
+    val cloudUi by (cloud?.ui ?: remember { kotlinx.coroutines.flow.MutableStateFlow(com.olarte.mprogress.data.cloud.CloudUi()) }).collectAsState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var erasing by remember { mutableStateOf(false) }
+    var eraseError by remember { mutableStateOf<String?>(null) }
+    when (page) {
+        "cuenta" -> { if (cloud != null) { AccountScreen(cloud) { page = null }; return } }
+        "apariencia" -> { AppearanceScreen(store) { page = null }; return }
+        "icono" -> { AppIconScreen { page = null }; return }
+        "avisos" -> { AlertsScreen(store) { page = null }; return }
+        "moneda" -> { CurrencyScreen(store) { page = null }; return }
+        "respaldo" -> { BackupScreen(store) { page = null }; return }
+        "novedades" -> { WhatsNewScreen { page = null }; return }
+    }
+    val alerts by store.alerts.collectAsState()
+    val currency by store.currency.collectAsState()
+    val lock by store.lock.collectAsState()
+    val activity = androidx.compose.ui.platform.LocalContext.current as? androidx.fragment.app.FragmentActivity
     val context = androidx.compose.ui.platform.LocalContext.current
     val (iconSymbol, iconWhite) = AppIcons.current(context)
     val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "1.0" }
@@ -77,36 +99,53 @@ fun SettingsScreen(store: Store) {
         androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
             Avatar("Mi cuenta", 48.dp)
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                T("Sin cuenta", Type.titulo3)
-                T("Todo se guarda en este teléfono", Type.cuerpo2, Palette.texto2)
+                T(cloudUi.email ?: "Sin cuenta", Type.titulo3, maxLines = 1)
+                T(if (cloudUi.isSignedIn) "Cifrado y sincronizado con tu cuenta" else "Todo se guarda en este teléfono", Type.cuerpo2, Palette.texto2)
             }
         }
         SectionLabel("General")
         Card(padding = Spacing.s2) {
-            Row("Bloqueo con huella", "Pronto", enabled = false)
+            com.olarte.mprogress.ui.components.FormToggle("Bloqueo con huella o rostro", lock) { on ->
+                if (!on) store.setLock(false)
+                else if (activity != null && com.olarte.mprogress.ui.Biometric.available(activity)) {
+                    // Al prenderlo se confirma que funciona; si no, se queda apagado.
+                    com.olarte.mprogress.ui.Biometric.authenticate(activity, "Activar el bloqueo") { ok -> store.setLock(ok) }
+                } else store.showUndo("Configura una huella, rostro o código en el teléfono para usar el bloqueo.")
+            }
             Divider()
-            Row("Moneda", "COP $", enabled = false)
+            Row("Moneda", "${currency.code} ${currency.symbol}") { page = "moneda" }
             Divider()
-            Row("Apariencia", "${AppTheme.from(theme).title} · vidrio ${GlassLevel.from(glass).title.lowercase()}") { appearance = true }
+            Row("Apariencia", "${AppTheme.from(theme).title} · vidrio ${GlassLevel.from(glass).title.lowercase()}") { page = "apariencia" }
             Divider()
-            Row("Ícono de la app", "${iconSymbol.title} · ${if (iconWhite) "blanco" else "negro"}") { icon = true }
+            Row("Ícono de la app", "${iconSymbol.title} · ${if (iconWhite) "blanco" else "negro"}") { page = "icono" }
+            Divider()
+            Row("Registro automático", when {
+                !com.olarte.mprogress.auto.AutoCapture.fullCapture -> "Recibos y botón rápido"
+                com.olarte.mprogress.auto.AutoCapture.enabled(androidx.compose.ui.platform.LocalContext.current) -> "Activo"
+                else -> "Sin configurar"
+            }) {
+                com.olarte.mprogress.auto.LaunchAction.pending.value = "revisar"
+            }
+
         }
         SectionLabel("Datos")
         Card(padding = Spacing.s2) {
-            Row("Respaldo y dispositivos", "Pronto", enabled = false)
+            Row("Respaldo y dispositivos", lastBackupText(store)) { page = "respaldo" }
             Divider()
             Row("Espacios compartidos", "Pronto", enabled = false)
             Divider()
-            Row("Avisos", "Pronto", enabled = false)
+            Row("Avisos", if (!alerts.enabled) "Apagados" else if (alerts.daysBefore == 0) "El mismo día" else "${alerts.daysBefore} días antes") { page = "avisos" }
         }
         SectionLabel("Información")
         Card(padding = Spacing.s2) {
-            Row("Novedades", version, enabled = false)
+            Row("Novedades", version) { page = "novedades" }
             Divider()
             Row("Escríbeme", "Pronto", enabled = false)
         }
         SectionLabel("Cuenta")
         Card(padding = Spacing.s2) {
+            Row("Cuenta y nube", if (cloudUi.isSignedIn) cloudUi.status.title else "Crear o entrar") { page = "cuenta" }
+            Divider()
             androidx.compose.foundation.layout.Row(
                 Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(14.dp)).clickable { confirmErase = true }.padding(horizontal = Spacing.s2),
                 verticalAlignment = Alignment.CenterVertically,
@@ -115,7 +154,8 @@ fun SettingsScreen(store: Store) {
                 Icon(Icons.Outlined.Delete, null, Modifier.size(18.dp), tint = Palette.peligro)
             }
         }
-        T("Borra tus movimientos, bancos, pagos fijos, metas, respaldos y ajustes de este teléfono. No se puede deshacer.", Type.leyenda, Palette.texto2)
+        T(if (cloudUi.isSignedIn) "Borra tu cuenta en la nube con todo lo que tiene, y tus movimientos, bancos, pagos fijos, metas, respaldos y ajustes de este teléfono. No se puede deshacer."
+          else "Borra tus movimientos, bancos, pagos fijos, metas, respaldos y ajustes de este teléfono. No se puede deshacer.", Type.leyenda, Palette.texto2)
         SignatureFooter()
     }
 
@@ -123,11 +163,35 @@ fun SettingsScreen(store: Store) {
         AlertDialog(
             onDismissRequest = { confirmErase = false },
             title = { T("¿Borrar tu cuenta y todos tus datos?", Type.titulo3) },
-            text = { T("Se borra todo lo que hay en este teléfono, también los respaldos. La app vuelve al inicio como nueva.", Type.cuerpo2, Palette.texto2) },
-            confirmButton = { TextButton({ confirmErase = false; store.eraseAll() }) { T("Borrar todo", Type.etiqueta, Palette.peligro) } },
+            text = { T(if (cloudUi.isSignedIn) "Se borra tu cuenta en la nube y todo lo que hay en este teléfono, también los respaldos. La app vuelve al inicio como nueva."
+                       else "Se borra todo lo que hay en este teléfono, también los respaldos. La app vuelve al inicio como nueva.", Type.cuerpo2, Palette.texto2) },
+            confirmButton = { TextButton({
+                confirmErase = false
+                if (!erasing) {
+                    erasing = true
+                    scope.launch {
+                        // Primero la cuenta en la nube (función delete_my_account); si no se puede, no se borra nada.
+                        if (cloud != null && cloudUi.isSignedIn) {
+                            try { cloud.deleteRemoteAccount() } catch (e: Exception) {
+                                eraseError = "No se pudo borrar tu cuenta en la nube. Revisa tu conexión e intenta de nuevo."
+                                erasing = false
+                                return@launch
+                            }
+                        }
+                        cloud?.forgetEverything()
+                        java.io.File(context.filesDir, "respaldos").deleteRecursively()
+                        store.eraseAll()
+                        erasing = false
+                    }
+                }
+            }) { T("Borrar todo", Type.etiqueta, Palette.peligro) } },
             dismissButton = { TextButton({ confirmErase = false }) { T("Cancelar", Type.etiqueta) } },
             containerColor = Palette.superficie2,
         )
+    }
+    eraseError?.let { e ->
+        AlertDialog(onDismissRequest = { eraseError = null }, title = { T("No se pudo borrar", Type.titulo3) }, text = { T(e, Type.cuerpo2, Palette.texto2) },
+            confirmButton = { TextButton({ eraseError = null }) { T("Entendido", Type.etiqueta, Palette.brasaTinta) } }, containerColor = Palette.superficie2)
     }
 }
 

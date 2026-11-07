@@ -147,6 +147,14 @@ final class LedgerStore {
         try context.save()
     }
 
+    /// Cambia solo el monto de un pago fijo (arreglo rápido del sueldo en Inicio). Queda pendiente de sincronizar.
+    func setRecurringAmount(_ item: Recurring, amountMinor: Int64, now: Date = .now) throws {
+        precondition(amountMinor > 0, "El monto va siempre positivo")
+        item.amountMinor = amountMinor
+        item.touch(now)
+        try context.save()
+    }
+
     func recurring(spaceId: UUID) throws -> [Recurring] {
         try context.fetch(FetchDescriptor<Recurring>(
             predicate: #Predicate<Recurring> { $0.spaceId == spaceId && $0.deletedAt == nil },

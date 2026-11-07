@@ -4,11 +4,11 @@ import java.time.LocalDate
 
 /** Cálculos del mes (HANDOFF 8.2), los mismos de iOS. */
 object BalanceCalculator {
+    /** Cobros que faltan en el mes, respetando la fecha final y las cuotas que quedan (Paso 2). */
     fun pendingOccurrences(item: RecurringRecord, monthOf: LocalDate): List<LocalDate> {
-        if (!item.active || item.dateUnset) return emptyList()
         val start = monthOf.withDayOfMonth(1)
         val end = monthOf.withDayOfMonth(monthOf.lengthOfMonth())
-        return CycleMath.occurrences(item.nextDate, end, item.cycle, item.anchor).filter { !it.isBefore(start) }
+        return RecurringMath.occurrences(item, end).filter { !it.isBefore(start) }
     }
 
     fun monthSummary(entries: List<EntryRecord>, recurring: List<RecurringRecord>, today: LocalDate): MonthSummary {
@@ -28,7 +28,7 @@ object BalanceCalculator {
     }
 
     fun upcoming(recurring: List<RecurringRecord>, today: LocalDate, kind: EntryKind? = EntryKind.GASTO, limit: Int = 20) =
-        recurring.filter { it.active && !it.dateUnset && (kind == null || it.kind == kind) }
+        recurring.filter { it.active && !it.dateUnset && !it.finished && (kind == null || it.kind == kind) }
             .map { UpcomingCharge(it.id, it.name, it.kind, it.amountMinor, it.nextDate, Urgency.of(it.nextDate, today), Urgency.days(today, it.nextDate)) }
             .sortedWith(compareBy({ it.date }, { it.name }))
             .take(limit)
@@ -87,12 +87,20 @@ object FixedMath {
     fun totals(items: List<RecurringRecord>): Totals {
         var t = Totals()
         for (i in items) {
+            if (i.finished) continue
             if (!i.active) { t = t.copy(paused = t.paused + 1); continue }
             if (i.dateUnset) t = t.copy(withoutDate = t.withoutDate + 1)
             val m = monthlyEquivalent(i.amountMinor, i.cycle)
             t = if (i.kind == EntryKind.INGRESO) t.copy(incomeMinor = t.incomeMinor + m) else t.copy(expenseMinor = t.expenseMinor + m)
         }
         return t
+    }
+
+    /** Igual que scheduleText y, si tiene fin, "Cuota 3 de 12" o "Hasta 15 mar 2027". */
+    fun scheduleText(item: RecurringRecord, today: LocalDate): String {
+        if (item.finished) return "Terminado"
+        val base = scheduleText(item.cycle, item.nextDate, item.dateUnset, today)
+        return RecurringMath.endText(item)?.let { "$base · $it" } ?: base
     }
 
     fun scheduleText(cycle: Cycle, nextDate: LocalDate, dateUnset: Boolean, today: LocalDate): String = when {

@@ -13,11 +13,11 @@ object HistoryMath {
         entries.groupBy { it.occurredAt }.map { (d, items) -> HistoryDay(d, items.sortedBy { it.name }, items.sumOf { it.signedMinor }) }
             .sortedByDescending { it.day }
 
-    fun filter(entries: List<EntryRecord>, query: String): List<EntryRecord> {
+    fun filter(entries: List<EntryRecord>, query: String, categoryName: (String?) -> String? = { null }): List<EntryRecord> {
         val words = normalize(query).split(" ").filter { it.isNotBlank() }
         if (words.isEmpty()) return entries
         return entries.filter { e ->
-            val hay = normalize(e.name) + " " + (e.amountMinor / 100)
+            val hay = normalize(e.name) + " " + (e.amountMinor / 100) + " " + normalize(categoryName(e.categoryId) ?: "") + " " + normalize(e.notes ?: "")
             words.all { hay.contains(it) }
         }
     }
@@ -90,8 +90,8 @@ object CalendarMath {
         entries.filter { YearMonth.from(it.occurredAt) == month }.forEach { e ->
             val d = out[e.occurredAt] ?: CalendarDay(); out[e.occurredAt] = d.copy(entries = d.entries + e)
         }
-        recurring.filter { it.active && !it.dateUnset }.forEach { r ->
-            CycleMath.occurrences(r.nextDate, month.atEndOfMonth(), r.cycle, r.anchor).filter { YearMonth.from(it) == month }.forEach { date ->
+        recurring.forEach { r ->
+            RecurringMath.occurrences(r, month.atEndOfMonth()).filter { YearMonth.from(it) == month }.forEach { date ->
                 val c = UpcomingCharge(r.id, r.name, r.kind, r.amountMinor, date, Urgency.of(date, today), Urgency.days(today, date))
                 val d = out[date] ?: CalendarDay(); out[date] = d.copy(charges = d.charges + c)
             }
@@ -104,20 +104,24 @@ object CalendarMath {
 data class ProductRecord(val id: String, val kind: ProductKind, val balanceMinor: Long, val balanceAt: LocalDate, val hidden: Boolean = false, val parentProductId: String? = null)
 
 object MoneyCalculator {
-    fun currentBalance(p: ProductRecord, products: List<ProductRecord>, entries: List<EntryRecord>): Long {
+    fun currentBalance(p: ProductRecord, products: List<ProductRecord>, entries: List<EntryRecord>, transfers: List<TransferRecord> = emptyList()): Long {
         val debit = products.filter { it.kind == ProductKind.DEBITO && it.parentProductId == p.id }.map { it.id }.toSet()
         var b = p.balanceMinor
         entries.filter { it.occurredAt.isAfter(p.balanceAt) || it.occurredAt == p.balanceAt }.forEach { e ->
             val pid = e.productId ?: return@forEach
             if (pid == p.id || pid in debit) b += if (p.kind.isDebt) -e.signedMinor else e.signedMinor
         }
+        transfers.filter { !it.occurredAt.isBefore(p.balanceAt) }.forEach { t ->
+            if (t.fromProductId == p.id) b += if (p.kind.isDebt) t.amountMinor else -t.amountMinor
+            if (t.toProductId == p.id) b += if (p.kind.isDebt) -t.amountMinor else t.amountMinor
+        }
         return b
     }
 
-    fun netWorth(products: List<ProductRecord>, entries: List<EntryRecord>): Triple<Long, Long, Long> {
+    fun netWorth(products: List<ProductRecord>, entries: List<EntryRecord>, transfers: List<TransferRecord> = emptyList()): Triple<Long, Long, Long> {
         var have = 0L; var owe = 0L
         products.filter { !it.hidden && it.kind != ProductKind.DEBITO }.forEach {
-            val b = currentBalance(it, products, entries)
+            val b = currentBalance(it, products, entries, transfers)
             if (it.kind.isDebt) owe += b else have += b
         }
         return Triple(have, owe, have - owe)

@@ -1,5 +1,7 @@
 package com.olarte.mprogress.ui.money
 
+import com.olarte.mprogress.ui.components.appTextField
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -61,6 +63,14 @@ import com.olarte.mprogress.domain.Money
 import com.olarte.mprogress.domain.MoneyCalculator
 import com.olarte.mprogress.domain.ProductKind
 import com.olarte.mprogress.ui.components.BackButton
+import com.olarte.mprogress.ui.components.DayGridSheet
+import com.olarte.mprogress.ui.components.FormDivider
+import com.olarte.mprogress.ui.components.FormRow
+import com.olarte.mprogress.ui.components.FormToggle
+import com.olarte.mprogress.ui.components.MoneyField
+import com.olarte.mprogress.domain.monthlyYield
+import com.olarte.mprogress.domain.Currency
+import androidx.compose.foundation.layout.width
 import com.olarte.mprogress.ui.components.Card
 import com.olarte.mprogress.ui.components.Chip
 import com.olarte.mprogress.ui.components.CircleIconButton
@@ -82,12 +92,12 @@ private const val HIDE_KEY = "dinero.ocultarSaldos"
 
 private fun money(minor: Long) = Money(minor).formatted()
 private fun hexOf(i: Institution) = i.colorHex ?: InstitutionStyle.hexFor(i.name)
-private fun Ledger.balance(p: Product) = MoneyCalculator.currentBalance(p.record, products.map { it.record }, entries)
 
 private sealed interface MoneySheet {
     data object NewBank : MoneySheet
     data class NewProduct(val institutionId: String, val kind: ProductKind) : MoneySheet
     data class Edit(val product: Product) : MoneySheet
+    data class Transfer(val from: String? = null, val to: String? = null) : MoneySheet
 }
 
 /** Mi dinero (pantalla 31) y Mi dinero vacío (pantalla 40), igual que MoneyView de iOS. */
@@ -113,7 +123,7 @@ fun MoneyScreen(store: Store, initialDetail: String? = null) {
             }
             if (ledger.institutions.isEmpty()) EmptyMoney { sheet = MoneySheet.NewBank }
             else {
-                val (have, owe, net) = MoneyCalculator.netWorth(ledger.products.map { it.record }, ledger.entries)
+                val (have, owe, net) = MoneyCalculator.netWorth(ledger.productRecords, ledger.entries, ledger.transfers)
                 Card {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                         T("Patrimonio neto", Type.cuerpo2, Palette.texto2)
@@ -125,7 +135,7 @@ fun MoneyScreen(store: Store, initialDetail: String? = null) {
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3), verticalAlignment = Alignment.CenterVertically) {
-                    SecondaryButton("Transferir", Modifier.weight(1f), enabled = false) {}
+                    SecondaryButton("Transferir", Modifier.weight(1f), enabled = ledger.products.count { it.kind != ProductKind.DEBITO } >= 2) { sheet = MoneySheet.Transfer() }
                     PrimaryButton("+ Banco", Modifier.weight(1f)) { sheet = MoneySheet.NewBank }
                 }
                 SectionLabel("Bancos y billeteras")
@@ -145,17 +155,22 @@ fun MoneyScreen(store: Store, initialDetail: String? = null) {
                                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     T(if (hide) "••••••" else money(haveI), Type.cifraPequena)
                                     if (!hide && oweI > 0) T("debes ${money(oweI)}", Type.leyenda, Palette.brasaTinta)
+                                    else if (!hide) products.filter { it.kind == ProductKind.BOLSILLO }.sumOf { monthlyYield(ledger.balance(it), it.rateEA) }
+                                        .takeIf { it > 0 }?.let { T("+ ${money(it)} rendimiento", Type.leyenda, Palette.exito) }
                                 }
                             }
                         }
                     }
                 }
+                RewardsSection(store, ledger, hide)
             }
         }
         when (val s = sheet) {
+            is MoneySheet.Transfer -> TransferSheet(store, s.from, s.to) { sheet = null }
             MoneySheet.NewBank -> AddInstitutionSheet(store) { sheet = null }
             is MoneySheet.NewProduct -> ProductFormSheet(store, ledger, ledger.institutions.first { it.id == s.institutionId }, s.kind, null) { sheet = null }
-            is MoneySheet.Edit -> ProductFormSheet(store, ledger, ledger.institutions.first { it.id == s.product.institutionId }, s.product.kind, s.product) { sheet = null }
+            is MoneySheet.Edit -> ProductFormSheet(store, ledger, ledger.institutions.first { it.id == s.product.institutionId }, s.product.kind, s.product,
+                onPay = { sheet = MoneySheet.Transfer(to = s.product.id) }) { sheet = null }
             null -> {}
         }
     }
@@ -231,7 +246,7 @@ private fun InstitutionDetail(store: Store, ledger: Ledger, inst: Institution, h
             T("Total en ${inst.name}", Type.cuerpo2, Palette.texto2)
             T(if (hide) "••••••" else money(net), Type.cifraGrande, maxLines = 1)
         }
-        listOf("Cuenta" to setOf(ProductKind.CUENTA, ProductKind.EFECTIVO), "Cajitas" to setOf(ProductKind.BOLSILLO), "Tarjetas" to setOf(ProductKind.CREDITO, ProductKind.DEBITO)).forEach { (title, kinds) ->
+        listOf((if (inst.name == "Efectivo") "Efectivo" else "Cuenta") to setOf(ProductKind.CUENTA, ProductKind.EFECTIVO), "Cajitas" to setOf(ProductKind.BOLSILLO), "Tarjetas" to setOf(ProductKind.CREDITO, ProductKind.DEBITO)).forEach { (title, kinds) ->
             val items = products.filter { it.kind in kinds }
             if (items.isNotEmpty()) {
                 SectionLabel(title)
@@ -243,7 +258,10 @@ private fun InstitutionDetail(store: Store, ledger: Ledger, inst: Institution, h
             }
         }
         if (products.isEmpty()) T("Agrega la cuenta, cajitas o tarjetas que tienes en ${inst.name}.", Type.cuerpo, Palette.texto2)
-        if (inst.name != "Efectivo") {
+        if (inst.name == "Efectivo") {
+            SecondaryButton("+ Efectivo") { onSheet(MoneySheet.NewProduct(inst.id, ProductKind.EFECTIVO)) }
+            T("Crea uno por cada lugar donde guardas billetes: Billetera, Casa, Alcancía. Mueve plata entre ellos con Transferir.", Type.leyenda, Palette.texto2)
+        } else {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                 SecondaryButton("+ Cajita", Modifier.weight(1f)) { onSheet(MoneySheet.NewProduct(inst.id, ProductKind.BOLSILLO)) }
                 SecondaryButton("+ Tarjeta", Modifier.weight(1f)) { onSheet(MoneySheet.NewProduct(inst.id, ProductKind.CREDITO)) }
@@ -280,13 +298,13 @@ private fun ProductRow(ledger: Ledger, p: Product, hide: Boolean, today: LocalDa
     val subtitle = when (p.kind) {
         ProductKind.CUENTA -> "Disponible para gastar"
         ProductKind.EFECTIVO -> "Billetera física"
-        ProductKind.BOLSILLO -> "Sin rentabilidad"
+        ProductKind.BOLSILLO -> p.rateEA?.let { "Rentabilidad ${if (it % 1.0 == 0.0) it.toLong().toString() else it.toString().replace('.', ',')}% E.A." } ?: "Sin rentabilidad"
         ProductKind.DEBITO -> listOfNotNull("Física", ledger.products.firstOrNull { it.id == p.parentProductId }?.name?.let { "de $it" }).joinToString(" · ")
-        ProductKind.CREDITO -> p.dueDay?.let { d ->
+        ProductKind.CREDITO -> listOfNotNull(p.creditLimitMinor?.let { "Cupo ${money(it)}" }, p.cutDay?.let { "corte día $it" }, p.dueDay?.let { d ->
             var next = today.withDayOfMonth(minOf(d, today.lengthOfMonth()))
             if (next.isBefore(today)) next = next.plusMonths(1).let { it.withDayOfMonth(minOf(d, it.lengthOfMonth())) }
             "pago ${DueText.describe(next, today).lowercase()}"
-        } ?: "Tarjeta de crédito"
+        }).joinToString(" · ").ifEmpty { "Tarjeta de crédito" }
     }
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick).padding(vertical = Spacing.s1),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
@@ -295,9 +313,14 @@ private fun ProductRow(ledger: Ledger, p: Product, hide: Boolean, today: LocalDa
             T(p.last4?.let { "${p.name} ·· $it" } ?: p.name, Type.titulo3, maxLines = 1)
             T(subtitle, Type.cuerpo2, Palette.texto2, maxLines = 1)
         }
-        if (p.kind != ProductKind.DEBITO) {
+        if (p.kind != ProductKind.DEBITO) Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
             T(if (hide || p.hidden) "••••••" else Money(if (p.kind == ProductKind.CREDITO) -balance else balance).formatted(), Type.cifraPequena,
                 if (p.kind == ProductKind.CREDITO && balance > 0) Palette.brasaTinta else Palette.texto1)
+            if (!hide && !p.hidden) {
+                val y = if (p.kind == ProductKind.BOLSILLO) monthlyYield(balance, p.rateEA) else 0
+                if (y > 0) T("+ ${money(y)}", Type.leyenda, Palette.exito)
+                p.creditLimitMinor?.takeIf { p.kind == ProductKind.CREDITO }?.let { T("disponible ${money(maxOf(0, it - balance))}", Type.leyenda, Palette.texto2) }
+            }
         }
     }
 }
@@ -324,7 +347,7 @@ private fun AddInstitutionSheet(store: Store, onDone: () -> Unit) {
         SheetBar("Nuevo banco", clean.isNotEmpty(), onDone) {
             if (clean.equals("Efectivo", true)) {
                 val id = store.ledger.value.institutions.firstOrNull { it.name.equals("Efectivo", true) }?.id ?: store.addInstitution("Efectivo", 0x3A3F47)
-                if (store.ledger.value.products.none { it.institutionId == id }) store.addProduct(id, ProductKind.EFECTIVO, "Efectivo", null, 0, null)
+                if (store.ledger.value.products.none { it.institutionId == id }) store.addProduct(id, ProductKind.EFECTIVO, "Billetera", null, 0, null)
             } else store.addInstitution(clean, hex)
             onDone()
         }
@@ -333,7 +356,7 @@ private fun AddInstitutionSheet(store: Store, onDone: () -> Unit) {
                 InstitutionStyle.Tile(clean.ifEmpty { "?" }, hex, 60.dp)
                 Box(Modifier.weight(1f)) {
                     if (name.isEmpty()) T("Nombre del banco o billetera", Type.titulo2, Palette.texto2, maxLines = 1)
-                    BasicTextField(name, { name = it }, Modifier.fillMaxWidth(), textStyle = Type.titulo2.copy(color = Palette.texto1), cursorBrush = SolidColor(Palette.brasa), singleLine = true)
+                    BasicTextField(name, { name = it }, Modifier.appTextField().fillMaxWidth(), textStyle = Type.titulo2.copy(color = Palette.texto1), cursorBrush = SolidColor(Palette.brasa), singleLine = true)
                 }
             }
             SectionLabel("Sugerencias")
@@ -353,81 +376,126 @@ private fun AddInstitutionSheet(store: Store, onDone: () -> Unit) {
     }
 }
 
-/** Agregar o editar cuenta, tarjeta o cajita, como ProductFormView de iOS. Solo últimos 4 de la tarjeta. */
+/** Agregar o editar cuenta, tarjeta, cajita o efectivo, como ProductFormView de iOS. Solo los últimos 4 de la tarjeta. */
 @Composable
-private fun ProductFormSheet(store: Store, ledger: Ledger, inst: Institution, initialKind: ProductKind, editing: Product?, onDone: () -> Unit) {
+private fun ProductFormSheet(store: Store, ledger: Ledger, inst: Institution, initialKind: ProductKind, editing: Product?, onPay: () -> Unit = {}, onDone: () -> Unit) {
     var kind by remember { mutableStateOf(initialKind) }
     var name by remember { mutableStateOf(editing?.name ?: "") }
     var last4 by remember { mutableStateOf(editing?.last4 ?: "") }
     val startBalance = editing?.let { ledger.balance(it) } ?: 0L
-    var balanceText by remember { mutableStateOf(if (startBalance != 0L) Money.groupThousands(startBalance / 100) else "") }
+    var balance by remember { mutableStateOf(startBalance) }
+    var limit by remember { mutableStateOf(editing?.creditLimitMinor ?: 0L) }
+    var rate by remember { mutableStateOf(editing?.rateEA?.toString()?.replace('.', ',') ?: "") }
+    var cutDay by remember { mutableStateOf(editing?.cutDay) }
     var dueDay by remember { mutableStateOf(editing?.dueDay) }
+    var parentId by remember { mutableStateOf(editing?.parentProductId) }
+    var hidden by remember { mutableStateOf(editing?.hidden ?: false) }
+    var rewardId by remember { mutableStateOf(editing?.rewardProgramId) }
+    var points by remember { mutableStateOf(editing?.pointsPerThousand?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString().replace('.', ',') } ?: "") }
+    var pickDay by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
     val isCard = kind == ProductKind.CREDITO || kind == ProductKind.DEBITO
     val last4Valid = last4.isEmpty() || last4.length == 4
     val kindName = when (kind) { ProductKind.CUENTA -> "Cuenta"; ProductKind.DEBITO -> "Tarjeta débito"; ProductKind.CREDITO -> "Tarjeta crédito"; ProductKind.BOLSILLO -> "Cajita"; ProductKind.EFECTIVO -> "Efectivo" }
-    val canSave = last4Valid
-    val balanceMinor = (balanceText.filter(Char::isDigit).toLongOrNull() ?: 0) * 100
+    val accounts = ledger.products.filter { it.institutionId == inst.id && it.kind == ProductKind.CUENTA }
 
-    OverlaySheet(onDone, Modifier.fillMaxSize().padding(top = 48.dp)) {
-        SheetBar(if (editing == null) "Agregar a ${inst.name}" else "Editar", canSave, onDone) {
-            val finalName = name.trim().ifEmpty { kindName }
-            if (editing == null) store.addProduct(inst.id, kind, finalName, last4.ifEmpty { null }, if (kind == ProductKind.DEBITO) 0 else balanceMinor, if (kind == ProductKind.CREDITO) dueDay else null)
-            else store.updateProduct(editing.id, finalName, last4.ifEmpty { null }, if (kind == ProductKind.CREDITO) dueDay else null,
-                if (kind != ProductKind.DEBITO && balanceMinor != startBalance) balanceMinor else null)
-            onDone()
-        }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Spacing.margen, vertical = Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s5)) {
-            if (editing == null) {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                    SectionLabel("¿Qué es?")
-                    listOf(listOf(Triple(ProductKind.CUENTA, "Cuenta", "Ahorros o corriente"), Triple(ProductKind.DEBITO, "Tarjeta débito", "Ligada a una cuenta")),
-                        listOf(Triple(ProductKind.CREDITO, "Tarjeta crédito", "Cupo, corte y pago"), Triple(ProductKind.BOLSILLO, "Bolsillo o cajita", "Con o sin rentabilidad"))).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-                            row.forEach { (k, t, sub) ->
-                                val on = kind == k
-                                Column(Modifier.weight(1f).heightIn(min = 64.dp).clip(RoundedCornerShape(Radius.campo)).background(if (on) Palette.brasaVelo else Palette.superficie3)
-                                    .border(1.5.dp, if (on) Palette.brasa else Color.Transparent, RoundedCornerShape(Radius.campo)).clickable { kind = k }.padding(horizontal = Spacing.s3),
-                                    verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically)) {
-                                    T(t, Type.titulo3, maxLines = 1); T(sub, Type.leyenda, Palette.texto2, maxLines = 1)
+    Box(Modifier.fillMaxSize()) {
+        OverlaySheet(onDone, Modifier.fillMaxSize().padding(top = 48.dp)) {
+            SheetBar(if (editing == null) "Agregar a ${inst.name}" else "Editar", last4Valid, onDone) {
+                val base = editing ?: Product(institutionId = inst.id, kind = kind, name = "", balanceMinor = 0)
+                var p = base.copy(kind = kind, name = name.trim().ifEmpty { kindName }, last4 = last4.ifEmpty { null },
+                    creditLimitMinor = if (kind == ProductKind.CREDITO && limit > 0) limit else null, cutDay = if (kind == ProductKind.CREDITO) cutDay else null,
+                    dueDay = if (kind == ProductKind.CREDITO) dueDay else null, rateEA = if (kind == ProductKind.BOLSILLO) rate.replace(',', '.').toDoubleOrNull() else null,
+                    parentProductId = if (kind == ProductKind.DEBITO) parentId else null, hidden = hidden,
+                    rewardProgramId = if (isCard) rewardId else null, pointsPerThousand = if (isCard && rewardId != null) points.replace(',', '.').toDoubleOrNull() else null)
+                if (editing == null) p = p.copy(balanceMinor = if (kind == ProductKind.DEBITO) 0 else balance, balanceAt = LocalDate.now())
+                else if (kind != ProductKind.DEBITO && balance != startBalance) p = p.copy(balanceMinor = balance, balanceAt = LocalDate.now().plusDays(1))
+                store.saveProduct(p)
+                onDone()
+            }
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Spacing.margen, vertical = Spacing.s4), verticalArrangement = Arrangement.spacedBy(Spacing.s5)) {
+                if (editing == null && kind != ProductKind.EFECTIVO) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                        SectionLabel("¿Qué es?")
+                        listOf(listOf(Triple(ProductKind.CUENTA, "Cuenta", "Ahorros o corriente"), Triple(ProductKind.DEBITO, "Tarjeta débito", "Ligada a una cuenta")),
+                            listOf(Triple(ProductKind.CREDITO, "Tarjeta crédito", "Cupo, corte y pago"), Triple(ProductKind.BOLSILLO, "Bolsillo o cajita", "Con o sin rentabilidad"))).forEach { row ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                                row.forEach { (k, t, sub) ->
+                                    val on = kind == k
+                                    Column(Modifier.weight(1f).heightIn(min = 64.dp).clip(RoundedCornerShape(Radius.campo)).background(if (on) Palette.brasaVelo else Palette.superficie3)
+                                        .border(1.5.dp, if (on) Palette.brasa else Color.Transparent, RoundedCornerShape(Radius.campo)).clickable { kind = k }.padding(horizontal = Spacing.s3),
+                                        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically)) {
+                                        T(t, Type.titulo3, maxLines = 1); T(sub, Type.leyenda, Palette.texto2, maxLines = 1)
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-            Field("Nombre") { TextBox(name, when (kind) { ProductKind.CREDITO -> "Crédito Oro"; ProductKind.DEBITO -> "Débito"; ProductKind.BOLSILLO -> "Emergencias"; else -> "Ahorros" }) { name = it } }
-            if (isCard) Field("Últimos 4") {
-                TextBox(last4, "0000", numeric = true, color = if (last4Valid) Palette.texto1 else Palette.peligro) { last4 = it.filter(Char::isDigit).take(4) }
-            }
-            if (kind != ProductKind.DEBITO) Field(if (kind == ProductKind.CREDITO) "Deuda de hoy" else "Saldo de hoy") {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-                    T("$", Type.cifraPequena, Palette.texto2)
-                    Box(Modifier.weight(1f)) {
-                        if (balanceText.isEmpty()) T("0", Type.cifraPequena, Palette.texto2)
-                        BasicTextField(balanceText, { v -> val d = v.filter(Char::isDigit).take(12); balanceText = if (d.isEmpty()) "" else Money.groupThousands(d.toLong()) },
-                            Modifier.fillMaxWidth(), textStyle = Type.cifraPequena.copy(color = Palette.texto1), cursorBrush = SolidColor(Palette.brasa), singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                Field("Nombre") { TextBox(name, when (kind) { ProductKind.CREDITO -> "Crédito Oro"; ProductKind.DEBITO -> "Débito"; ProductKind.BOLSILLO -> "Emergencias"; ProductKind.EFECTIVO -> "Billetera, Casa, Alcancía"; else -> "Ahorros" }) { name = it } }
+                when (kind) {
+                    ProductKind.CREDITO -> {
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                            Box(Modifier.weight(1f)) { Field("Últimos 4") { TextBox(last4, "0000", numeric = true, color = if (last4Valid) Palette.texto1 else Palette.peligro) { last4 = it.filter(Char::isDigit).take(4) } } }
+                            MoneyField("Cupo", limit, modifier = Modifier.weight(1f)) { limit = it }
+                        }
+                        MoneyField("Deuda de hoy", balance) { balance = it }
                     }
+                    ProductKind.DEBITO -> Field("Últimos 4") { TextBox(last4, "0000", numeric = true, color = if (last4Valid) Palette.texto1 else Palette.peligro) { last4 = it.filter(Char::isDigit).take(4) } }
+                    ProductKind.BOLSILLO -> Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                        MoneyField("Saldo de hoy", balance, modifier = Modifier.weight(1f)) { balance = it }
+                        Box(Modifier.weight(0.6f)) { Field("Tasa E.A. (%)") { TextBox(rate, "0", numeric = true) { rate = it.filter { c -> c.isDigit() || c == ',' || c == '.' } } } }
+                    }
+                    else -> MoneyField("Saldo de hoy", balance) { balance = it }
                 }
-            }
-            if (kind == ProductKind.CREDITO) {
                 Card(padding = Spacing.s2) {
-                    var open by remember { mutableStateOf(false) }
-                    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { open = true }.padding(horizontal = Spacing.s2), verticalAlignment = Alignment.CenterVertically) {
-                        T("Día de pago", Type.cuerpo, modifier = Modifier.weight(1f))
+                    if (kind == ProductKind.CREDITO) {
+                        FormRow("Día de corte", cutDay?.let { "Día $it" } ?: "Sin definir", onClick = { pickDay = "corte" })
+                        FormDivider()
+                        FormRow("Día de pago", dueDay?.let { "Día $it" } ?: "Sin definir", onClick = { pickDay = "pago" })
+                        FormDivider()
+                    }
+                    if (kind == ProductKind.DEBITO && accounts.isNotEmpty()) {
+                        var open by remember { mutableStateOf(false) }
                         Box {
-                            T(dueDay?.toString() ?: "Sin definir", Type.cuerpo, Palette.texto2)
+                            FormRow("Cuenta que paga", accounts.firstOrNull { it.id == parentId }?.name ?: "Ninguna", onClick = { open = true })
                             DropdownMenu(open, { open = false }, containerColor = Palette.superficie2) {
-                                DropdownMenuItem({ T("Sin definir", Type.cuerpo) }, { dueDay = null; open = false })
-                                (1..31).forEach { d -> DropdownMenuItem({ T("$d", Type.cuerpo) }, { dueDay = d; open = false }) }
+                                DropdownMenuItem({ T("Ninguna", Type.cuerpo) }, { parentId = null; open = false })
+                                accounts.forEach { a -> DropdownMenuItem({ T(a.name, Type.cuerpo) }, { parentId = a.id; open = false }) }
                             }
                         }
+                        FormDivider()
                     }
+                    if (isCard && ledger.rewards.isNotEmpty()) {
+                        var open by remember { mutableStateOf(false) }
+                        Box {
+                            FormRow("Acumula en", ledger.rewards.firstOrNull { it.id == rewardId }?.name ?: "Ningún programa", onClick = { open = true })
+                            DropdownMenu(open, { open = false }, containerColor = Palette.superficie2) {
+                                DropdownMenuItem({ T("Ningún programa", Type.cuerpo) }, { rewardId = null; open = false })
+                                ledger.rewards.forEach { r -> DropdownMenuItem({ T(r.name, Type.cuerpo) }, { rewardId = r.id; open = false }) }
+                            }
+                        }
+                        if (rewardId != null) {
+                            FormDivider()
+                            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = Spacing.s2), verticalAlignment = Alignment.CenterVertically) {
+                                T("Puntos por cada ${Money.units(1000, Currency.current).formatted()}", Type.cuerpo, modifier = Modifier.weight(1f))
+                                Box(Modifier.width(72.dp)) { TextBox(points, "1", numeric = true) { points = it.filter { c -> c.isDigit() || c == ',' || c == '.' }.take(6) } }
+                            }
+                        }
+                        FormDivider()
+                    }
+                    FormToggle("Ocultar saldo en Inicio", hidden) { hidden = it }
                 }
+                if (isCard) T("Solo guardamos los últimos 4 dígitos para reconocer la tarjeta. Nunca el número completo.", Type.leyenda, Palette.texto2)
+                if (isCard && rewardId != null) T("Cada gasto con esta tarjeta suma sus puntos solo; si lo borras, se restan.", Type.leyenda, Palette.texto2)
+                if (editing != null && kind == ProductKind.CREDITO) SecondaryButton("Pagar tarjeta") { onPay() }
+                if (editing != null) SecondaryButton("Borrar ${kindName.lowercase()}", danger = true) { confirmDelete = true }
             }
-            T("Solo guardamos los últimos 4 dígitos para reconocer la tarjeta. Nunca el número completo.", Type.leyenda, Palette.texto2)
-            if (editing != null) SecondaryButton("Borrar ${kindName.lowercase()}", danger = true) { confirmDelete = true }
+        }
+        pickDay?.let { which ->
+            DayGridSheet(if (which == "corte") "¿Qué día es el corte?" else "¿Qué día se paga la tarjeta?", if (which == "corte") cutDay else dueDay, { pickDay = null }) { d ->
+                if (which == "corte") cutDay = d else dueDay = d; pickDay = null
+            }
         }
     }
     if (confirmDelete && editing != null) {
@@ -455,7 +523,7 @@ private fun Field(title: String, content: @Composable () -> Unit) {
 private fun TextBox(value: String, hint: String, numeric: Boolean = false, color: Color = Palette.texto1, onChange: (String) -> Unit) {
     Box(Modifier.fillMaxWidth()) {
         if (value.isEmpty()) T(hint, Type.cuerpo, Palette.texto2)
-        BasicTextField(value, onChange, Modifier.fillMaxWidth(), textStyle = Type.cuerpo.copy(color = color), cursorBrush = SolidColor(Palette.brasa), singleLine = true,
-            keyboardOptions = if (numeric) KeyboardOptions(keyboardType = KeyboardType.NumberPassword) else KeyboardOptions.Default)
+        BasicTextField(value, onChange, Modifier.appTextField().fillMaxWidth(), textStyle = Type.cuerpo.copy(color = color), cursorBrush = SolidColor(Palette.brasa), singleLine = true,
+            keyboardOptions = if (numeric) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default)
     }
 }

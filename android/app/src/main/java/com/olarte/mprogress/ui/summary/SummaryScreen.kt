@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -65,13 +66,17 @@ private val presets = listOf(1 to "Este mes", 3 to "3 meses", 6 to "6 meses", 12
 
 private fun money(minor: Long, sign: Boolean = false) = Money(minor).formatted(sign)
 
-/** Resumen (pantalla 10), igual que SummaryView de iOS: periodo, ingresos y gastos, cómo va tu gasto, en qué gastas, tu mes normal y el mes que viene. */
+/** Resumen (pantalla 10), igual que SummaryView de iOS: periodo, este mes (solo datos reales), ingresos y gastos, cómo va tu gasto, en qué gastas, tu mes normal, el mes que viene y los próximos 3 meses con pagos fijos. */
 @Composable
 fun SummaryScreen(store: Store, today: LocalDate = LocalDate.now()) {
     val ledger by store.ledger.collectAsState()
     var months by remember { mutableStateOf(12) }
+    var categoryId by remember { mutableStateOf<String?>(null) }
     val start = YearMonth.from(today).minusMonths(months - 1L)
-    val visible = ledger.entries.filter { !YearMonth.from(it.occurredAt).isBefore(start) && !YearMonth.from(it.occurredAt).isAfter(YearMonth.from(today)) }
+    val inPeriod = ledger.entries.filter { !YearMonth.from(it.occurredAt).isBefore(start) && !YearMonth.from(it.occurredAt).isAfter(YearMonth.from(today)) }
+    val chipIds = inPeriod.filter { it.kind == EntryKind.GASTO }.mapNotNull { it.categoryId }.distinct().sortedBy { com.olarte.mprogress.domain.Categories.byId(it)?.sort ?: 999 }
+    val filtered = if (categoryId == null) ledger.entries else ledger.entries.filter { it.kind == EntryKind.GASTO && it.categoryId == categoryId }
+    val visible = inPeriod.filter { categoryId == null || (it.kind == EntryKind.GASTO && it.categoryId == categoryId) }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(horizontal = Spacing.margen).padding(top = Spacing.s4, bottom = 120.dp),
@@ -81,9 +86,14 @@ fun SummaryScreen(store: Store, today: LocalDate = LocalDate.now()) {
             T("Resumen", Type.titulo1, modifier = Modifier.weight(1f))
             PeriodMenu(months) { months = it }
         }
+        if (chipIds.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            Chip("Todas", categoryId == null) { categoryId = null }
+            chipIds.forEach { id -> Chip(com.olarte.mprogress.domain.Categories.byId(id)?.name ?: "Sin categoría", categoryId == id) { categoryId = if (categoryId == id) null else id } }
+        }
         if (ledger.entries.isEmpty()) EmptyCard() else {
-            FlowsCard(SummaryMath.flows(ledger.entries, today, months).map { Triple(it.month, it.incomeMinor, it.spentMinor) })
-            PaceCard(ledger.entries, today)
+            MonthFactsCard(ledger.entries, ledger.recurring.filter { it.active }, today)
+            FlowsCard(SummaryMath.flows(filtered, today, months).map { Triple(it.month, it.incomeMinor, it.spentMinor) }, categoryId)
+            PaceCard(filtered, today)
             CategoriesCard(visible)
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                 val normal = SummaryMath.normalMonth(ledger.entries, today)
@@ -96,6 +106,7 @@ fun SummaryScreen(store: Store, today: LocalDate = LocalDate.now()) {
                 ledger.recurring.forEach { r -> val c = BalanceCalculator.pendingOccurrences(r, next).size; count += c; if (r.kind == EntryKind.GASTO) expense += c * r.amountMinor }
                 SmallCard("El mes que viene", money(expense), if (count == 0) "Nada programado" else "ya previsto en $count ${if (count == 1) "pago" else "pagos"}", Modifier.weight(1f))
             }
+            NextMonthsCard(com.olarte.mprogress.domain.Forecast.nextMonths(3, ledger.recurring, today))
         }
     }
 }
@@ -127,15 +138,16 @@ private fun LegendDot(color: Color, text: String, textColor: Color = color) {
 }
 
 @Composable
-private fun FlowsCard(flows: List<Triple<YearMonth, Long, Long>>) {
+private fun FlowsCard(flows: List<Triple<YearMonth, Long, Long>>, categoryId: String?) {
     val income = flows.sumOf { it.second }; val spent = flows.sumOf { it.third }
     val hielo = Palette.hielo
     Card {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-            T("Ingresos y gastos", Type.cuerpo2, Palette.texto2)
-            T(money(income - spent, sign = true), Type.cifraGrande, maxLines = 1)
+            val showsIncome = categoryId == null
+            T(if (showsIncome) "Ingresos y gastos" else "Gastos de ${com.olarte.mprogress.domain.Categories.byId(categoryId)?.name ?: "Sin categoría"}", Type.cuerpo2, Palette.texto2)
+            T(if (showsIncome) money(income - spent, sign = true) else money(spent), Type.cifraGrande, maxLines = 1)
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-                LegendDot(hielo, "Ingresos ${money(income)}")
+                if (showsIncome) LegendDot(hielo, "Ingresos ${money(income)}")
                 LegendDot(Palette.brasa, "Gastos ${money(spent)}")
             }
             val max = flows.maxOf { maxOf(it.second, it.third) }.coerceAtLeast(1)
@@ -208,17 +220,92 @@ private fun PaceCard(entries: List<EntryRecord>, today: LocalDate) {
 
 @Composable
 private fun CategoriesCard(visible: List<EntryRecord>) {
-    // Android aún no tiene categorías: todo cae en "Sin categoría", como en iOS cuando no se elige una.
-    val total = visible.filter { it.kind == EntryKind.GASTO }.sumOf { it.amountMinor }
+    val rows = com.olarte.mprogress.domain.CategoryMath.spending(visible)
+    val total = rows.sumOf { it.totalMinor }
+    val top = rows.firstOrNull()?.totalMinor?.coerceAtLeast(1) ?: 1
     Card {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
             T("En qué gastas", Type.cuerpo2, Palette.texto2)
             T(money(total), Type.cifraGrande)
-            if (total == 0L) T("Sin gastos en este periodo.", Type.cuerpo2, Palette.texto2)
-            else Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-                Row { T("Sin categoría", Type.cuerpo, modifier = Modifier.weight(1f)); T(money(total), Type.cifraPequena) }
-                Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(Palette.brasa))
+            if (rows.isEmpty()) T("Sin gastos en este periodo.", Type.cuerpo2, Palette.texto2)
+            rows.take(8).forEach { row ->
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                    Row { T(com.olarte.mprogress.domain.Categories.byId(row.categoryId)?.name ?: "Sin categoría", Type.cuerpo, modifier = Modifier.weight(1f)); T(money(row.totalMinor), Type.cifraPequena) }
+                    Box(Modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(Palette.superficie3)) {
+                        Box(Modifier.fillMaxWidth((row.totalMinor.toFloat() / top).coerceIn(0.02f, 1f)).height(6.dp).clip(CircleShape).background(Palette.brasa))
+                    }
+                }
             }
+        }
+    }
+}
+
+/** "Este mes" (PLAN_F12B Paso 4, sin predicciones inventadas): entró, gastaste, fijos que faltan y te quedan, el mismo número de Inicio. */
+@Composable
+private fun MonthFactsCard(entries: List<EntryRecord>, recurring: List<com.olarte.mprogress.domain.RecurringRecord>, today: LocalDate) {
+    val f = com.olarte.mprogress.domain.Forecast.monthFacts(entries, recurring, today)
+    Card {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                T("Este mes", Type.cuerpo2, Palette.texto2, Modifier.weight(1f))
+                if (f.isOver) com.olarte.mprogress.ui.components.Badge("Ojo", Palette.peligroVelo, Palette.peligro)
+            }
+            FactRow("Entró", money(f.enteredMinor))
+            if (f.pendingIncomeMinor > 0) FactRow("Por entrar", money(f.pendingIncomeMinor))
+            FactRow("Gastaste", money(f.spentMinor))
+            FactRow("Fijos que faltan", money(f.pendingFixedMinor))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Palette.linea))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                T("Te quedan", Type.cuerpo, modifier = Modifier.weight(1f))
+                T(money(f.remainingMinor), Type.cifraGrande, if (f.isOver) Palette.peligro else Palette.texto1, maxLines = 1)
+            }
+            com.olarte.mprogress.domain.Forecast.overText(f.remainingMinor)?.let { T(it, Type.cuerpo2, Palette.peligro) }
+        }
+    }
+}
+
+@Composable
+private fun FactRow(title: String, value: String) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 28.dp), verticalAlignment = Alignment.CenterVertically) {
+        T(title, Type.cuerpo, Palette.texto2, Modifier.weight(1f))
+        T(value, Type.cifraPequena)
+    }
+}
+
+/** "Los próximos 3 meses": ingresos fijos y gastos fijos, con lo que quedaría. Solo pagos fijos. */
+@Composable
+private fun NextMonthsCard(months: List<com.olarte.mprogress.domain.MonthForecast>) {
+    val hielo = Palette.hielo; val brasa = Palette.brasa
+    val max = months.maxOfOrNull { maxOf(it.fixedIncomeMinor, it.fixedExpenseMinor) }?.coerceAtLeast(1) ?: 1
+    Card {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+            T("Los próximos 3 meses", Type.cuerpo2, Palette.texto2)
+            Column {
+                Canvas(Modifier.fillMaxWidth().height(120.dp)) {
+                    val slot = size.width / months.size
+                    val bar = minOf(slot * 0.24f, 24.dp.toPx()); val gap = 3.dp.toPx()
+                    months.forEachIndexed { i, m ->
+                        val start = slot * i + slot / 2 - (bar * 2 + gap) / 2
+                        listOf(m.fixedIncomeMinor to hielo, m.fixedExpenseMinor to brasa).forEachIndexed { j, (v, c) ->
+                            val h = size.height * v / max
+                            if (h > 0) drawRoundRect(c, Offset(start + j * (bar + gap), size.height - h), Size(bar, h), CornerRadius(4.dp.toPx()))
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth().padding(top = Spacing.s1)) {
+                    months.forEach { T(DueText.months[it.month.monthValue - 1], Type.leyenda, Palette.texto2, Modifier.weight(1f), align = TextAlign.Center) }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                LegendDot(hielo, "Ingresos fijos", Palette.texto2); LegendDot(brasa, "Gastos fijos", Palette.texto2)
+            }
+            months.forEach { m ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 32.dp), verticalAlignment = Alignment.CenterVertically) {
+                    T(DueText.monthName(m.month.atDay(1)).replaceFirstChar { it.uppercase() }, Type.cuerpo, modifier = Modifier.weight(1f))
+                    T(com.olarte.mprogress.domain.Forecast.netText(m), Type.cifraPequena, if (m.netMinor < 0) Palette.peligro else Palette.texto1)
+                }
+            }
+            T(com.olarte.mprogress.domain.Forecast.NEXT_MONTHS_NOTE, Type.leyenda, Palette.texto2)
         }
     }
 }

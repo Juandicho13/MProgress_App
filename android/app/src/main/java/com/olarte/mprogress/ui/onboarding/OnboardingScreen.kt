@@ -1,5 +1,7 @@
 package com.olarte.mprogress.ui.onboarding
 
+import com.olarte.mprogress.ui.components.appTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -262,7 +264,7 @@ fun OnboardingScreen(store: Store, state: OnboardingState = remember { Onboardin
                 OnboardingStep.FIJOS -> FixedStep(state)
                 OnboardingStep.FECHAS -> DatesStep(state)
                 OnboardingStep.INTERESES -> InterestsStep(state)
-                OnboardingStep.FUNCIONES -> FeatureStep(state) { store.finishOnboarding(state.toDraft()) }
+                OnboardingStep.FUNCIONES -> FeatureStep(state) { val d = state.toDraft(); store.finishOnboarding(d); if (d.fixed.isNotEmpty()) com.olarte.mprogress.ui.Permissions.askAfterFirstFixed() }
             }
         }
     }
@@ -532,7 +534,7 @@ private fun PlannedCardSheet(kind: ProductKind, onDismiss: () -> Unit, onAdd: (P
                 FormField(name, "Nombre") { name = it }
                 if (isCard) {
                     Box(Modifier.padding(start = Spacing.s4)) { Divider() }
-                    FormField(last4, "Últimos 4 dígitos", KeyboardType.NumberPassword) { last4 = it.filter(Char::isDigit).take(4) }
+                    FormField(last4, "Últimos 4 dígitos", KeyboardType.Number) { last4 = it.filter(Char::isDigit).take(4) }
                 }
             }
         }
@@ -543,7 +545,7 @@ private fun PlannedCardSheet(kind: ProductKind, onDismiss: () -> Unit, onAdd: (P
 private fun FormField(value: String, hint: String, keyboard: KeyboardType = KeyboardType.Text, onChange: (String) -> Unit) {
     Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = Spacing.s4), contentAlignment = Alignment.CenterStart) {
         if (value.isEmpty()) T(hint, Type.cuerpo, Palette.texto2)
-        BasicTextField(value, onChange, Modifier.fillMaxWidth(), textStyle = Type.cuerpo.copy(color = Palette.texto1), cursorBrush = SolidColor(Palette.brasa),
+        BasicTextField(value, onChange, Modifier.appTextField().fillMaxWidth(), textStyle = Type.cuerpo.copy(color = Palette.texto1), cursorBrush = SolidColor(Palette.brasa),
             singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = keyboard))
     }
 }
@@ -605,7 +607,7 @@ private fun FixedAmountSheet(title: String?, minor: Long, onDismiss: () -> Unit,
             if (title != null) T(title, Type.titulo2, modifier = Modifier.padding(top = Spacing.s6))
             else Box(Modifier.fillMaxWidth().padding(top = Spacing.s6).clickable { nameFocused = true }, contentAlignment = Alignment.Center) {
                 if (name.isEmpty()) T("Nombre: internet, colegio, celular…", Type.titulo2, Palette.texto2, align = TextAlign.Center)
-                BasicTextField(name, { name = it; nameFocused = true }, Modifier.fillMaxWidth(), singleLine = true,
+                BasicTextField(name, { name = it; nameFocused = true }, Modifier.appTextField().fillMaxWidth(), singleLine = true,
                     textStyle = Type.titulo2.copy(color = Palette.texto1, textAlign = TextAlign.Center), cursorBrush = SolidColor(Palette.brasa))
             }
             AmountDisplay("$", input.display, !nameFocused || title != null, empty = input.text.isEmpty()) { nameFocused = false }

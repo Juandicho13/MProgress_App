@@ -148,7 +148,8 @@ Plan detallado: `docs/PLAN_F10.md` (cifrado de extremo a extremo: Supabase solo 
 - [x] F14-01 Dominio en Kotlin igual al de iOS, con pruebas JVM.
 - [x] F14-02 Todas las pestañas y pantallas con el mismo diseño de iOS (verificado con capturas Robolectric).
 - [~] F14-03 Paridad de funciones (ver F12B).
-- [ ] F14-04 Cuentas, nube y cifrado con los mismos formatos de iOS (F10).
+- [~] F14-04 Cuentas, nube y cifrado con los mismos formatos de iOS (F10). Hecho en el APK 1.0: enlace mágico con PKCE, sesión y llaves cifradas con el Android Keystore, sobres AES-GCM y llaves X25519 iguales byte por byte a iOS (vectores en `android/app/src/test/vectors`), sincronización con PostgREST, código de recuperación, aprobar dispositivos y borrar la cuenta remota. Falta: probar en el teléfono de Juan contra Supabase real y con el iPhone.
+- [x] F14-05 Dos versiones del APK: `estandar` (sin SMS ni lector de notificaciones, para que Play Protect no bloquee la instalación) y `completo` (todo el registro automático, se instala desde el Mac).
 
 ## Después de F12 (por planear, no se programa todavía)
 

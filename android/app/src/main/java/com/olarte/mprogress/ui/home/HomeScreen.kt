@@ -1,6 +1,8 @@
 package com.olarte.mprogress.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +22,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.QuestionMark
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.TextButton
@@ -37,6 +42,10 @@ import com.olarte.mprogress.data.Store
 import com.olarte.mprogress.domain.BalanceCalculator
 import com.olarte.mprogress.domain.DueText
 import com.olarte.mprogress.domain.EntryKind
+import com.olarte.mprogress.domain.Forecast
+import com.olarte.mprogress.domain.IncomeCheck
+import com.olarte.mprogress.domain.RecurringRecord
+import com.olarte.mprogress.domain.UpcomingFold
 import com.olarte.mprogress.domain.Money
 import com.olarte.mprogress.domain.QuickActionKind
 import com.olarte.mprogress.domain.UpcomingCharge
@@ -45,7 +54,9 @@ import com.olarte.mprogress.ui.components.Avatar
 import com.olarte.mprogress.ui.components.Badge
 import com.olarte.mprogress.ui.components.Card
 import com.olarte.mprogress.ui.components.CircleIconButton
+import com.olarte.mprogress.ui.components.IconTile
 import com.olarte.mprogress.ui.components.ListRow
+import com.olarte.mprogress.ui.components.SecondaryButton
 import com.olarte.mprogress.ui.components.Sym
 import com.olarte.mprogress.ui.components.T
 import com.olarte.mprogress.ui.components.Type
@@ -57,14 +68,19 @@ import java.time.LocalDate
 
 /** Inicio (pantalla 1) e Inicio vacío (38), igual que en iOS. */
 @Composable
-fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> Unit, onOpenFixed: () -> Unit, onOpenHistory: () -> Unit) {
+fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> Unit, onOpenFixed: () -> Unit, onOpenHistory: () -> Unit, onOpenEntry: (String) -> Unit = {}) {
     val ledger by store.ledger.collectAsState()
     val actions by store.actions.collectAsState()
+    val currency by store.currency.collectAsState()
+    val checkedIncomes by store.checkedIncomes.collectAsState()
+    val upcomingExpanded by store.upcomingExpanded.collectAsState()
     var charge by remember { mutableStateOf<UpcomingCharge?>(null) }
     val today = LocalDate.now()
     val active = ledger.recurring.filter { it.active }
     val summary = BalanceCalculator.monthSummary(ledger.entries, active, today)
-    val upcoming = BalanceCalculator.upcoming(active, today, kind = null, limit = 6)
+    // Todos los próximos cargos (hasta 20); la tarjeta muestra 3 si está cerrada.
+    val upcoming = BalanceCalculator.upcoming(active, today, kind = null, limit = UpcomingFold.EXPANDED_LIMIT)
+    val suspicious = IncomeCheck.suspicious(active, currency, checkedIncomes)
     val recent = ledger.entries.sortedByDescending { it.occurredAt }.take(5)
     val isEmpty = ledger.entries.isEmpty() && active.isEmpty()
 
@@ -87,6 +103,8 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
             CircleIconButton(Sym.bell, "Avisos") { }
         }
 
+        SyncPill()
+
         // Te quedan.
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             T("Te quedan en ${DueText.monthName(today)}", Type.cuerpo2, Palette.texto2)
@@ -100,6 +118,13 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
                     Box(Modifier.fillMaxWidth(summary.spentRatio.toFloat().coerceAtLeast(0.02f)).height(8.dp).clip(CircleShape).background(Palette.brasa))
                 }
                 T("Gastado ${Money(summary.spentMinor).formatted()} de ${Money(summary.expectedIncomeMinor).formatted()} · faltan ${summary.daysLeft} días", Type.cuerpo2, Palette.texto2)
+                // PLAN_F12B Paso 4, sin predicciones: la línea roja solo sale si Te quedan ya es negativo.
+                Forecast.overText(summary.remainingMinor, currency)?.let { alert ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                        Icon(Icons.Rounded.Warning, null, Modifier.size(16.dp), tint = Palette.peligro)
+                        T(alert, Type.cuerpo2, Palette.peligro)
+                    }
+                }
             }
         }
 
@@ -121,13 +146,14 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
                 }
             }
         } else {
+            suspicious.forEach { r -> IncomeCheckCard(store, r) }
             if (upcoming.isNotEmpty()) {
                 Card {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         T("Próximos cargos", Type.titulo3, modifier = Modifier.weight(1f))
                         T("Pagos fijos", Type.etiqueta, Palette.brasaTinta, Modifier.heightIn(min = Size.toqueMinimo).clickable(onClick = onOpenFixed).padding(vertical = 15.dp, horizontal = 4.dp))
                     }
-                    upcoming.forEach { c ->
+                    UpcomingFold.visible(upcoming, upcomingExpanded).forEach { c ->
                         val income = c.kind == EntryKind.INGRESO
                         val cycle = ledger.recurring.firstOrNull { it.id == c.recurringId }?.cycle?.title.orEmpty()
                         ListRow(c.name, title = c.name, subtitle = "${DueText.describe(c.date, today)} · $cycle",
@@ -141,6 +167,14 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
                                     else -> {}
                                 }
                             }
+                        }
+                    }
+                    UpcomingFold.toggleTitle(upcoming.size, upcomingExpanded)?.let { toggle ->
+                        Row(Modifier.fillMaxWidth().heightIn(min = Size.toqueMinimo).clip(RoundedCornerShape(Radius.boton))
+                            .clickable { store.setUpcomingExpanded(!upcomingExpanded) },
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.s1, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+                            T(toggle, Type.etiqueta, Palette.brasaTinta)
+                            Icon(if (upcomingExpanded) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown, null, Modifier.size(16.dp), tint = Palette.brasaTinta)
                         }
                     }
                 }
@@ -160,7 +194,7 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
                         val income = e.kind == EntryKind.INGRESO
                         val name = e.name.ifBlank { if (income) "Ingreso" else "Gasto" }
                         ListRow(name, title = name, subtitle = DueText.describe(e.occurredAt, today),
-                            tint = if (income) Palette.hieloVelo else Palette.superficie3, fg = if (income) Palette.hielo else Palette.texto1) {
+                            tint = if (income) Palette.hieloVelo else Palette.superficie3, fg = if (income) Palette.hielo else Palette.texto1, onClick = { onOpenEntry(e.id) }) {
                             T((if (income) Money(e.amountMinor) else Money(-e.amountMinor)).formatted(sign = income), Type.cifra, if (income) Palette.hielo else Palette.texto1)
                         }
                     }
@@ -174,10 +208,36 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
             onDismissRequest = { charge = null },
             title = { T(c.name, Type.titulo3) },
             text = { T("${Money(c.amountMinor).formatted()} · ${DueText.describe(c.date, today)}", Type.cuerpo2, Palette.texto2) },
-            confirmButton = { TextButton({ store.markPaid(c.recurringId); charge = null }) { T("Marcar pagado", Type.etiqueta, Palette.brasaTinta) } },
+            confirmButton = { TextButton({ com.olarte.mprogress.ui.home.markPaidWithUndo(store, c.recurringId); charge = null }) { T("Marcar pagado", Type.etiqueta, Palette.brasaTinta) } },
             dismissButton = { TextButton({ charge = null }) { T("Cancelar", Type.etiqueta) } },
             containerColor = Palette.superficie2,
         )
+    }
+}
+
+/** "¿Tu sueldo es $ 2?": arreglo rápido de un ingreso fijo que parece mal escrito (igual que iOS). */
+@Composable
+private fun IncomeCheckCard(store: Store, r: RecurringRecord) {
+    Card {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                IconTile(Icons.Rounded.QuestionMark, Palette.oro.copy(alpha = 0.16f), Palette.oro)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
+                    T(IncomeCheck.question(r.name, r.amountMinor), Type.titulo3)
+                    T("Parece muy poco para un ingreso fijo. Si le faltaron ceros, arréglalo aquí.", Type.cuerpo2, Palette.texto2)
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                IncomeCheck.factors.forEach { factor ->
+                    SecondaryButton(IncomeCheck.fixTitle(r.amountMinor, factor)) {
+                        val previous = r.amountMinor
+                        store.setRecurringAmount(r.id, previous * factor)
+                        store.showUndo("${r.name} quedó en ${Money(previous * factor).formatted()}") { store.setRecurringAmount(r.id, previous) }
+                    }
+                }
+                SecondaryButton("Sí, es correcto") { store.markIncomeChecked(r.id) }
+            }
+        }
     }
 }
 
@@ -203,3 +263,21 @@ private fun EmptyArt() {
         }
     }
 }
+
+/** Pastilla de sincronización (F10): solo con cuenta, sin conexión o con error. "Sin conexión · 3 cambios sin sincronizar". */
+@Composable
+fun SyncPill() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val cloud = remember { runCatching { com.olarte.mprogress.data.cloud.CloudAccount.get(context) }.getOrNull() } ?: return
+    val ui by cloud.ui.collectAsState()
+    if (!ui.isSignedIn) return
+    val text = com.olarte.mprogress.domain.SyncEngine.pillText(ui.status) ?: return
+    Row(Modifier.heightIn(min = 36.dp).clip(CircleShape).background(Palette.vidrioTinte.copy(alpha = 0.78f))
+        .androidxBorder().padding(horizontal = Spacing.s4), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        Icon(androidx.compose.material.icons.Icons.Outlined.CloudOff, null, Modifier.size(16.dp), tint = Palette.texto1)
+        T(text, Type.etiqueta, maxLines = 1)
+    }
+}
+
+@Composable
+private fun Modifier.androidxBorder() = this.then(Modifier.border(1.dp, Palette.vidrioBorde, CircleShape))

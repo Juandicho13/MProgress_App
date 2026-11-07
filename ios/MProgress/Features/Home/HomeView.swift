@@ -20,6 +20,10 @@ struct HomeView: View {
     @State private var route: HomeRoute?
     @State private var scanning = false
     @State private var receipt: ReceiptDraft?
+    /// Ingresos fijos que la persona confirmó que están bien aunque sean pequeños (en este dispositivo).
+    @AppStorage(IncomeCheck.storageKey) private var checkedIncomesRaw = ""
+    /// Próximos cargos abiertos o cerrados (en este dispositivo).
+    @AppStorage(UpcomingFold.storageKey) private var upcomingExpanded = false
 
     struct ReceiptDraft: Identifiable {
         let id = UUID()
@@ -46,13 +50,16 @@ struct HomeView: View {
         BalanceCalculator.monthSummary(entries: entries.map(\.record), recurring: recurring.map(\.record), now: now, calendar: calendar)
     }
 
-    /// Te quedan − ritmo del gasto variable × días que faltan.
-    private var projectedEndOfMonth: Int64 {
-        Forecast.projectedEndOfMonth(entries: entries.map(\.record), recurring: recurring.map(\.record), now: now, calendar: calendar)
+    /// Todos los próximos cargos (hasta 20); la tarjeta muestra 3 si está cerrada.
+    private var upcoming: [UpcomingCharge] {
+        BalanceCalculator.upcoming(recurring: recurring.map(\.record), now: now, calendar: calendar, kind: nil, limit: UpcomingFold.expandedLimit)
     }
 
-    private var upcoming: [UpcomingCharge] {
-        BalanceCalculator.upcoming(recurring: recurring.map(\.record), now: now, calendar: calendar, kind: nil, limit: 6)
+    /// Ingresos fijos con un monto que parece un error al escribirlo ("$ 2").
+    private var suspiciousIncomes: [Recurring] {
+        let ids = Set(IncomeCheck.suspicious(recurring.map(\.record), currency: currency,
+                                             dismissed: IncomeCheck.dismissed(from: checkedIncomesRaw)).map(\.id))
+        return recurring.filter { ids.contains($0.id) }
     }
 
     private var cardDues: [CardDue] {
@@ -75,6 +82,7 @@ struct HomeView: View {
                 if isEmpty {
                     emptyCard
                 } else {
+                    ForEach(suspiciousIncomes, id: \.id) { item in incomeCheckCard(item) }
                     if !upcoming.isEmpty {
                         upcomingCard
                     } else if !recurring.isEmpty {
@@ -217,8 +225,8 @@ struct HomeView: View {
                 Text("Gastado \(Money(minor: summary.spentMinor, currency: currency).formatted()) de \(Money(minor: summary.expectedIncomeMinor, currency: currency).formatted()) · faltan \(summary.daysLeft) días")
                     .appFont(.cuerpo2)
                     .foregroundStyle(Palette.texto2)
-                // Predicción (PLAN_F12B Paso 4): solo se muestra si a este ritmo el mes termina en negativo.
-                if let alert = Forecast.alertText(projectedMinor: projectedEndOfMonth, currency: currency) {
+                // PLAN_F12B Paso 4, sin predicciones: la línea roja solo sale si Te quedan ya es negativo.
+                if let alert = Forecast.overText(remainingMinor: summary.remainingMinor, currency: currency) {
                     Label(alert, systemImage: "exclamationmark.triangle.fill")
                         .appFont(.cuerpo2)
                         .foregroundStyle(Palette.peligro)
@@ -272,7 +280,7 @@ struct HomeView: View {
                         .foregroundStyle(Palette.brasaTinta)
                         .frame(minHeight: Size.toqueMinimo)
                 }
-                ForEach(upcoming, id: \.recurringId) { charge in
+                ForEach(UpcomingFold.visible(upcoming, expanded: upcomingExpanded), id: \.recurringId) { charge in
                     let item = recurring.first { $0.id == charge.recurringId }
                     Button {
                         chargeActions = item
@@ -294,7 +302,72 @@ struct HomeView: View {
                     .buttonStyle(.plain)
                     .accessibilityHint("Toca para marcarlo como pagado o configurar su aviso")
                 }
+                if let toggle = UpcomingFold.toggleTitle(total: upcoming.count, expanded: upcomingExpanded) {
+                    Button {
+                        withAnimation(.snappy) { upcomingExpanded.toggle() }
+                    } label: {
+                        HStack(spacing: Spacing.s1) {
+                            Text(toggle).appFont(.etiqueta)
+                            Image(systemName: upcomingExpanded ? "chevron.up" : "chevron.down").font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundStyle(Palette.brasaTinta)
+                        .frame(maxWidth: .infinity, minHeight: Size.toqueMinimo)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+        }
+    }
+
+    /// "¿Tu sueldo es $ 2?": arreglo rápido de un ingreso fijo que parece mal escrito.
+    private func incomeCheckCard(_ item: Recurring) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: Spacing.s3) {
+                HStack(alignment: .top, spacing: Spacing.s3) {
+                    IconTile(content: .symbol("questionmark"), tint: Palette.oroVelo, foreground: Palette.oro)
+                    VStack(alignment: .leading, spacing: Spacing.s1) {
+                        Text(IncomeCheck.question(name: item.name, amountMinor: item.amountMinor, currency: currency))
+                            .appFont(.titulo3)
+                            .foregroundStyle(Palette.texto1)
+                        Text("Parece muy poco para un ingreso fijo. Si le faltaron ceros, arréglalo aquí.")
+                            .appFont(.cuerpo2)
+                            .foregroundStyle(Palette.texto2)
+                    }
+                }
+                VStack(spacing: Spacing.s2) { incomeCheckButtons(item) }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func incomeCheckButtons(_ item: Recurring) -> some View {
+        ForEach(IncomeCheck.factors, id: \.self) { factor in
+            Button(IncomeCheck.fixTitle(amountMinor: item.amountMinor, factor: factor, currency: currency)) {
+                fixIncome(item, factor: factor)
+            }
+            .buttonStyle(.secondary)
+        }
+        Button("Sí, es correcto") {
+            var ids = IncomeCheck.dismissed(from: checkedIncomesRaw)
+            ids.insert(item.id)
+            checkedIncomesRaw = IncomeCheck.stored(ids)
+        }
+        .buttonStyle(.secondary)
+    }
+
+    /// Multiplica el monto con el store (así se sincroniza) y deja deshacer.
+    private func fixIncome(_ item: Recurring, factor: Int64) {
+        let ledger = LedgerStore(context: context, calendar: calendar)
+        let previous = item.amountMinor
+        do {
+            try ledger.setRecurringAmount(item, amountMinor: previous * factor)
+            undo.show("\(item.name) quedó en \(Money(minor: item.amountMinor, currency: currency).formatted())") {
+                try? ledger.setRecurringAmount(item, amountMinor: previous)
+            }
+            Task { await NotificationScheduler.reschedule(context: context) }
+        } catch {
+            errorText = error.localizedDescription
         }
     }
 

@@ -1,5 +1,7 @@
 package com.olarte.mprogress.ui.home
 
+import com.olarte.mprogress.ui.components.appTextField
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,6 +54,9 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.olarte.mprogress.data.Store
+import com.olarte.mprogress.domain.*
+import com.olarte.mprogress.ui.components.*
+import com.olarte.mprogress.ui.Permissions
 import com.olarte.mprogress.domain.AmountInput
 import com.olarte.mprogress.domain.Cycle
 import com.olarte.mprogress.domain.DueText
@@ -80,15 +86,15 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-data class AddRequest(val kind: EntryKind, val cycle: Cycle)
+data class AddRequest(val kind: EntryKind, val cycle: Cycle, val name: String = "", val amountMinor: Long = 0, val source: String = "manual", val productId: String? = null)
 
-private enum class CycleChoice(val title: String) { PUNTUAL("Puntual"), MENSUAL("Mensual"), ANUAL("Anual"), OTRA("Otra") }
+enum class CycleChoice(val title: String) { PUNTUAL("Puntual"), MENSUAL("Mensual"), ANUAL("Anual"), OTRA("Otra") }
 
-private fun CycleChoice.cycle(every: Int): Cycle = when (this) {
+fun CycleChoice.cycle(every: Int): Cycle = when (this) {
     CycleChoice.PUNTUAL -> Cycle.Puntual; CycleChoice.MENSUAL -> Cycle.Mensual; CycleChoice.ANUAL -> Cycle.Anual; CycleChoice.OTRA -> Cycle.CadaDias(maxOf(1, every))
 }
 
-private fun choiceOf(c: Cycle) = when (c) {
+fun choiceOf(c: Cycle) = when (c) {
     Cycle.Mensual, Cycle.Semanal -> CycleChoice.MENSUAL; Cycle.Anual -> CycleChoice.ANUAL; is Cycle.CadaDias -> CycleChoice.OTRA; else -> CycleChoice.PUNTUAL
 }
 
@@ -100,31 +106,89 @@ private fun summary(c: Cycle, date: LocalDate): String = when (c) {
     is Cycle.CadaDias -> "Cada ${c.days} días"
 }
 
-/** Agregar movimiento (pantalla 7), igual que AddEntryView de iOS: barra con cerrar y guardar, nombre, tipo, monto, ciclo y detalles. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** "Termina" de un pago fijo (Paso 2): nunca, en una fecha o después de N cuotas. */
+enum class EndChoice(val title: String) { NUNCA("Nunca"), FECHA("En una fecha"), CUOTAS("Después de N cuotas") }
+
+/** Bloque "Termina" que comparten Agregar y editar pago fijo. */
 @Composable
-fun AddEntryContent(store: Store, request: AddRequest, onDone: () -> Unit) {
+fun EndPicker(choice: EndChoice, endDate: LocalDate, count: Int, onChoice: (EndChoice) -> Unit, onDate: (LocalDate) -> Unit, onCount: (Int) -> Unit) {
+    var picking by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+        SectionLabel("Termina")
+        Segmented(EndChoice.entries.map { it.name to when (it) { EndChoice.NUNCA -> "Nunca"; EndChoice.FECHA -> "En una fecha"; EndChoice.CUOTAS -> "Cuotas" } }, choice.name) { onChoice(EndChoice.valueOf(it)) }
+        when (choice) {
+            EndChoice.FECHA -> Card(padding = Spacing.s2) {
+                FormRow("Último cobro", "${endDate.dayOfMonth} ${DueText.months[endDate.monthValue - 1]} ${endDate.year}", onClick = { picking = true })
+            }
+            EndChoice.CUOTAS -> Card(padding = Spacing.s2) { Stepper("Después de $count cuotas", count, 1..360, onCount) }
+            EndChoice.NUNCA -> {}
+        }
+    }
+    if (picking) DatePickDialog(endDate, { picking = false }) { onDate(it); picking = false }
+}
+
+/** Agregar movimiento (pantalla 7), igual que AddEntryView de iOS. Con `editing` edita uno ya guardado. */
+@Composable
+fun AddEntryContent(store: Store, request: AddRequest, editing: EntryRecord? = null, onDone: () -> Unit) {
     val ledger by store.ledger.collectAsState()
-    var kind by remember { mutableStateOf(request.kind) }
-    var amount by remember { mutableStateOf(AmountInput()) }
-    var name by remember { mutableStateOf("") }
+    val currency by store.currency.collectAsState()
+    val today = LocalDate.now()
+    var kind by remember { mutableStateOf(editing?.kind ?: request.kind) }
+    var amount by remember { mutableStateOf(editing?.let { AmountInput.fromMinor(it.amountMinor, currency) }
+        ?: if (request.amountMinor > 0) AmountInput.fromMinor(request.amountMinor, currency) else AmountInput(currency)) }
+    var name by remember { mutableStateOf(editing?.name ?: request.name) }
     var nameFocused by remember { mutableStateOf(false) }
+    var notesFocused by remember { mutableStateOf(false) }
     var choice by remember { mutableStateOf(choiceOf(request.cycle)) }
     var everyDays by remember { mutableStateOf(30) }
-    var date by remember { mutableStateOf(LocalDate.now()) }
-    var productId by remember { mutableStateOf<String?>(null) }
-    var picking by remember { mutableStateOf(false) }
+    var date by remember { mutableStateOf(editing?.occurredAt ?: today) }
+    var atMinutes by remember { mutableStateOf(editing?.atMinutes) }
+    var productId by remember { mutableStateOf(editing?.productId ?: request.productId) }
+    var categoryId by remember { mutableStateOf(editing?.categoryId) }
+    var notes by remember { mutableStateOf(editing?.notes ?: "") }
+    var end by remember { mutableStateOf(EndChoice.NUNCA) }
+    var pickedDay by remember { mutableStateOf<Int?>(null) }
+    var paidThisMonth by remember { mutableStateOf(false) }
+    var endDate by remember { mutableStateOf(today.plusMonths(6)) }
+    var count by remember { mutableStateOf(12) }
     var payWith by remember { mutableStateOf(false) }
+    var categories by remember { mutableStateOf(false) }
+    var pickingTime by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
-    val cycle = choice.cycle(everyDays)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val cycle = if (editing != null) Cycle.Puntual else choice.cycle(everyDays)
     val canSave = amount.money.minor > 0
-    fun save() { store.add(kind, name.trim(), amount.money.minor, cycle, date, productId); onDone() }
+    val anyFocused = nameFocused || notesFocused
+
+    fun save() {
+        if (editing != null) {
+            store.updateEntry(editing.copy(kind = kind, amountMinor = amount.money.minor, name = name.trim(), occurredAt = date, productId = productId,
+                categoryId = categoryId, notes = notes.trim().ifEmpty { null }, atMinutes = atMinutes))
+            onDone(); return
+        }
+        val before = BudgetMath.statuses(ledger.budgets, ledger.entries, today)
+        val created = store.add(kind, name.trim(), amount.money.minor, cycle, date, productId, today, categoryId, notes.trim(), atMinutes, source = request.source,
+            endDate = if (cycle.repeats && end == EndChoice.FECHA) endDate else null, totalCount = if (cycle.repeats && end == EndChoice.CUOTAS) count else null)
+        val l = store.ledger.value
+        val crossing = if (created != null && store.alerts.value.budgets) BudgetMath.crossings(before, BudgetMath.statuses(l.budgets, l.entries, today)).firstOrNull() else null
+        if (crossing != null) {
+            val cname = crossing.budget.categoryId?.let { Categories.byId(it)?.name } ?: "el total del mes"
+            val pct = Math.round(crossing.ratio * 100)
+            val text = if (crossing.level == BudgetLevel.SUPERADO) "Te pasaste del límite de $cname ($pct %)" else "Vas en $pct % del límite de $cname"
+            store.showUndo(text)
+            com.olarte.mprogress.notify.Notifier.show(context, "mp.limite.${crossing.budget.id}.${crossing.level}", if (crossing.level == BudgetLevel.SUPERADO) "Te pasaste del límite" else "Te acercas al límite", text, com.olarte.mprogress.notify.Notifier.CHANNEL_LIMITES)
+        } else if (created != null) {
+            store.showUndo("Guardaste ${name.trim().ifEmpty { if (kind == EntryKind.GASTO) "el gasto" else "el ingreso" }}") { store.deleteEntry(created.id) }
+        }
+        if (cycle.repeats) Permissions.askAfterFirstFixed()
+        onDone()
+    }
 
     Box(Modifier.fillMaxWidth().fillMaxHeight().background(Palette.superficie2)) {
-        Column(Modifier.fillMaxSize().navigationBarsPadding()) {
+        Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = Spacing.margen).padding(top = Spacing.s4), verticalAlignment = Alignment.CenterVertically) {
                 CircleIconButton(Icons.Rounded.Close, "Cerrar", onClick = onDone)
-                T("Agregar", Type.titulo3, modifier = Modifier.weight(1f), align = TextAlign.Center)
+                T(if (editing != null) "Editar" else "Agregar", Type.titulo3, modifier = Modifier.weight(1f), align = TextAlign.Center)
                 CircleIconButton(Icons.Rounded.Check, "Guardar", filled = true, enabled = canSave) { save() }
             }
             Column(
@@ -132,68 +196,78 @@ fun AddEntryContent(store: Store, request: AddRequest, onDone: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(Spacing.s5),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-                    Tile(name.ifBlank { "?" }, size = 60.dp)
+                    val cat = Categories.byId(categoryId)
+                    val icon = Sym.sf(cat?.icon)
+                    if (icon != null) IconTile(icon, size = 60.dp) else Tile(name.ifBlank { "?" }, size = 60.dp)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         T("Nombre", Type.leyenda, Palette.texto2)
                         Box {
                             if (name.isEmpty()) T("Netflix, mercado, sueldo", Type.titulo2, Palette.texto2, maxLines = 1)
-                            BasicTextField(name, { name = it }, Modifier.fillMaxWidth().onFocusChanged { nameFocused = it.isFocused },
+                            BasicTextField(name, { name = it }, Modifier.appTextField().fillMaxWidth().onFocusChanged { nameFocused = it.isFocused },
                                 textStyle = Type.titulo2.copy(color = Palette.texto1), cursorBrush = SolidColor(Palette.brasa), singleLine = true)
                         }
                     }
                 }
                 Segmented(listOf("GASTO" to "Gasto", "INGRESO" to "Ingreso"), kind.name) { kind = EntryKind.valueOf(it) }
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-                    AmountDisplay("$", amount.display, !nameFocused, empty = amount.text.isEmpty()) { focus.clearFocus() }
-                    T(summary(cycle, date), Type.cuerpo2, Palette.texto2)
+                    AmountDisplay(currency.symbol, amount.display, !anyFocused, empty = amount.text.isEmpty()) { focus.clearFocus() }
+                    if (editing == null) T(summary(cycle, date), Type.cuerpo2, Palette.texto2)
                 }
-                SectionLabel("Ciclo de cobro")
-                Segmented(CycleChoice.entries.map { it.name to it.title }, choice.name) { choice = CycleChoice.valueOf(it) }
-                if (choice == CycleChoice.OTRA) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        T("Cada $everyDays días", Type.cuerpo, modifier = Modifier.weight(1f))
-                        Row(Modifier.clip(RoundedCornerShape(Radius.campo)).background(Palette.superficie3)) {
-                            StepperKey("−", everyDays > 1) { everyDays-- }
-                            Box(Modifier.width(1.dp).height(20.dp).align(Alignment.CenterVertically).background(Palette.linea))
-                            StepperKey("+", everyDays < 365) { everyDays++ }
+                if (editing == null) {
+                    SectionLabel("Ciclo de cobro")
+                    Segmented(CycleChoice.entries.map { it.name to it.title }, choice.name) { choice = CycleChoice.valueOf(it) }
+                    if (choice == CycleChoice.OTRA) Card(padding = Spacing.s2) { Stepper("Cada $everyDays días", everyDays, 1..365) { everyDays = it } }
+                    if (cycle.repeats) EndPicker(end, endDate, count, { end = it }, { endDate = it }, { count = it })
+                }
+                if (editing == null && choice == CycleChoice.MENSUAL) Card {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                        T("Día del mes", Type.titulo3)
+                        DayGrid(pickedDay ?: date.dayOfMonth) { d -> pickedDay = d; date = DayOfMonth.date(d, today, paidThisMonth) }
+                        val day = pickedDay ?: date.dayOfMonth
+                        if (DayOfMonth.hasPassed(day, today)) FormToggle(if (kind == EntryKind.INGRESO) "Ya me llegó este mes" else "Ya lo pagué este mes", paidThisMonth) {
+                            paidThisMonth = it; date = DayOfMonth.date(day, today, it)
                         }
+                        val plan = AddPlan.decide(cycle, date, today)
+                        val word = if (kind == EntryKind.INGRESO) "pago" else "cobro"
+                        val next = plan.recurringNext?.let { DueText.shortDate(it, today) }.orEmpty()
+                        T(plan.entryDate?.let { "Se anota el ${DueText.shortDate(it, today)} como ${if (kind == EntryKind.INGRESO) "recibido" else "pagado"} y el próximo $word es el $next." }
+                            ?: "Próximo $word: $next.", Type.leyenda, Palette.texto2)
+                    }
+                } else Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                    SectionLabel(if (choice == CycleChoice.PUNTUAL || editing != null) "Fecha" else "Fecha de pago")
+                    DateChips(date, today) { date = it }
+                    if (atMinutes == null) T("+ Agregar hora", Type.etiqueta, Palette.brasaTinta, Modifier.clip(CircleShape).clickable { pickingTime = true }.padding(vertical = Spacing.s2, horizontal = Spacing.s1))
+                    else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                        Chip("Hora ${ReminderPlanner.timeText(atMinutes!!)}", true) { pickingTime = true }
+                        T("Quitar", Type.etiqueta, Palette.texto2, Modifier.clip(CircleShape).clickable { atMinutes = null }.padding(Spacing.s2))
                     }
                 }
                 Card(padding = Spacing.s2) {
+                    DetailRow("Categoría", Categories.byId(categoryId)?.name ?: "Sin categoría") { focus.clearFocus(); categories = true }
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(Palette.linea))
+                    val product = ledger.product(productId)
+                    DetailRow(if (kind == EntryKind.INGRESO) "¿A dónde llegó?" else "¿Con qué pagaste?", product?.label ?: "Sin elegir") { focus.clearFocus(); payWith = true }
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(Palette.linea))
                     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = Spacing.s2), verticalAlignment = Alignment.CenterVertically) {
-                        T(if (choice == CycleChoice.PUNTUAL) "Fecha" else "Fecha de pago", Type.cuerpo, modifier = Modifier.weight(1f))
-                        Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Palette.superficie3).clickable { focus.clearFocus(); picking = true }
-                            .padding(horizontal = Spacing.s3, vertical = 6.dp)) {
-                            T("${date.dayOfMonth} ${DueText.monthName(date).take(3)} ${date.year}", Type.cuerpo, Palette.brasaTinta)
+                        T("Notas", Type.cuerpo)
+                        Box(Modifier.weight(1f).padding(start = Spacing.s3), contentAlignment = Alignment.CenterEnd) {
+                            if (notes.isEmpty()) T("Opcional", Type.cuerpo, Palette.texto2)
+                            BasicTextField(notes, { notes = it }, Modifier.appTextField().fillMaxWidth().onFocusChanged { notesFocused = it.isFocused },
+                                textStyle = Type.cuerpo.copy(color = Palette.texto2, textAlign = TextAlign.End), cursorBrush = SolidColor(Palette.brasa))
                         }
                     }
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(Palette.linea))
-                    val product = ledger.products.firstOrNull { it.id == productId }
-                    DetailRow(if (kind == EntryKind.INGRESO) "¿A dónde llegó?" else "¿Con qué pagaste?",
-                        product?.let { p -> p.last4?.let { "${p.name} ·· $it" } ?: p.name } ?: "Sin elegir") { focus.clearFocus(); payWith = true }
                 }
             }
-            if (!nameFocused) {
+            if (!anyFocused) {
                 Box(Modifier.padding(horizontal = Spacing.margen).padding(bottom = Spacing.s2)) {
                     Keypad(amount.allowsDecimals, { amount = amount.press(it) }, { amount = amount.deleteLast() })
                 }
             }
         }
         if (payWith) PayWithSheet(store, kind, productId, { payWith = false }) { productId = it }
+        if (categories) CategoryPickerSheet(ledger.entries, categoryId, { categories = false }) { categoryId = it; categories = false }
     }
-
-    if (picking) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = date.atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli())
-        DatePickerDialog(
-            onDismissRequest = { picking = false },
-            confirmButton = {
-                TextButton({
-                    state.selectedDateMillis?.let { date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
-                    picking = false
-                }) { T("Listo", Type.etiqueta, Palette.brasaTinta) }
-            },
-        ) { DatePicker(state) }
-    }
+    if (pickingTime) TimePickDialog(atMinutes ?: 12 * 60, { pickingTime = false }) { atMinutes = it; pickingTime = false }
 }
 
 @Composable
@@ -220,7 +294,7 @@ private enum class PayTab(val title: String, val kinds: Set<ProductKind>) {
 
 /** ¿Con qué pagaste? (pantalla 34): tarjeta, cuenta o efectivo. */
 @Composable
-private fun PayWithSheet(store: Store, kind: EntryKind, selected: String?, onDismiss: () -> Unit, onPick: (String?) -> Unit) {
+fun PayWithSheet(store: Store, kind: EntryKind, selected: String?, onDismiss: () -> Unit, onPick: (String?) -> Unit) {
     val ledger by store.ledger.collectAsState()
     var current by remember { mutableStateOf(selected) }
     var tab by remember { mutableStateOf(ledger.products.firstOrNull { it.id == selected }?.let { PayTab.of(it.kind) } ?: PayTab.TARJETA) }

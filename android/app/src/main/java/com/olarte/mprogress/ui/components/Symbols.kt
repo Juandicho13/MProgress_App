@@ -29,6 +29,20 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.TrackChanges
+import androidx.compose.material.icons.outlined.SmartDisplay
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.outlined.WorkOutline
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.material.icons.outlined.DirectionsCar
+import androidx.compose.material.icons.outlined.Restaurant
+import androidx.compose.material.icons.rounded.FitnessCenter
+import androidx.compose.material.icons.outlined.MedicalServices
+import androidx.compose.material.icons.outlined.School
+import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.Business
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.olarte.mprogress.domain.QuickActionKind
 
@@ -67,4 +81,26 @@ object Sym {
     }
 
     val savings = Icons.Rounded.Savings
+
+    /** Íconos de iOS (SF Symbols) usados en datos: categorías, pagos fijos. */
+    fun sf(name: String?): ImageVector? = when (name) {
+        "play.rectangle" -> Icons.Outlined.SmartDisplay
+        "music.note" -> Icons.Rounded.MusicNote
+        "briefcase" -> Icons.Outlined.WorkOutline
+        "wrench.and.screwdriver" -> Icons.Outlined.Build
+        "house" -> Icons.Outlined.Home
+        "cart" -> Icons.Outlined.ShoppingCart
+        "car" -> Icons.Outlined.DirectionsCar
+        "fork.knife" -> Icons.Outlined.Restaurant
+        "dumbbell" -> Icons.Rounded.FitnessCenter
+        "cross.case" -> Icons.Outlined.MedicalServices
+        "graduationcap" -> Icons.Outlined.School
+        "person.2" -> Icons.Outlined.People
+        "building.2" -> Icons.Outlined.Business
+        "banknote" -> Icons.Outlined.Payments
+        "square.grid.2x2" -> Icons.Outlined.GridView
+        "icloud" -> Icons.Outlined.Cloud
+        "sparkles" -> Icons.Rounded.AutoAwesome
+        else -> null
+    }
 }
