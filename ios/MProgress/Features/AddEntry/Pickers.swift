@@ -77,12 +77,19 @@ struct IconPickerView: View {
     }
 }
 
-/// Categoría (pantalla 9): recientes y todas.
+/// Categoría (pantalla 9): "+ Nueva categoría", recientes y todas. Una nueva queda elegida al guardarla; las propias
+/// se cambian o se borran con el menú de mantener presionado (las de la app no).
 struct CategoryPickerView: View {
     @Binding var selection: UUID?
     let spaceId: UUID
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
     @Query(filter: #Predicate<SpendCategory> { $0.deletedAt == nil }, sort: \SpendCategory.sort) private var all: [SpendCategory]
+    @State private var creating = false
+    /// La que se acaba de crear: se elige cuando se cierra el formulario.
+    @State private var created: UUID?
+    @State private var editingCategory: SpendCategory?
 
     private var available: [SpendCategory] { all.filter { $0.ownerSpaceId == nil || $0.ownerSpaceId == spaceId } }
     private var recent: [SpendCategory] {
@@ -95,12 +102,18 @@ struct CategoryPickerView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
+                    newCategoryRow
                     if !recent.isEmpty {
                         SectionLabel(text: "Recientes")
                         group(recent)
                     }
                     SectionLabel(text: "Todas")
                     group(available)
+                    if available.contains(where: { !$0.isGlobal }) {
+                        Text("Mantén presionada una categoría tuya para cambiarla o borrarla.")
+                            .appFont(.leyenda)
+                            .foregroundStyle(Palette.texto2)
+                    }
                     Button("Sin categoría") {
                         selection = nil
                         dismiss()
@@ -115,6 +128,42 @@ struct CategoryPickerView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cerrar") { dismiss() } }
             }
             .background(Palette.superficie2)
+            .sheet(isPresented: $creating, onDismiss: {
+                guard let id = created else { return }
+                created = nil
+                selection = id
+                dismiss()
+            }) {
+                CategoryFormView(spaceId: spaceId) { category in created = category.id }
+            }
+            .sheet(item: $editingCategory) { category in
+                CategoryFormView(spaceId: spaceId, editing: category) { _ in }
+            }
+        }
+    }
+
+    private var newCategoryRow: some View {
+        Card(padding: Spacing.s2) {
+            Button { creating = true } label: {
+                HStack(spacing: Spacing.s3) {
+                    IconTile(content: .symbol("plus"), tint: Palette.brasaVelo, foreground: Palette.brasaTinta, size: 36)
+                    Text("Nueva categoría").appFont(.cuerpo).fontWeight(.semibold).foregroundStyle(Palette.brasaTinta)
+                    Spacer()
+                }
+                .padding(.horizontal, Spacing.s2)
+                .frame(minHeight: 56)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func delete(_ category: SpendCategory) {
+        let title = category.name
+        try? CategoryStore(context: context).delete(category)
+        if selection == category.id { selection = nil }
+        undo?.show("Borraste la categoría \(title)") {
+            try? CategoryStore(context: context).restore(category)
         }
     }
 
@@ -145,6 +194,12 @@ struct CategoryPickerView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
+                    .contextMenu {
+                        if !item.isGlobal {
+                            Button("Editar", systemImage: "pencil") { editingCategory = item }
+                            Button("Borrar", systemImage: "trash", role: .destructive) { delete(item) }
+                        }
+                    }
                 }
             }
         }

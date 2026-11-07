@@ -40,7 +40,7 @@ object AutoCapture {
         val bank = c.bank ?: return null
         val inst = l.institutions.firstOrNull { HistoryMath.normalize(it.name) == HistoryMath.normalize(bank) } ?: return null
         val products = l.products.filter { it.institutionId == inst.id }
-        return (products.firstOrNull { it.kind == ProductKind.CUENTA } ?: products.firstOrNull { it.kind != ProductKind.BOLSILLO })?.id
+        return (products.firstOrNull { it.kind == ProductKind.CUENTA } ?: products.firstOrNull { !it.kind.earnsYield })?.id
     }
 
     /** Procesa un texto: si está claro lo anota; si no, queda para revisar. Devuelve true si se usó. */

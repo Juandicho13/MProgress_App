@@ -12,7 +12,8 @@ struct SummaryView: View {
     @Query(filter: #Predicate<SpendCategory> { $0.deletedAt == nil }, sort: \SpendCategory.sort) private var categories: [SpendCategory]
 
     @State private var period: SummaryPeriod = .meses(12)
-    @State private var categoryId: UUID?
+    /// Categorías elegidas en la barra de filtros; vacío es "Todas".
+    @State private var selectedCategories: Set<UUID> = []
     @State private var showsCustom = false
     @State private var customStart = Calendar.current.date(byAdding: .month, value: -1, to: .now) ?? .now
     @State private var customEnd = Date.now
@@ -26,21 +27,26 @@ struct SummaryView: View {
         let now = Date.now
         let records = self.records
         let interval = period.interval(now: now, calendar: calendar)
-        let filterSet = categoryId.map { Set([$0]) }
+        let chipIds = SummaryMath.activeCategories(records, in: interval)
+        let filterSet = SummaryFilter.effective(selectedCategories, chips: chipIds)
         let visible = SummaryMath.filter(records, in: interval, categories: filterSet)
         let flows = SummaryMath.monthlyFlows(visible, in: interval, calendar: calendar)
-        let chipIds = SummaryMath.activeCategories(records, in: interval)
 
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.s5) {
                 header
-                if !chipIds.isEmpty { chips(chipIds) }
+                filterBar(chipIds, filter: filterSet)
                 if records.isEmpty {
+                    // Sin movimientos todavía: si ya hay pagos fijos, igual se ve lo que viene (el sueldo, los cobros).
+                    if !recurring.isEmpty {
+                        monthFactsCard(records, now: now)
+                        nextMonthsSection(now: now)
+                    }
                     emptyCard
                 } else {
                     monthFactsCard(records, now: now)
-                    flowsCard(flows)
-                    paceCard(records, now: now)
+                    flowsCard(flows, filter: filterSet, chips: chipIds)
+                    paceCard(records, now: now, filter: filterSet)
                     categoriesCard(visible, interval: interval)
                     HStack(alignment: .top, spacing: Spacing.s3) {
                         normalCard(records, now: now)
@@ -60,34 +66,49 @@ struct SummaryView: View {
     // MARK: Encabezado y filtros
 
     private var header: some View {
-        HStack {
-            Text("Resumen")
-                .appFont(.titulo1)
-                .foregroundStyle(Palette.texto1)
-                .accessibilityAddTraits(.isHeader)
-            Spacer()
-            Menu {
-                ForEach(SummaryPeriod.presets, id: \.self) { option in
-                    Button {
-                        period = option
-                    } label: {
-                        if option == period { Label(option.title, systemImage: "checkmark") } else { Text(option.title) }
+        Text("Resumen")
+            .appFont(.titulo1)
+            .foregroundStyle(Palette.texto1)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Barra de filtros: el periodo, "Todas" y una pastilla por categoría con gasto en el periodo (de mayor a menor).
+    /// Se pueden elegir varias categorías; "Todas" las quita.
+    private func filterBar(_ ids: [UUID], filter: Set<UUID>?) -> some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: Spacing.s2) {
+                periodMenu
+                if !ids.isEmpty {
+                    FilterPill(title: "Todas", selected: filter == nil) { selectedCategories = [] }
+                    ForEach(ids, id: \.self) { id in
+                        FilterPill(title: name(of: id), systemImage: icon(of: id), selected: filter?.contains(id) == true) {
+                            selectedCategories = SummaryFilter.toggle(SummaryFilter.effective(selectedCategories, chips: ids) ?? [], id)
+                        }
                     }
                 }
-                Divider()
-                Button("Personalizado…") { showsCustom = true }
-            } label: {
-                HStack(spacing: Spacing.s1) {
-                    Text(periodLabel).appFont(.etiqueta)
-                    Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
-                }
-                .foregroundStyle(Palette.texto1)
-                .padding(.horizontal, Spacing.s4)
-                .frame(minHeight: 36)
-                .background(Capsule().fill(Palette.superficie1))
             }
-            .accessibilityLabel("Periodo, \(periodLabel)")
         }
+        .scrollIndicators(.hidden)
+        // De borde a borde, como en Android: el contenido arranca en el margen y se desliza hasta la orilla.
+        .contentMargins(.horizontal, Spacing.margen, for: .scrollContent)
+        .padding(.horizontal, -Spacing.margen)
+    }
+
+    private var periodMenu: some View {
+        Menu {
+            ForEach(SummaryPeriod.presets, id: \.self) { option in
+                Button {
+                    period = option
+                } label: {
+                    if option == period { Label(option.title, systemImage: "checkmark") } else { Text(option.title) }
+                }
+            }
+            Divider()
+            Button("Personalizado…") { showsCustom = true }
+        } label: {
+            FilterPillLabel(title: periodLabel, showsChevron: true)
+        }
+        .accessibilityLabel("Periodo, \(periodLabel)")
     }
 
     private var periodLabel: String {
@@ -95,18 +116,6 @@ struct SummaryView: View {
             return "\(DueText.shortDate(start, calendar: calendar)) a \(DueText.shortDate(end, calendar: calendar))"
         }
         return period.title
-    }
-
-    private func chips(_ ids: [UUID]) -> some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: Spacing.s2) {
-                Chip(title: "Todas", selected: categoryId == nil) { categoryId = nil }
-                ForEach(ids, id: \.self) { id in
-                    Chip(title: name(of: id), selected: categoryId == id) { categoryId = categoryId == id ? nil : id }
-                }
-            }
-        }
-        .scrollIndicators(.hidden)
     }
 
     private var customSheet: some View {
@@ -133,12 +142,13 @@ struct SummaryView: View {
 
     // MARK: Tarjetas
 
-    private func flowsCard(_ flows: [MonthFlow]) -> some View {
+    private func flowsCard(_ flows: [MonthFlow], filter: Set<UUID>?, chips: [UUID]) -> some View {
         let totals = SummaryMath.totals(flows)
-        let showsIncome = categoryId == nil
+        let showsIncome = filter == nil
+        let names = chips.filter { filter?.contains($0) == true }.map { name(of: $0) }
         return Card {
             VStack(alignment: .leading, spacing: Spacing.s3) {
-                Text(showsIncome ? "Ingresos y gastos" : "Gastos de \(name(of: categoryId))").appFont(.cuerpo2).foregroundStyle(Palette.texto2)
+                Text(SummaryFilter.spendTitle(names)).appFont(.cuerpo2).foregroundStyle(Palette.texto2)
                 Text(showsIncome ? money(totals.net, sign: true) : money(totals.spent))
                     .appFont(.cifraGrande)
                     .foregroundStyle(Palette.texto1)
@@ -177,8 +187,7 @@ struct SummaryView: View {
         }
     }
 
-    private func paceCard(_ records: [EntryRecord], now: Date) -> some View {
-        let filterSet = categoryId.map { Set([$0]) }
+    private func paceCard(_ records: [EntryRecord], now: Date, filter filterSet: Set<UUID>?) -> some View {
         let base = filterSet.map { set in records.filter { $0.kind == .gasto && $0.categoryId.map(set.contains) == true } } ?? records
         let lastMonth = calendar.date(byAdding: .month, value: -1, to: CycleMath.startOfMonth(now, calendar)) ?? now
         let thisSeries = SummaryMath.cumulative(base, month: now, upTo: now, calendar: calendar)
@@ -417,8 +426,13 @@ struct SummaryView: View {
         DueText.months[max(0, min(11, calendar.component(.month, from: date) - 1))]
     }
 
+    /// Nombre de la categoría, también las propias; si ya no existe, "Sin categoría".
     private func name(of id: UUID?) -> String {
         categories.first { $0.id == id }?.name ?? "Sin categoría"
+    }
+
+    private func icon(of id: UUID) -> String {
+        categories.first { $0.id == id }?.icon ?? "square.grid.2x2"
     }
 }
 

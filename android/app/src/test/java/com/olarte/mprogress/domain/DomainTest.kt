@@ -97,19 +97,37 @@ class BalanceTest {
 class QuickActionsTest {
     @Test fun porDefectoYGuardado() {
         val l = QuickActionLayout.parse("")
-        assertEquals(listOf(QuickActionKind.GASTO, QuickActionKind.INGRESO, QuickActionKind.FIJO), l.pinned)
+        assertEquals(listOf(QuickActionKind.GASTO, QuickActionKind.INGRESO, QuickActionKind.FIJOS), l.pinned)
         val m = l.togglePin(QuickActionKind.INGRESO).togglePin(QuickActionKind.AHORRO)
         assertEquals(m, QuickActionLayout.parse(m.stored))
-        assertEquals(listOf(QuickActionKind.GASTO, QuickActionKind.FIJO, QuickActionKind.AHORRO), m.pinned)
+        assertEquals(listOf(QuickActionKind.GASTO, QuickActionKind.FIJOS, QuickActionKind.AHORRO), m.pinned)
     }
 
     @Test fun limiteYTolerancia() {
-        assertEquals(QuickActionKind.HISTORIAL, QuickActionLayout.standard.togglePin(QuickActionKind.HISTORIAL).pinned.last())
+        assertEquals(QuickActionKind.LIMITES, QuickActionLayout.standard.togglePin(QuickActionKind.LIMITES).pinned.last())
         val l = QuickActionLayout.parse("ahorro,vieja,gasto|ahorro,ahorro,vieja")
         assertEquals(listOf(QuickActionKind.AHORRO), l.pinned)
         assertTrue(l.order.toSet() == QuickActionKind.entries.toSet())
         // Mismo texto que guarda iOS: se puede leer igual en ambas apps.
         assertEquals(QuickActionKind.AHORRO, QuickActionLayout.parse("ahorro,gasto|ahorro").pinned.first())
+    }
+
+    @Test fun sinRepetidasDePagosFijos() {
+        val raws = QuickActionKind.entries.map { it.raw }.toSet()
+        assertTrue(raws.intersect(setOf("fijo", "sueldo", "anual", "historial")).isEmpty())
+        assertTrue(QuickActionKind.entries.any { it.title == "Pagos fijos" })
+    }
+
+    @Test fun migraLasFijadasQueSeQuitaron() {
+        // Mismos casos que QuickActionsTests.migraFijadas de iOS.
+        assertEquals(listOf(QuickActionKind.GASTO, QuickActionKind.INGRESO, QuickActionKind.FIJOS),
+            QuickActionLayout.parse("gasto,ingreso,fijo,sueldo,anual,fijos,rapido|gasto,ingreso,fijo").pinned)
+        assertEquals(QuickActionLayout.standard.pinned, QuickActionLayout.parse("fijo,sueldo,anual|sueldo,anual,fijo").pinned)
+        val mezcla = QuickActionLayout.parse("ahorro,fijos,historial|historial,ahorro,fijos")
+        assertEquals(listOf(QuickActionKind.AHORRO, QuickActionKind.FIJOS, QuickActionKind.GASTO), mezcla.pinned)
+        assertEquals(QuickActionKind.entries.toSet(), mezcla.order.toSet())
+        // Menos de 3 a propósito se respeta.
+        assertEquals(listOf(QuickActionKind.AHORRO), QuickActionLayout.parse("gasto,ahorro|ahorro").pinned)
     }
 }
 

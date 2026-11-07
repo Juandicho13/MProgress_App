@@ -99,7 +99,7 @@ final class MoneyStore {
         product.creditLimitMinor = draft.kind == .credito ? draft.creditLimitMinor : nil
         product.cutDay = draft.kind == .credito ? draft.cutDay.map { min(31, max(1, $0)) } : nil
         product.dueDay = draft.kind == .credito && draft.remindPayment ? draft.dueDay.map { min(31, max(1, $0)) } : nil
-        product.rateEA = draft.kind == .bolsillo ? draft.rateEA : nil
+        product.rateEA = draft.kind.earnsYield ? draft.rateEA : nil
         product.parentProductId = draft.kind == .debito ? draft.parentProductId : nil
         product.inWallet = isCard && draft.inWallet
         product.hidden = draft.hidden

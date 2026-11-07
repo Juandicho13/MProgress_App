@@ -61,6 +61,8 @@ struct SegmentedPill<Value: Hashable>: View {
                         .appFont(.etiqueta)
                         .fontWeight(active ? .semibold : .medium)
                         .foregroundStyle(Palette.texto1)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity, minHeight: 40)
                         .background {
                             if active {

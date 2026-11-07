@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Drafts
 import androidx.compose.material.icons.outlined.PhoneAndroid
@@ -212,6 +213,24 @@ private fun ReadyContent(ui: CloudUi, onApprove: (RemoteDevice) -> Unit, onSync:
             }
         }
     }
+    // Primera subida (F10-05): avance y, al terminar, que todo quedó en la nube.
+    val upload = ui.upload
+    if (upload != null) {
+        Card {
+            Row(Modifier.heightIn(min = Size.toqueMinimo).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                CircularProgressIndicator(Modifier.size(22.dp), color = Palette.texto2, strokeWidth = 2.5.dp)
+                T(com.olarte.mprogress.domain.InitialUpload.progressText(upload.done, upload.total), Type.cuerpo)
+            }
+        }
+    } else if (ui.initialUploadDone) {
+        Card {
+            Row(Modifier.semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                IconTile(Icons.Outlined.CloudDone, Palette.superficie3, Palette.exito, size = 40.dp)
+                T(com.olarte.mprogress.domain.InitialUpload.DONE_TEXT, Type.cuerpo, modifier = Modifier.weight(1f))
+            }
+        }
+    }
     Card(padding = Spacing.s2) {
         InfoRow("Correo", ui.email ?: "")
         Line()
@@ -231,17 +250,11 @@ private fun ReadyContent(ui: CloudUi, onApprove: (RemoteDevice) -> Unit, onSync:
     SecondaryButton("Cerrar sesión", onClick = onSignOut)
 }
 
-/** "Sincronizado · hace 3 min". */
+/** "Al día · hace 3 min". */
 fun statusText(ui: CloudUi, now: Instant = Instant.now()): String {
-    val base = ui.status.title
+    val base = (ui.pill ?: com.olarte.mprogress.domain.SyncPill.AlDia).text
     val last = ui.lastSyncAt ?: return base
-    val minutes = Duration.between(last, now).toMinutes()
-    val whenText = when {
-        minutes < 1 -> "hace un momento"
-        minutes < 60 -> "hace $minutes min"
-        else -> DueText.describe(last.atZone(ZoneId.systemDefault()).toLocalDate(), LocalDate.now()).lowercase()
-    }
-    return "$base · $whenText"
+    return "$base · ${com.olarte.mprogress.domain.SyncText.relative(last, now).lowercase()}"
 }
 
 fun deviceTitle(d: RemoteDevice) = d.name ?: if (d.platform == "android") "Un teléfono Android" else "Un iPhone"

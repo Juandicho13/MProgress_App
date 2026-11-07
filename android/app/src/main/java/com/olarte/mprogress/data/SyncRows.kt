@@ -22,9 +22,9 @@ object SyncRows {
     /** Espacio y dueño de las filas, y cómo se escriben las fechas (6 decimales para la nube, sin decimales en el respaldo). */
     class Ctx(val spaceId: String, val ownerId: String, val date: (Instant) -> String = ServerTime::format)
 
-    /** Tablas que Android lee y escribe, en el orden del SyncEngine. `categories` y `splits` no: Android no las tiene. */
-    val TABLES = listOf("spaces", "institutions", "reward_programs", "products", "recurring", "entries", "transfers", "reminders",
-        "budgets", "savings_goals", "goal_contributions", "merchant_alias")
+    /** Tablas que Android lee y escribe, en el orden del SyncEngine. `splits` no: Android no las tiene. De `categories`, solo las propias. */
+    val TABLES = listOf("spaces", "categories", "institutions", "reward_programs", "products", "recurring", "entries", "transfers", "reminders",
+        "budgets", "savings_goals", "goal_contributions", "merchant_alias", DebtRows.DEBTS, DebtRows.PAYMENTS)
 
     private val uuid = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
     /** iOS solo lee UUID válidos: lo que no lo es (datos de prueba) no se sube. */
@@ -52,6 +52,10 @@ object SyncRows {
     fun category(c: CategoryRecord) = JSONObject().put("id", c.id).opt("ownerSpaceId", null).put("name", c.name).put("icon", c.icon)
         .opt("colorHex", null).put("sort", c.sort).opt("lastUsedAt", null)
 
+    /** Categoría propia: va con el espacio, como en iOS (las de la app no se sincronizan). */
+    fun customCategory(c: CategoryRecord, ctx: Ctx) = JSONObject().put("id", c.id).put("ownerSpaceId", ctx.spaceId).put("name", c.name).put("icon", c.icon)
+        .opt("colorHex", null).put("sort", c.sort).opt("lastUsedAt", null)
+
     fun institution(it: Institution, sort: Int, ctx: Ctx) = JSONObject().put("id", it.id).put("spaceId", ctx.spaceId).put("name", it.name)
         .opt("colorHex", hex(it.colorHex)).opt("icon", null).put("hidden", it.hidden).put("sort", sort)
 
@@ -65,7 +69,7 @@ object SyncRows {
         .opt("icon", null).put("amountMinor", it.amountMinor).put("cycleRaw", it.cycle.raw).opt("intervalDays", it.cycle.intervalDays).put("nextDate", ctx.date(noon(it.nextDate)))
         .put("anchorDay", it.anchor.day).put("anchorMonth", it.anchor.month).opt("categoryId", it.categoryId).opt("productId", it.productId).opt("responsibleId", null)
         .put("active", it.active).opt("createdBy", null).put("dateUnset", it.dateUnset).opt("endDate", it.endDate?.let { d -> ctx.date(noon(d)) }).opt("totalCount", it.totalCount)
-        .put("paidCount", it.paidCount).put("intervalMonths", it.cycle.intervalMonths)
+        .put("paidCount", it.paidCount).put("intervalMonths", it.cycle.intervalMonths).opt("firstDay", it.cycle.firstDay).opt("secondDay", it.cycle.secondDay)
 
     /** La hora opcional de Android va dentro de la fecha; sin hora, al mediodía UTC (el mismo día en Colombia). */
     fun occurred(e: EntryRecord): Instant = e.atMinutes?.let { e.occurredAt.atTime(LocalTime.of(it / 60, it % 60)).atZone(ZoneId.systemDefault()).toInstant() } ?: noon(e.occurredAt)
@@ -110,7 +114,7 @@ object SyncRows {
 
     fun recurringFrom(o: JSONObject, alert: AlertRule = AlertRule()): RecurringRecord {
         val r = RecurringRecord(id = o.getString("id").lowercase(), kind = kind(o.getString("kindRaw")), name = o.getString("name"), amountMinor = o.getLong("amountMinor"),
-            cycle = Cycle.from(o.getString("cycleRaw"), o.int("intervalDays"), o.int("intervalMonths")), nextDate = day(o.getString("nextDate")) ?: LocalDate.now(),
+            cycle = Cycle.from(o.getString("cycleRaw"), o.int("intervalDays"), o.int("intervalMonths"), o.int("firstDay"), o.int("secondDay")), nextDate = day(o.getString("nextDate")) ?: LocalDate.now(),
             anchor = CycleAnchor(o.getInt("anchorDay"), o.getInt("anchorMonth")), active = o.optBoolean("active", true), dateUnset = o.optBoolean("dateUnset", false),
             categoryId = o.id("categoryId"), productId = o.id("productId"), endDate = day(o.str("endDate")), totalCount = o.int("totalCount"),
             paidCount = o.optInt("paidCount", 0), alert = alert)
@@ -132,6 +136,7 @@ object SyncRows {
     fun goalFrom(o: JSONObject) = GoalRecord(o.getString("id").lowercase(), o.getString("name"), o.getLong("targetAmountMinor"), day(o.str("targetDate")), o.id("productId"))
     fun contributionFrom(o: JSONObject) = ContributionRecord(o.getString("id").lowercase(), o.getString("goalId").lowercase(), o.getLong("amountMinor"),
         day(o.getString("occurredAt")) ?: LocalDate.now())
+    fun categoryFrom(o: JSONObject) = CategoryRecord(o.getString("id").lowercase(), o.getString("name"), o.optString("icon", "square.grid.2x2"), o.optInt("sort", 50))
     fun merchantAliasFrom(o: JSONObject) = MerchantAliasRule(o.getString("id").lowercase(), o.getString("key"), o.getString("name"), o.id("categoryId"))
 
     fun rewardFrom(o: JSONObject) = RewardRecord(o.getString("id").lowercase(), o.getString("name"), RewardKind.from(o.str("kindRaw")), o.optLong("balance"),
@@ -145,6 +150,7 @@ object SyncRows {
      */
     fun snapshot(l: Ledger, currency: Currency, reminderId: (String) -> String): Map<String, Map<String, Any>> = mapOf(
         "spaces" to mapOf(SPACE_KEY to currency.code),
+        "categories" to l.categories.associateBy { it.id },
         "institutions" to l.institutions.associateBy { it.id },
         "reward_programs" to l.rewards.associateBy { it.id },
         "products" to l.products.associateBy { it.id },
@@ -156,11 +162,14 @@ object SyncRows {
         "savings_goals" to l.goals.associateBy { it.id },
         "goal_contributions" to l.contributions.associateBy { it.id },
         "merchant_alias" to l.merchantAliases.associateBy { it.id },
+        DebtRows.DEBTS to l.debts.associateBy { it.id },
+        DebtRows.PAYMENTS to l.debtPayments.associateBy { it.id },
     ).mapValues { (_, m) -> m.filterKeys { it == SPACE_KEY || isUuid(it) } }
 
     /** La fila de un registro del estado de `snapshot`. */
     fun render(table: String, id: String, value: Any, l: Ledger, ctx: Ctx, rewardBalanceAt: Instant = ServerTime.now()): JSONObject = when (table) {
         "spaces" -> space(Currency.from(value as String), ctx)
+        "categories" -> customCategory(value as CategoryRecord, ctx)
         "institutions" -> (value as Institution).let { institution(it, l.institutions.indexOfFirst { i -> i.id == it.id }.coerceAtLeast(0), ctx) }
         "reward_programs" -> reward(value as RewardRecord, ctx, rewardBalanceAt)
         "products" -> product(value as Product, ctx)
@@ -175,6 +184,8 @@ object SyncRows {
         "savings_goals" -> goal(value as GoalRecord, ctx)
         "goal_contributions" -> contribution(value as ContributionRecord, ctx)
         "merchant_alias" -> merchantAlias(value as MerchantAliasRule, ctx)
+        DebtRows.DEBTS -> DebtRows.debt(value as DebtRecord, ctx.spaceId, DebtRows.syncDate(ctx))
+        DebtRows.PAYMENTS -> DebtRows.payment(value as DebtPaymentRecord, ctx.spaceId, DebtRows.syncDate(ctx))
         else -> error("Tabla desconocida: $table")
     }
 
@@ -182,7 +193,7 @@ object SyncRows {
     fun canonical(l: Ledger): Ledger {
         fun String.c() = lowercase()
         fun String?.c() = this?.lowercase()
-        return l.copy(
+        return DebtRows.canonical(l).copy(
             institutions = l.institutions.map { it.copy(id = it.id.c()) },
             products = l.products.map { it.copy(id = it.id.c(), institutionId = it.institutionId.c(), parentProductId = it.parentProductId.c(), rewardProgramId = it.rewardProgramId.c()) },
             recurring = l.recurring.map { it.copy(id = it.id.c(), categoryId = it.categoryId.c(), productId = it.productId.c()) },
@@ -193,6 +204,7 @@ object SyncRows {
             contributions = l.contributions.map { it.copy(id = it.id.c(), goalId = it.goalId.c()) },
             rewards = l.rewards.map { it.copy(id = it.id.c()) },
             merchantAliases = l.merchantAliases.map { it.copy(id = it.id.c(), categoryId = it.categoryId.c()) },
+            categories = l.categories.map { it.copy(id = it.id.c()) },
         )
     }
 

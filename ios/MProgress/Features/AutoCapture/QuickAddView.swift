@@ -12,40 +12,35 @@ final class QuickAddRouter {
     var openFixed = false
 }
 
-/// Registro rápido: 1) monto y si es gasto o ingreso, 2) de dónde sale o a dónde entra, y guardar.
+/// Registro rápido en una sola pantalla: Gasto o Ingreso, el monto con el teclado de la app, "¿En qué?" opcional
+/// con los nombres que más usas y Guardar. Sin nombre queda "Gasto rápido" o "Ingreso rápido", como siempre.
 struct QuickAddView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Environment(\.calendar) private var calendar
     @Environment(UndoCenter.self) private var undo: UndoCenter?
     @Query(filter: #Predicate<Space> { $0.deletedAt == nil }, sort: \Space.createdAt) private var spaces: [Space]
-    @Query(filter: #Predicate<Product> { $0.deletedAt == nil }, sort: \Product.createdAt) private var allProducts: [Product]
-    @Query(filter: #Predicate<Institution> { $0.deletedAt == nil }) private var institutions: [Institution]
-    @Query(filter: #Predicate<SpendCategory> { $0.deletedAt == nil }, sort: \SpendCategory.sort) private var categories: [SpendCategory]
+    @Query(filter: #Predicate<Entry> { $0.deletedAt == nil }, sort: \Entry.occurredAt, order: .reverse) private var allEntries: [Entry]
 
     @State private var kind: EntryKind = .gasto
     @State private var amount = AmountInput()
-    @State private var step = 0
-    @State private var productId: UUID?
-    @State private var categoryId: UUID?
+    @State private var name = ""
     @State private var errorText: String?
+    @FocusState private var nameFocused: Bool
 
     private var space: Space? { spaces.first { $0.kindRaw == "personal" } ?? spaces.first }
     private var currency: Currency { space?.currency ?? .cop }
-    /// De dónde sale un gasto: tarjetas, cuentas y efectivo. A dónde entra un ingreso: cuentas, cajitas y efectivo.
-    private var products: [Product] {
-        allProducts.filter { $0.spaceId == space?.id && QuickAddMath.offers($0.kind, for: kind) }
+    /// Los 6 nombres que más usas en tus movimientos recientes de este tipo.
+    private var suggestions: [QuickName] {
+        let records = allEntries.filter { $0.spaceId == space?.id }.prefix(QuickNames.window * 2).map(\.record)
+        return QuickNames.recent(Array(records), kind: kind)
     }
-    private var recentCategories: [SpendCategory] {
-        Array(categories.sorted { ($0.lastUsedAt ?? .distantPast) > ($1.lastUsedAt ?? .distantPast) }.prefix(8))
-    }
+    private var visibleSuggestions: [QuickName] { QuickNames.matching(suggestions, typed: name) }
 
     var body: some View {
-        VStack(spacing: Spacing.s4) {
+        VStack(spacing: Spacing.s3) {
             HStack {
-                CircleIconButton(systemImage: step == 0 ? "xmark" : "chevron.left", label: step == 0 ? "Cerrar" : "Atrás") {
-                    if step == 0 { dismiss() } else { withAnimation(.snappy) { step = 0 } }
-                }
+                CircleIconButton(systemImage: "xmark", label: "Cerrar") { dismiss() }
                 Spacer()
                 Text("Registro rápido").appFont(.titulo3).foregroundStyle(Palette.texto1)
                 Spacer()
@@ -53,10 +48,29 @@ struct QuickAddView: View {
             }
             .padding(.top, Spacing.s4)
 
-            if step == 0 {
-                amountStep
-            } else {
-                sourceStep
+            SegmentedPill(options: [(value: EntryKind.gasto, title: "Gasto"), (value: EntryKind.ingreso, title: "Ingreso")], selection: $kind)
+            // El mismo campo de monto de Agregar; el teclado de la app escribe aquí salvo mientras escribes el nombre.
+            EditableAmountField(input: amount, editing: !nameFocused, showsCaption: false) { nameFocused = false }
+            nameField
+            if !visibleSuggestions.isEmpty {
+                ScrollView(.horizontal) {
+                    HStack(spacing: Spacing.s2) {
+                        ForEach(visibleSuggestions, id: \.name) { item in
+                            Chip(title: item.name, selected: false) {
+                                name = item.name
+                                nameFocused = false
+                            }
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+            }
+            Spacer(minLength: 0)
+            Button("Guardar") { save() }
+                .buttonStyle(.primary)
+                .disabled(amount.money.isZero)
+            if !nameFocused {
+                NumericKeypad(input: $amount)
             }
         }
         .padding(.horizontal, Spacing.margen)
@@ -70,87 +84,42 @@ struct QuickAddView: View {
         }
     }
 
-    private var amountStep: some View {
-        VStack(spacing: Spacing.s4) {
-            SegmentedPill(options: [(value: EntryKind.gasto, title: "Gasto"), (value: EntryKind.ingreso, title: "Ingreso")], selection: $kind)
-            AmountDisplay(input: amount, active: true)
-            Spacer(minLength: 0)
-            Button(kind == .gasto ? "¿De dónde sale?" : "¿A dónde entra?") {
-                withAnimation(.snappy) { step = 1 }
-            }
-            .buttonStyle(.primary)
-            .disabled(amount.money.isZero)
-            NumericKeypad(input: $amount)
-        }
-    }
-
-    private var sourceStep: some View {
-        VStack(alignment: .leading, spacing: Spacing.s4) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(kind == .gasto ? "¿De dónde sale?" : "¿A dónde entra?").appFont(.titulo2).foregroundStyle(Palette.texto1)
-                Spacer()
-                Text(signedAmount(amount.money.minor, kind, currency)).appFont(.cifra).foregroundStyle(kind == .ingreso ? Palette.hielo : Palette.texto1)
-            }
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.s4) {
-                    Card(padding: Spacing.s3) {
-                        VStack(spacing: Spacing.s2) {
-                            ForEach(products) { product in
-                                Button { productId = product.id } label: { productRow(product) }
-                                    .buttonStyle(.plain)
-                            }
-                            Button { productId = nil } label: {
-                                ListRow(tile: IconTile(content: .symbol("questionmark")), title: "Sin elegir", subtitle: "Lo decides después") {
-                                    if productId == nil { check }
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    if kind == .gasto {
-                        SectionLabel(text: "Categoría (opcional)")
-                        FlowLayout(spacing: Spacing.s2) {
-                            ForEach(recentCategories) { category in
-                                Chip(title: category.name, systemImage: category.icon, selected: categoryId == category.id) {
-                                    categoryId = categoryId == category.id ? nil : category.id
-                                }
-                            }
-                        }
-                    }
+    private var nameField: some View {
+        HStack(spacing: Spacing.s2) {
+            Image(systemName: "text.cursor").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.texto2)
+                .accessibilityHidden(true)
+            TextField("¿En qué? Almuerzo, taxi, mercado", text: $name)
+                .appFont(.cuerpo)
+                .foregroundStyle(Palette.texto1)
+                .textInputAutocapitalization(.sentences)
+                .submitLabel(.done)
+                .focused($nameFocused)
+                .onSubmit { nameFocused = false }
+                .accessibilityLabel("¿En qué?")
+            if !name.isEmpty {
+                Button { name = "" } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 17)).foregroundStyle(Palette.texto2)
+                        .frame(width: Size.toqueMinimo, height: Size.toqueMinimo)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Borrar el nombre")
             }
-            .scrollIndicators(.hidden)
-            Button("Guardar") { save() }.buttonStyle(.primary)
         }
-    }
-
-    private func productRow(_ product: Product) -> some View {
-        let bank = institutions.first { $0.id == product.institutionId }
-        return ListRow(tile: InstitutionStyle.tile(name: bank?.name ?? product.name, hex: bank?.colorHex),
-                       title: product.last4.map { "\(product.name) ·· \($0)" } ?? product.name,
-                       subtitle: bank?.name ?? "") {
-            if productId == product.id { check }
-        }
-        .contentShape(Rectangle())
-        .accessibilityAddTraits(productId == product.id ? [.isSelected] : [])
-    }
-
-    private var check: some View {
-        Image(systemName: "checkmark.circle.fill").font(.system(size: 22)).foregroundStyle(Palette.brasa)
+        .padding(.leading, Spacing.s4)
+        .frame(minHeight: Size.toqueMinimo)
+        .background(RoundedRectangle(cornerRadius: Radius.campo, style: .continuous).fill(Palette.superficie3))
     }
 
     private func save() {
-        guard let space else { return }
-        let product = products.first { $0.id == productId }
-        let category = categories.first { $0.id == categoryId }
-        let name = category?.name ?? (kind == .gasto ? "Gasto rápido" : "Ingreso rápido")
+        guard let space, !amount.money.isZero else { return }
+        let finalName = QuickAddMath.name(kind: kind, concept: name)
+        let categoryId = kind == .gasto ? QuickNames.categoryId(for: name, in: suggestions) : nil
         do {
             let entry = try LedgerStore(context: context, calendar: calendar).addEntry(
-                spaceId: space.id, kind: kind, amountMinor: amount.money.minor, name: name, categoryId: category?.id,
-                productId: product?.id, createdBy: LocalIdentity.userId)
+                spaceId: space.id, kind: kind, amountMinor: amount.money.minor, name: finalName, categoryId: categoryId,
+                createdBy: LocalIdentity.userId)
             dismiss()
-            undo?.show("Anotado: \(signedAmount(entry.amountMinor, kind, currency))") {
+            undo?.show("Anotado: \(finalName) · \(signedAmount(entry.amountMinor, kind, currency))") {
                 try? LedgerStore(context: context).softDelete(entry)
             }
         } catch {

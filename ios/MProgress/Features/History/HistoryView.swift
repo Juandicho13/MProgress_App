@@ -86,7 +86,8 @@ struct HistoryView: View {
                         ForEach(day.entries, id: \.id) { record in
                             if let entry = entries.first(where: { $0.id == record.id }) {
                                 Button { selected = entry } label: {
-                                    EntryRow(entry: entry, subtitle: subtitle(entry), currency: currency)
+                                    EntryRow(entry: entry, subtitle: subtitle(entry), currency: currency,
+                                             pending: CloudAccount.shared.showsPendingMark(entry))
                                 }
                                 .buttonStyle(.plain)
                             }

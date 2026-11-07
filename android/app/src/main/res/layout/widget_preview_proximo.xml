@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Vista previa del widget en el selector del lanzador (datos de ejemplo). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@drawable/widget_fondo" android:padding="14dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="EN 3 D" android:textSize="11sp"
+        android:textColor="#F5C451" android:textStyle="bold" android:background="@drawable/widget_etiqueta" android:paddingStart="8dp" android:paddingEnd="8dp" android:paddingTop="2dp" android:paddingBottom="2dp" />
+    <View android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Próximo cargo" android:textSize="12sp" android:textColor="#9EA3AB" android:maxLines="1" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Netflix" android:textSize="14sp" android:textColor="#F3F4F6" android:textStyle="bold" android:maxLines="1" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="$ 45.500" android:textSize="19sp" android:textColor="#F3F4F6" android:textStyle="bold" android:maxLines="1" />
+</LinearLayout>

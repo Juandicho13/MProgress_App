@@ -23,6 +23,9 @@ struct BackupSnapshot: Codable, Equatable, Sendable {
     var rewards: [RewardRow]? = nil
     /// Nombres de comercios aprendidos. Opcional: los respaldos de antes no lo traen.
     var merchantAliases: [MerchantAliasRow]? = nil
+    /// Quién te debe: deudas con otras personas y sus abonos (filas en Domain/Debts.swift). Opcionales por los respaldos de antes.
+    var debts: [DebtRow]? = nil
+    var debtPayments: [DebtPaymentRow]? = nil
 
     struct SpaceRow: Codable, Equatable, Sendable {
         var id: UUID; var ownerId: UUID; var name: String; var kindRaw: String; var currencyCode: String
@@ -63,6 +66,9 @@ struct BackupSnapshot: Codable, Equatable, Sendable {
         var paidCount: Int? = nil
         /// Meses entre cobros de un pago mensual (1 a 24). Opcional: los respaldos de antes son mensuales (1).
         var intervalMonths: Int? = nil
+        /// Días de un pago quincenal (31 es el último día). Solo con cycleRaw "quincenal".
+        var firstDay: Int? = nil
+        var secondDay: Int? = nil
     }
 
     struct EntryRow: Codable, Equatable, Sendable {

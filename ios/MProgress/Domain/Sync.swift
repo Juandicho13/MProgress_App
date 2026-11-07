@@ -62,7 +62,7 @@ struct SyncEngine {
     static let maxAttempts = 3
     /// Orden de las tablas: primero lo que otras filas referencian.
     static let tables = ["spaces", "categories", "institutions", "reward_programs", "products", "recurring", "entries", "splits",
-                         "transfers", "reminders", "budgets", "savings_goals", "goal_contributions", "merchant_alias"]
+                         "transfers", "reminders", "budgets", "savings_goals", "goal_contributions", "merchant_alias", "debts", "debt_payments"]
 
     struct Report: Equatable, Sendable {
         var pushed = 0
@@ -77,21 +77,9 @@ struct SyncEngine {
 
     func run() async throws -> Report {
         var report = Report()
-        let pending = try local.pending()
-        for start in stride(from: 0, to: pending.count, by: batchSize) {
-            let batch = Array(pending[start..<min(start + batchSize, pending.count)])
-            do {
-                try await remote.push(batch)
-                try local.markSynced(batch)
-                report.pushed += batch.count
-            } catch {
-                let attempts = batch.map { local.attempts(for: $0) + 1 }.max() ?? 1
-                try local.markFailed(batch, attempts: attempts)
-                report.failed += batch.count
-                if attempts >= Self.maxAttempts { continue }
-                throw error
-            }
-        }
+        let pushed = try await pushPending(batchSize: batchSize) { _, _ in }
+        report.pushed = pushed.pushed
+        report.failed = pushed.failed
 
         for table in Self.tables {
             let rows = try await remote.pull(table: table, since: local.cursor(table: table))
@@ -109,6 +97,31 @@ struct SyncEngine {
             }
         }
         return report
+    }
+
+    /// Sube los pendientes en lotes y en el orden en que se hicieron. Un lote que falla suma un intento; al tercero queda
+    /// con error y se sigue con el siguiente; antes, se detiene y lanza. `progress` recibe (procesadas, total).
+    func pushPending(batchSize size: Int, progress: (Int, Int) -> Void) async throws -> (pushed: Int, failed: Int) {
+        var pushed = 0
+        var failed = 0
+        let pending = try local.pending()
+        let step = max(1, size)
+        progress(0, pending.count)
+        for start in stride(from: 0, to: pending.count, by: step) {
+            let batch = Array(pending[start..<min(start + step, pending.count)])
+            do {
+                try await remote.push(batch)
+                try local.markSynced(batch)
+                pushed += batch.count
+            } catch {
+                let attempts = batch.map { local.attempts(for: $0) + 1 }.max() ?? 1
+                try local.markFailed(batch, attempts: attempts)
+                failed += batch.count
+                if attempts < Self.maxAttempts { throw error }
+            }
+            progress(min(start + step, pending.count), pending.count)
+        }
+        return (pushed, failed)
     }
 
     /// Gana el `updatedAt` más reciente; si empatan, gana el servidor para que todos los teléfonos terminen igual.

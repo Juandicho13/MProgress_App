@@ -50,6 +50,34 @@ struct QuickProductQuery: EntityQuery {
     }
 }
 
+/// Un nombre de los que más usas ("Almuerzo", "Taxi") para "¿En qué?". El id es el nombre.
+struct QuickNameEntity: AppEntity, Identifiable {
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "En qué"
+    static let defaultQuery = QuickNameQuery()
+    /// Elegirlo deja el nombre de siempre ("Gasto rápido" o "Ingreso rápido").
+    static let unnamed = QuickNameEntity(id: "sin-nombre", title: "Sin nombre")
+
+    let id: String
+    let title: String
+
+    var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: "\(title)")
+    }
+}
+
+struct QuickNameQuery: EntityQuery {
+    @MainActor
+    func entities(for identifiers: [String]) async throws -> [QuickNameEntity] {
+        let all = QuickAddRunner.nameOptions(for: .gasto) + QuickAddRunner.nameOptions(for: .ingreso) + [.unnamed]
+        return all.filter { identifiers.contains($0.id) }
+    }
+
+    @MainActor
+    func suggestedEntities() async throws -> [QuickNameEntity] {
+        QuickAddRunner.nameOptions(for: .gasto)
+    }
+}
+
 /// "Registro rápido" (doble toque atrás, Siri, Atajos) sin abrir la app (PLAN_F12B Paso 3): pide el monto con
 /// el cuadro del sistema, luego gasto o ingreso y de dónde sale o a dónde entra; guarda y muestra en la isla
 /// dinámica "− $ 84.300 · te quedan $ 1.901.100" con Deshacer, que se cierra sola a los 8 segundos.
@@ -72,11 +100,16 @@ struct QuickAddIntent: AppIntent, LiveActivityIntent {
     @Parameter(title: "Concepto")
     var concept: String?
 
+    /// "¿En qué?" con los nombres que más usas; solo se pregunta si no llegó el concepto y hay nombres recientes.
+    @Parameter(title: "En qué")
+    var recentName: QuickNameEntity?
+
     static var parameterSummary: some ParameterSummary {
         Summary("Anotar \(\.$amount)") {
             \.$kind
             \.$product
             \.$concept
+            \.$recentName
         }
     }
 
@@ -116,7 +149,17 @@ struct QuickAddIntent: AppIntent, LiveActivityIntent {
         }
         let productId = chosenProduct.flatMap { UUID(uuidString: $0.id) }
 
-        let state = try QuickAddRunner.save(amountMinor: minor, kind: entryKind, productId: productId, concept: concept)
+        var chosenConcept = concept?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if chosenConcept.isEmpty {
+            var picked = recentName
+            let options = QuickAddRunner.nameOptions(for: entryKind)
+            if picked == nil, !options.isEmpty {
+                picked = try await $recentName.requestDisambiguation(among: options + [QuickNameEntity.unnamed], dialog: "¿En qué?")
+            }
+            if let picked, picked.id != QuickNameEntity.unnamed.id { chosenConcept = picked.title }
+        }
+
+        let state = try QuickAddRunner.save(amountMinor: minor, kind: entryKind, productId: productId, concept: chosenConcept)
         if await QuickAddActivityController.show(state) {
             QuickAddBackgroundHold.closeLater(entryId: state.entryId)
         }
@@ -175,6 +218,22 @@ enum QuickAddRunner {
             }
     }
 
+    /// Los nombres que más usas en movimientos recientes de ese tipo (los mismos chips de la app).
+    static func recentNames(for kind: EntryKind, in context: ModelContext) -> [QuickName] {
+        guard let space = space(in: context) else { return [] }
+        let spaceId = space.id
+        var descriptor = FetchDescriptor<Entry>(predicate: #Predicate<Entry> { $0.deletedAt == nil && $0.spaceId == spaceId },
+                                                sortBy: [SortDescriptor(\.occurredAt, order: .reverse)])
+        descriptor.fetchLimit = QuickNames.window * 2
+        let entries = (try? context.fetch(descriptor)) ?? []
+        return QuickNames.recent(entries.map(\.record), kind: kind)
+    }
+
+    static func nameOptions(for kind: EntryKind) -> [QuickNameEntity] {
+        guard let container = try? Persistence.shared() else { return [] }
+        return recentNames(for: kind, in: container.mainContext).map { QuickNameEntity(id: $0.name, title: $0.name) }
+    }
+
     /// Guarda el movimiento y arma lo que muestra la Live Activity.
     static func save(amountMinor: Int64, kind: EntryKind, productId: UUID?, concept: String?,
                      now: Date = .now, calendar: Calendar = .current) throws -> QuickAddAttributes.ContentState {
@@ -183,8 +242,10 @@ enum QuickAddRunner {
         guard let space = space(in: context) else { throw CocoaError(.coderValueNotFound) }
         let ledger = LedgerStore(context: context, calendar: calendar)
         let name = QuickAddMath.name(kind: kind, concept: concept)
+        // Un nombre que ya usas trae la categoría que le pusiste la última vez.
+        let categoryId = kind == .gasto ? QuickNames.categoryId(for: concept ?? "", in: recentNames(for: kind, in: context)) : nil
         let entry = try ledger.addEntry(spaceId: space.id, kind: kind, amountMinor: amountMinor, name: name, occurredAt: now,
-                                        productId: productId, createdBy: LocalIdentity.userId)
+                                        categoryId: categoryId, productId: productId, createdBy: LocalIdentity.userId)
         let summary = try ledger.monthSummary(spaceId: space.id, now: now)
         WidgetPublisher.publish(context: context)
         let currency = space.currency

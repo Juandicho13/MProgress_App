@@ -34,6 +34,8 @@ struct QuickAddMathTests {
         #expect(QuickAddMath.offers(.credito, for: .gasto))
         #expect(!QuickAddMath.offers(.bolsillo, for: .gasto))
         #expect(QuickAddMath.offers(.bolsillo, for: .ingreso))
+        #expect(!QuickAddMath.offers(.cajita, for: .gasto))
+        #expect(QuickAddMath.offers(.cajita, for: .ingreso))
         #expect(!QuickAddMath.offers(.debito, for: .ingreso))
         #expect(QuickAddMath.offers(.efectivo, for: .ingreso))
     }

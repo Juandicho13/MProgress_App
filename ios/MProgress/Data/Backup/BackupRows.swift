@@ -130,12 +130,14 @@ enum BackupRows {
               cycleRaw: m.cycleRaw, intervalDays: m.intervalDays, nextDate: m.nextDate, anchorDay: m.anchorDay, anchorMonth: m.anchorMonth,
               categoryId: m.categoryId, productId: m.productId, responsibleId: m.responsibleId, active: m.active, createdBy: m.createdBy,
               createdAt: m.createdAt, updatedAt: m.updatedAt, deletedAt: m.deletedAt, dateUnset: m.dateUnset,
-              endDate: m.endDate, totalCount: m.totalCount, paidCount: m.paidCount, intervalMonths: m.intervalMonths)
+              endDate: m.endDate, totalCount: m.totalCount, paidCount: m.paidCount, intervalMonths: m.intervalMonths,
+              firstDay: m.firstDay, secondDay: m.secondDay)
     }
 
     static func make(_ r: S.RecurringRow) -> Recurring {
         let m = Recurring(id: r.id, spaceId: r.spaceId, kind: EntryKind(rawValue: r.kindRaw) ?? .gasto, name: r.name, amountMinor: r.amountMinor,
-                          cycle: Cycle(rawValue: r.cycleRaw, intervalDays: r.intervalDays, intervalMonths: r.intervalMonths), nextDate: r.nextDate)
+                          cycle: Cycle(rawValue: r.cycleRaw, intervalDays: r.intervalDays, intervalMonths: r.intervalMonths,
+                                       firstDay: r.firstDay, secondDay: r.secondDay), nextDate: r.nextDate)
         fill(m, r)
         return m
     }
@@ -150,6 +152,8 @@ enum BackupRows {
         m.cycleRaw = r.cycleRaw
         m.intervalDays = r.intervalDays
         m.intervalMonths = min(24, max(1, r.intervalMonths ?? 1))
+        m.firstDay = r.firstDay.map { min(31, max(1, $0)) }
+        m.secondDay = r.secondDay.map { min(31, max(1, $0)) }
         m.nextDate = r.nextDate
         m.anchorDay = r.anchorDay
         m.anchorMonth = r.anchorMonth

@@ -40,7 +40,7 @@ import com.olarte.mprogress.ui.theme.Spacing
  * campo con borde y tinte, lápiz y "Toca para cambiar el valor". Tocarlo abre el teclado numérico, que muestra quien lo usa.
  */
 @Composable
-fun EditableAmountField(input: AmountInput, editing: Boolean, modifier: Modifier = Modifier, onTap: () -> Unit) {
+fun EditableAmountField(input: AmountInput, editing: Boolean, modifier: Modifier = Modifier, showsCaption: Boolean = true, onTap: () -> Unit) {
     val blink by rememberInfiniteTransition(label = "cursor").animateFloat(1f, 0f, infiniteRepeatable(tween(530), RepeatMode.Reverse), label = "cursor")
     val shape = RoundedCornerShape(Radius.tarjeta)
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
@@ -58,7 +58,8 @@ fun EditableAmountField(input: AmountInput, editing: Boolean, modifier: Modifier
             if (editing) Box(Modifier.width(3.dp).height(44.dp).alpha(blink).clip(RoundedCornerShape(1.5.dp)).background(Palette.brasa))
             Icon(Icons.Rounded.Edit, null, Modifier.size(20.dp), tint = Palette.brasaTinta)
         }
-        T(if (editing) "Escribe el nuevo valor" else "Toca para cambiar el valor", Type.leyenda, if (editing) Palette.brasaTinta else Palette.texto2,
+        // Agregar lo quita: ahí va el ciclo debajo.
+        if (showsCaption) T(if (editing) "Escribe el nuevo valor" else "Toca para cambiar el valor", Type.leyenda, if (editing) Palette.brasaTinta else Palette.texto2,
             Modifier.padding(horizontal = Spacing.s2))
     }
 }

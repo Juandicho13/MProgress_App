@@ -95,6 +95,9 @@ enum NotificationScheduler {
             }
         }
 
+        // Quién te debe: el día antes de cada fecha límite.
+        await DebtNotifications.schedule(context: context, now: now, calendar: calendar)
+
         if AlertSettings.weekly {
             let content = UNMutableNotificationContent()
             content.title = "Tu semana"

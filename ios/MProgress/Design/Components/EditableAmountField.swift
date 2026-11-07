@@ -6,6 +6,8 @@ struct EditableAmountField: View {
     let input: AmountInput
     /// El teclado escribe aquí: borde brasa y cursor.
     let editing: Bool
+    /// "Toca para cambiar el valor" o "Escribe el nuevo valor" debajo. Agregar lo quita: ahí va el ciclo.
+    var showsCaption = true
     let onTap: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -55,9 +57,11 @@ struct EditableAmountField: View {
             .accessibilityLabel("Monto, \(input.money.formatted())")
             .accessibilityHint("Toca para cambiar el valor")
             .accessibilityAddTraits(editing ? [.isSelected] : [])
-            Text(editing ? "Escribe el nuevo valor" : "Toca para cambiar el valor")
-                .appFont(.leyenda)
-                .foregroundStyle(editing ? Palette.brasaTinta : Palette.texto2)
+            if showsCaption {
+                Text(editing ? "Escribe el nuevo valor" : "Toca para cambiar el valor")
+                    .appFont(.leyenda)
+                    .foregroundStyle(editing ? Palette.brasaTinta : Palette.texto2)
+            }
         }
         .animation(.snappy, value: editing)
         .task(id: editing) {

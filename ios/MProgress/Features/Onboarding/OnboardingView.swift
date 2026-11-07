@@ -384,10 +384,11 @@ private struct BanksStep: View {
                     }
                 }
                 if bank.name != "Efectivo" {
-                    HStack(spacing: Spacing.s2) {
+                    FlowLayout(spacing: Spacing.s2) {
                         Chip(title: "+ Crédito") { addingTo = CardRequest(bankId: bank.id, kind: .credito) }
                         Chip(title: "+ Débito") { addingTo = CardRequest(bankId: bank.id, kind: .debito) }
-                        Chip(title: "+ Cajita") { addingTo = CardRequest(bankId: bank.id, kind: .bolsillo) }
+                        Chip(title: "+ Bolsillo") { addingTo = CardRequest(bankId: bank.id, kind: .bolsillo) }
+                        Chip(title: "+ Cajita") { addingTo = CardRequest(bankId: bank.id, kind: .cajita) }
                     }
                 }
             }
@@ -395,7 +396,7 @@ private struct BanksStep: View {
     }
 }
 
-/// Nombre y 4 últimos dígitos de una tarjeta, o nombre de una cajita.
+/// Nombre y 4 últimos dígitos de una tarjeta, o nombre de un bolsillo o una cajita.
 private struct PlannedCardSheet: View {
     let kind: ProductKind
     let onAdd: @MainActor (PlannedProduct) -> Void
@@ -406,7 +407,7 @@ private struct PlannedCardSheet: View {
     init(kind: ProductKind, onAdd: @escaping @MainActor (PlannedProduct) -> Void) {
         self.kind = kind
         self.onAdd = onAdd
-        _name = State(initialValue: kind == .credito ? "Crédito" : kind == .debito ? "Débito" : "Cajita")
+        _name = State(initialValue: kind == .credito ? "Crédito" : kind == .debito ? "Débito" : kind.title)
     }
 
     private var isCard: Bool { kind == .credito || kind == .debito }
@@ -426,7 +427,7 @@ private struct PlannedCardSheet: View {
             }
             .scrollContentBackground(.hidden)
             .background(Palette.superficie2.ignoresSafeArea())
-            .navigationTitle(isCard ? "Nueva tarjeta" : "Nueva cajita")
+            .navigationTitle(isCard ? "Nueva tarjeta" : kind == .bolsillo ? "Nuevo bolsillo" : "Nueva cajita")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
@@ -592,7 +593,7 @@ private struct DatesStep: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// Menú de productos planeados: tarjetas, cuentas, cajitas y efectivo.
+    /// Menú de productos planeados: tarjetas, cuentas, bolsillos, cajitas y efectivo.
     private func productMenu(selection: UUID?, onPick: @escaping (UUID?) -> Void) -> some View {
         let products = model.plannedProducts
         let current = products.first { $0.id == selection }

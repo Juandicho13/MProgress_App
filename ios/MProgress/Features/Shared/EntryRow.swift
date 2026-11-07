@@ -18,12 +18,22 @@ struct EntryRow: View {
     let entry: Entry
     let subtitle: String
     let currency: Currency
+    /// Tiene cambios que todavía no suben a la nube (F10-04): reloj pequeño y "Pendiente" bajo el monto.
+    var pending: Bool = false
 
     var body: some View {
         ListRow(tile: entryTile(icon: entry.icon, name: entry.name, kind: entry.kind), title: entry.name, subtitle: subtitle) {
-            Text(signedAmount(entry.amountMinor, entry.kind, currency))
-                .appFont(.cifra)
-                .foregroundStyle(entry.kind == .ingreso ? Palette.hielo : Palette.texto1)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(signedAmount(entry.amountMinor, entry.kind, currency))
+                    .appFont(.cifra)
+                    .foregroundStyle(entry.kind == .ingreso ? Palette.hielo : Palette.texto1)
+                if pending {
+                    Label("Pendiente", systemImage: "clock")
+                        .appFont(.leyenda)
+                        .foregroundStyle(Palette.texto2)
+                        .labelStyle(.titleAndIcon)
+                }
+            }
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)

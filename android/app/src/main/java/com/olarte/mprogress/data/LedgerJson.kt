@@ -30,6 +30,7 @@ object LedgerJson {
         put("recurring", arr(l.recurring) {
             JSONObject().put("id", it.id).put("kind", it.kind.name).put("name", it.name).put("amountMinor", it.amountMinor)
                 .put("cycle", it.cycle.raw).opt("intervalDays", it.cycle.intervalDays).put("intervalMonths", it.cycle.intervalMonths)
+                .opt("firstDay", it.cycle.firstDay).opt("secondDay", it.cycle.secondDay)
                 .put("nextDate", it.nextDate.toString()).put("anchorDay", it.anchor.day).put("anchorMonth", it.anchor.month)
                 .put("active", it.active).put("dateUnset", it.dateUnset).opt("productId", it.productId).opt("categoryId", it.categoryId)
                 .opt("endDate", it.endDate?.toString()).opt("totalCount", it.totalCount).put("paidCount", it.paidCount).put("finished", it.finished)
@@ -59,9 +60,13 @@ object LedgerJson {
                 .opt("bank", it.bank).put("source", it.source).put("text", it.text).put("receivedAt", it.receivedAt.toString())
         })
         put("merchantAliases", arr(l.merchantAliases) { JSONObject().put("id", it.id).put("key", it.key).put("name", it.name).opt("categoryId", it.categoryId) })
+        put("categories", arr(l.categories) { JSONObject().put("id", it.id).put("name", it.name).put("icon", it.icon).put("sort", it.sort) })
+        DebtRows.encodeLocal(l, this)
     }
 
-    fun decode(o: JSONObject) = Ledger(
+    fun decode(o: JSONObject) = DebtRows.decodeLocal(o, decodeBase(o))
+
+    private fun decodeBase(o: JSONObject) = Ledger(
         institutions = o.optJSONArray("institutions").list { Institution(it.getString("id"), it.getString("name"), it.long("color"), it.optBoolean("hidden", false)) },
         products = o.optJSONArray("products").list {
             Product(it.getString("id"), it.getString("institutionId"), ProductKind.valueOf(it.getString("kind")), it.getString("name"), it.str("last4"), it.int("dueDay"),
@@ -70,7 +75,7 @@ object LedgerJson {
         },
         recurring = o.optJSONArray("recurring").list {
             RecurringRecord(id = it.getString("id"), kind = EntryKind.valueOf(it.getString("kind")), name = it.getString("name"),
-                amountMinor = it.getLong("amountMinor"), cycle = Cycle.from(it.getString("cycle"), it.int("intervalDays"), it.int("intervalMonths")),
+                amountMinor = it.getLong("amountMinor"), cycle = Cycle.from(it.getString("cycle"), it.int("intervalDays"), it.int("intervalMonths"), it.int("firstDay"), it.int("secondDay")),
                 nextDate = LocalDate.parse(it.getString("nextDate")), anchor = CycleAnchor(it.getInt("anchorDay"), it.getInt("anchorMonth")),
                 active = it.optBoolean("active", true), dateUnset = it.optBoolean("dateUnset", false), productId = it.str("productId"),
                 categoryId = it.str("categoryId"), endDate = it.date("endDate"), totalCount = it.int("totalCount"), paidCount = it.optInt("paidCount", 0),
@@ -97,5 +102,6 @@ object LedgerJson {
                 it.str("bank"), it.optString("source"), it.optString("text"), it.date("receivedAt") ?: LocalDate.now())
         },
         merchantAliases = o.optJSONArray("merchantAliases").list { MerchantAliasRule(it.getString("id"), it.getString("key"), it.getString("name"), it.str("categoryId")) },
+        categories = o.optJSONArray("categories").list { CategoryRecord(it.getString("id"), it.getString("name"), it.optString("icon", "square.grid.2x2"), it.optInt("sort", 50)) },
     )
 }

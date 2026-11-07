@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -318,7 +319,8 @@ fun EntryTile(name: String, kind: com.olarte.mprogress.domain.EntryKind, size: a
 
 /** Fila de un movimiento en Inicio, Historial y Calendario, como EntryRow de iOS. */
 @Composable
-fun EntryRow(name: String, kind: com.olarte.mprogress.domain.EntryKind, amountMinor: Long, subtitle: String?, onClick: (() -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) {
+fun EntryRow(name: String, kind: com.olarte.mprogress.domain.EntryKind, amountMinor: Long, subtitle: String?, onClick: (() -> Unit)? = null,
+             pending: Boolean = false, trailing: (@Composable () -> Unit)? = null) {
     val income = kind == com.olarte.mprogress.domain.EntryKind.INGRESO
     Row(
         Modifier.fillMaxWidth().heightIn(min = 56.dp).let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(vertical = Spacing.s1),
@@ -329,7 +331,19 @@ fun EntryRow(name: String, kind: com.olarte.mprogress.domain.EntryKind, amountMi
             T(name.ifBlank { if (income) "Ingreso" else "Gasto" }, Type.titulo3, maxLines = 1)
             subtitle?.let { T(it, Type.cuerpo2, Palette.texto2, maxLines = 1) }
         }
-        if (trailing != null) trailing() else T(signedAmount(amountMinor, kind), Type.cifra, if (income) Palette.hielo else Palette.texto1)
+        if (trailing != null) trailing() else Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            T(signedAmount(amountMinor, kind), Type.cifra, if (income) Palette.hielo else Palette.texto1)
+            if (pending) PendingMark()
+        }
+    }
+}
+
+/** Marca de un movimiento con cambios que todavía no suben a la nube (F10-04): reloj pequeño y "Pendiente". */
+@Composable
+fun PendingMark() {
+    Row(Modifier.semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        Icon(androidx.compose.material.icons.Icons.Outlined.Schedule, null, Modifier.size(12.dp), tint = Palette.texto2)
+        T("Pendiente", Type.leyenda, Palette.texto2, maxLines = 1)
     }
 }
 

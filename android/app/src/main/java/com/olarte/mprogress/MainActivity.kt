@@ -157,7 +157,7 @@ enum class AppTab(val title: String, val icon: androidx.compose.ui.graphics.vect
     Calendario("Calendario", Sym.calendar, Sym.calendarFill), Ajustes("Ajustes", Sym.gear, Sym.gearFill)
 }
 
-enum class Route { FIJOS, HISTORIAL, LIMITES, AHORRO, AUTOMATICO }
+enum class Route { FIJOS, HISTORIAL, LIMITES, AHORRO, AUTOMATICO, AVISOS }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -169,6 +169,8 @@ fun RootScreen(store: Store) {
     var entryDetail by remember { mutableStateOf<String?>(null) }
     var recurringEdit by remember { mutableStateOf<String?>(null) }
     var scanning by remember { mutableStateOf(false) }
+    // Registro rápido: una hoja corta encima de todo (botón Rápido, ajustes rápidos y widget).
+    var quick by remember { mutableStateOf(false) }
     val undo by store.undo.collectAsState()
     val glass by store.glass.collectAsState()
     val scope = rememberCoroutineScope()
@@ -176,13 +178,10 @@ fun RootScreen(store: Store) {
 
     fun perform(kind: QuickActionKind) {
         when (kind) {
-            QuickActionKind.GASTO, QuickActionKind.RAPIDO -> adding = AddRequest(EntryKind.GASTO, Cycle.Puntual)
+            QuickActionKind.GASTO -> adding = AddRequest(EntryKind.GASTO, Cycle.Puntual)
+            QuickActionKind.RAPIDO -> quick = true
             QuickActionKind.INGRESO -> adding = AddRequest(EntryKind.INGRESO, Cycle.Puntual)
-            QuickActionKind.FIJO -> adding = AddRequest(EntryKind.GASTO, Cycle.Mensual)
-            QuickActionKind.SUELDO -> adding = AddRequest(EntryKind.INGRESO, Cycle.Mensual)
-            QuickActionKind.ANUAL -> adding = AddRequest(EntryKind.GASTO, Cycle.Anual)
             QuickActionKind.FIJOS -> route = Route.FIJOS
-            QuickActionKind.HISTORIAL -> route = Route.HISTORIAL
             QuickActionKind.LIMITES -> route = Route.LIMITES
             QuickActionKind.RECIBO -> scanning = true
             QuickActionKind.AUTOMATICO -> route = Route.AUTOMATICO
@@ -196,6 +195,7 @@ fun RootScreen(store: Store) {
     androidx.compose.runtime.LaunchedEffect(launch) {
         when (launch) {
             "gasto" -> adding = AddRequest(EntryKind.GASTO, Cycle.Puntual)
+            "rapido" -> { adding = null; quick = true }
             "fijos" -> route = Route.FIJOS
             "calendario" -> { route = null; tab = AppTab.Calendario }
             "inicio" -> { route = null; tab = AppTab.Inicio }
@@ -218,7 +218,9 @@ fun RootScreen(store: Store) {
             }, onOpenEntry = { entryDetail = it }, onScan = { scanning = true }) { route = null }
             route == Route.LIMITES -> com.olarte.mprogress.ui.planning.BudgetsScreen(store) { route = null }
             route == Route.AHORRO -> com.olarte.mprogress.ui.planning.SavingsScreen(store) { route = null }
-            tab == AppTab.Inicio -> HomeScreen(store, ::perform, onMore = { more = true }, onOpenFixed = { route = Route.FIJOS }, onOpenHistory = { route = Route.HISTORIAL }, onOpenEntry = { entryDetail = it })
+            route == Route.AVISOS -> com.olarte.mprogress.ui.settings.AlertsScreen(store) { route = null }
+            tab == AppTab.Inicio -> HomeScreen(store, ::perform, onMore = { more = true }, onOpenFixed = { route = Route.FIJOS }, onOpenHistory = { route = Route.HISTORIAL }, onOpenEntry = { entryDetail = it },
+                onOpenAlerts = { route = Route.AVISOS }, onAddIncome = { adding = AddRequest(EntryKind.INGRESO, Cycle.Mensual) })
             tab == AppTab.Resumen -> com.olarte.mprogress.ui.summary.SummaryScreen(store)
             tab == AppTab.Dinero -> com.olarte.mprogress.ui.money.MoneyScreen(store)
             tab == AppTab.Calendario -> com.olarte.mprogress.ui.calendar.CalendarScreen(store, onOpenEntry = { entryDetail = it })
@@ -237,6 +239,7 @@ fun RootScreen(store: Store) {
             scanning = false
             adding = AddRequest(EntryKind.GASTO, Cycle.Puntual, alias?.name ?: merchant.orEmpty(), amount ?: 0, "recibo", merchant = merchant, categoryId = alias?.categoryId)
         }
+        if (quick) com.olarte.mprogress.ui.home.QuickAddSheet(store) { quick = false }
         com.olarte.mprogress.ui.components.UndoToast(undo, Size.barra + Spacing.s4) { store.clearUndo() }
     }
 

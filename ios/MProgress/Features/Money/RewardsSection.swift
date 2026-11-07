@@ -28,7 +28,7 @@ struct RewardsSection: View {
                 Button { adding = true } label: {
                     Card {
                         ListRow(tile: IconTile(content: .symbol("star.circle"), tint: Palette.oroVelo, foreground: Palette.oro),
-                                title: "Puntos Colombia, LifeMiles…", subtitle: "Lleva tus puntos y millas junto a tu plata") {
+                                title: "Agrega tus puntos", subtitle: "Puntos Colombia, LifeMiles y más") {
                             Image(systemName: "plus").foregroundStyle(Palette.texto2)
                         }
                     }
@@ -53,11 +53,16 @@ struct RewardsSection: View {
                 }
             }
         }
+        // Siempre a pantalla completa: sin tamaño explícito la hoja podía abrir como una franja con solo el título.
         .sheet(isPresented: $adding) {
             RewardFormView(reward: nil, wallet: wallet)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(item: $editing) { reward in
             RewardFormView(reward: reward, wallet: wallet)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 

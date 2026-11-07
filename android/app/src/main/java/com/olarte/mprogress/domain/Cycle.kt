@@ -12,26 +12,39 @@ sealed class Cycle {
     data class CadaDias(val days: Int) : Cycle()
     /** Cada N meses (2 a 24, sin 12, que es anual). Se guarda como "mensual" con `intervalMonths`. */
     data class CadaMeses(val months: Int) : Cycle()
+    /** Dos veces al mes en dos días fijos (la quincena de Colombia: 15 y último día). Se guarda como "quincenal" con `firstDay` y `secondDay`. */
+    data class Quincenal(val days: QuincenaDays) : Cycle()
 
     val raw: String get() = when (this) {
-        Puntual -> "puntual"; Semanal -> "semanal"; Mensual, is CadaMeses -> "mensual"; Anual -> "anual"; is CadaDias -> "otra"
+        Puntual -> "puntual"; Semanal -> "semanal"; Mensual, is CadaMeses -> "mensual"; Anual -> "anual"; is CadaDias -> "otra"; is Quincenal -> "quincenal"
     }
     val intervalDays: Int? get() = (this as? CadaDias)?.days
     /** Meses entre cobros que se guardan (`interval_months`): N en cada N meses, 1 en todo lo demás. */
     val intervalMonths: Int get() = (this as? CadaMeses)?.months ?: 1
+    /** Primer día de la quincena que se guarda (`first_day`). Null si no es quincenal. */
+    val firstDay: Int? get() = (this as? Quincenal)?.days?.first
+    /** Segundo día de la quincena que se guarda (`second_day`, 31 es el último día). Null si no es quincenal. */
+    val secondDay: Int? get() = (this as? Quincenal)?.days?.second
     /** Mensual o cada N meses: los que usan "Día del mes". */
     val isMonthly: Boolean get() = this == Mensual || this is CadaMeses
     val title: String get() = when (this) {
-        Puntual -> "Puntual"; Semanal -> "Semanal"; Mensual -> "Mensual"; Anual -> "Anual"; is CadaDias -> "Cada $days días"
-        is CadaMeses -> MonthInterval.title(months)
+        Puntual -> "Una vez"; Semanal -> "Semanal"; Mensual -> "Mensual"; Anual -> "Anual"
+        is CadaDias -> if (days % 7 == 0 && days >= 14) "Cada ${days / 7} semanas" else "Cada $days días"
+        is CadaMeses -> if (months == 24) "Cada 2 años" else MonthInterval.title(months)
+        is Quincenal -> "Quincenal"
     }
     val repeats: Boolean get() = this != Puntual
 
     companion object {
-        /** `intervalMonths` solo cuenta para "mensual": 1 (o null, los datos de antes) es mensual. */
-        fun from(raw: String, intervalDays: Int? = null, intervalMonths: Int? = null): Cycle = when (raw) {
+        /**
+         * `intervalMonths` solo cuenta para "mensual": 1 (o null, los datos de antes) es mensual. `firstDay` y `secondDay` solo cuentan
+         * para "quincenal": sin ellos es 15 y último día.
+         */
+        fun from(raw: String, intervalDays: Int? = null, intervalMonths: Int? = null, firstDay: Int? = null, secondDay: Int? = null): Cycle = when (raw) {
             "semanal" -> Semanal; "mensual" -> months(intervalMonths ?: 1); "anual" -> Anual
-            "otra" -> CadaDias(maxOf(1, intervalDays ?: 30)); else -> Puntual
+            "otra" -> CadaDias(maxOf(1, intervalDays ?: 30))
+            "quincenal" -> Quincenal(QuincenaDays.of(firstDay ?: QuincenaDays.STANDARD.first, secondDay ?: QuincenaDays.STANDARD.second))
+            else -> Puntual
         }
 
         /** El ciclo de cada N meses, de 1 a 24: 1 es mensual y 12 es anual, así cada ciclo tiene una sola forma. */
@@ -72,7 +85,21 @@ object CycleMath {
         is Cycle.CadaDias -> after.plusDays(cycle.days.toLong())
         Cycle.Mensual -> addMonths(1, after, anchor)
         is Cycle.CadaMeses -> addMonths(maxOf(1, cycle.months), after, anchor)
+        is Cycle.Quincenal -> nextQuincena(after, cycle.days)
         Cycle.Anual -> clamp(anchor.day, LocalDate.of(after.year + 1, anchor.month, 1))
+    }
+
+    /**
+     * Siguiente día de quincena después de `after`: el primero del mes si no ha llegado, luego el segundo y luego el primero del mes que
+     * viene. Los días que el mes no tiene caen en su último día (el 30 es el 28 en febrero). No usa el ancla: los dos días van en el ciclo.
+     */
+    fun nextQuincena(after: LocalDate, days: QuincenaDays): LocalDate {
+        val last = after.lengthOfMonth()
+        return when {
+            after.dayOfMonth < minOf(days.low, last) -> clamp(days.low, after.withDayOfMonth(1))
+            after.dayOfMonth < minOf(days.high, last) -> clamp(days.high, after.withDayOfMonth(1))
+            else -> clamp(days.low, after.withDayOfMonth(1).plusMonths(1))
+        }
     }
 
     fun occurrences(start: LocalDate, through: LocalDate, cycle: Cycle, anchor: CycleAnchor, limit: Int = 400): List<LocalDate> {

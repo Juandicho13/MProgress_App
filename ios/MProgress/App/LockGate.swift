@@ -2,12 +2,18 @@ import SwiftUI
 import LocalAuthentication
 
 /// Bloqueo con Face ID al abrir (F09-05). Tapa la app al salir y pide la cara (o el código) al volver.
+/// Con "Bloquear" en Ajustes (como WhatsApp) solo la pide si estuvo fuera al menos ese tiempo; al abrirla en frío, siempre.
+/// Fuera de la app siempre queda tapada, así el selector de apps nunca muestra los montos.
 struct LockGate: ViewModifier {
     static let enabledKey = "seguridad.faceID"
 
     @AppStorage(LockGate.enabledKey) private var enabled = false
+    @AppStorage(LockDelay.storageKey) private var delaySeconds = LockDelay.inmediatamente.seconds
     @Environment(\.scenePhase) private var scenePhase
     @State private var locked = UserDefaults.standard.bool(forKey: LockGate.enabledKey)
+    @State private var covered = false
+    /// Cuándo se fue a segundo plano, con un reloj que sigue contando con el teléfono dormido.
+    @State private var backgroundedAt: ContinuousClock.Instant?
     @State private var failed = false
 
     func body(content: Content) -> some View {
@@ -15,13 +21,25 @@ struct LockGate: ViewModifier {
             .overlay {
                 if enabled && locked {
                     lockScreen.transition(.opacity)
+                } else if enabled && covered {
+                    privacyCover
                 }
             }
             .onChange(of: scenePhase) { _, phase in
                 switch phase {
                 case .background:
-                    if enabled { locked = true }
+                    if enabled {
+                        covered = true
+                        if backgroundedAt == nil { backgroundedAt = .now }
+                    }
                 case .active:
+                    covered = false
+                    if enabled, let start = backgroundedAt {
+                        let gone = start.duration(to: .now).components
+                        let elapsed = Double(gone.seconds) + Double(gone.attoseconds) / 1e18
+                        if LockTimeout.requiresAuth(elapsedSeconds: elapsed, delay: LockDelay.from(seconds: delaySeconds)) { locked = true }
+                    }
+                    backgroundedAt = nil
                     if enabled && locked { unlock() }
                 default:
                     break
@@ -48,6 +66,15 @@ struct LockGate: ViewModifier {
             .padding(Spacing.margen)
         }
         .accessibilityElement(children: .contain)
+    }
+
+    /// Lo que se ve en el selector de apps mientras no hace falta desbloquear.
+    private var privacyCover: some View {
+        ZStack {
+            Palette.fondo.ignoresSafeArea()
+            IconTile(content: .symbol("lock.fill"), tint: Palette.brasaVelo, foreground: Palette.brasaTinta, size: 72, circle: true)
+        }
+        .accessibilityHidden(true)
     }
 
     private func unlock() {

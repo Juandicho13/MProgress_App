@@ -98,7 +98,7 @@ struct FixedView: View {
             RecurringEditView(item: item, currency: currency)
         }
         .sheet(item: $adding) { kind in
-            if let space { AddEntryView(spaceId: space.id, kind: kind, cycle: .mensual, currency: currency) }
+            if let space { NewFixedView(spaceId: space.id, kind: kind, cycle: .mensual, currency: currency) }
         }
     }
 

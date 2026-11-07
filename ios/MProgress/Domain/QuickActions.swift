@@ -2,7 +2,7 @@ import Foundation
 
 /// Acciones del menú Más. El usuario las ordena y fija 3 como accesos rápidos en Inicio.
 enum QuickActionKind: String, CaseIterable, Codable, Sendable, Identifiable {
-    case gasto, ingreso, fijo, sueldo, anual, fijos, rapido, limites, ahorro, historial, recibo, automatico
+    case gasto, ingreso, fijos, rapido, limites, ahorro, recibo, automatico
 
     var id: String { rawValue }
 
@@ -11,14 +11,10 @@ enum QuickActionKind: String, CaseIterable, Codable, Sendable, Identifiable {
         switch self {
         case .gasto: "Gasto"
         case .ingreso: "Ingreso extra"
-        case .fijo: "Gasto fijo"
-        case .sueldo: "Sueldo o fijo"
-        case .anual: "Pago anual"
         case .fijos: "Pagos fijos"
         case .rapido: "Registro rápido"
         case .limites: "Límites"
         case .ahorro: "Ahorro"
-        case .historial: "Historial"
         case .recibo: "Escanear recibo"
         case .automatico: "Registro automático"
         }
@@ -29,14 +25,10 @@ enum QuickActionKind: String, CaseIterable, Codable, Sendable, Identifiable {
         switch self {
         case .gasto: "Gasto"
         case .ingreso: "Ingreso"
-        case .fijo: "Fijo"
-        case .sueldo: "Sueldo"
-        case .anual: "Anual"
         case .fijos: "Fijos"
         case .rapido: "Rápido"
         case .limites: "Límites"
         case .ahorro: "Ahorro"
-        case .historial: "Historial"
         case .recibo: "Recibo"
         case .automatico: "Auto"
         }
@@ -46,14 +38,10 @@ enum QuickActionKind: String, CaseIterable, Codable, Sendable, Identifiable {
         switch self {
         case .gasto: "plus"
         case .ingreso: "arrow.down"
-        case .fijo: "repeat"
-        case .sueldo: "banknote"
-        case .anual: "calendar"
         case .fijos: "list.bullet.rectangle"
         case .rapido: "hand.tap"
         case .limites: "gauge.with.dots.needle.33percent"
         case .ahorro: "target"
-        case .historial: "clock.arrow.circlepath"
         case .recibo: "doc.text.viewfinder"
         case .automatico: "wand.and.stars"
         }
@@ -64,7 +52,11 @@ enum QuickActionKind: String, CaseIterable, Codable, Sendable, Identifiable {
 struct QuickActionLayout: Equatable, Sendable {
     static let storageKey = "inicio.acciones"
     static let pinnedLimit = 3
-    static let standard = QuickActionLayout(order: QuickActionKind.allCases, pinned: [.gasto, .ingreso, .fijo])
+    static let standard = QuickActionLayout(order: QuickActionKind.allCases, pinned: [.gasto, .ingreso, .fijos])
+    /// Acciones que existieron y se quitaron (Gasto fijo, Sueldo o fijo y Pago anual repetían Pagos fijos; Historial
+    /// ya está en Inicio › Movimientos › Ver todo). Si alguien las tenía fijadas, su lugar se llena con las de por
+    /// defecto para que Inicio siga mostrando 3.
+    static let retired: Set<String> = ["fijo", "sueldo", "anual", "historial"]
 
     private(set) var order: [QuickActionKind]
     private(set) var pinned: [QuickActionKind]
@@ -75,7 +67,7 @@ struct QuickActionLayout: Equatable, Sendable {
         normalize()
     }
 
-    /// Texto "orden|fijadas", por ejemplo "gasto,ingreso,...|gasto,ingreso,fijo".
+    /// Texto "orden|fijadas", por ejemplo "gasto,ingreso,...|gasto,ingreso,fijos".
     init(stored: String) {
         let parts = stored.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
         func kinds(_ text: String) -> [QuickActionKind] {
@@ -85,7 +77,22 @@ struct QuickActionLayout: Equatable, Sendable {
             self = .standard
             return
         }
-        self.init(order: kinds(parts[0]), pinned: kinds(parts[1]))
+        let storedPins = parts[1].split(separator: ",").map(String.init)
+        var pinned = kinds(parts[1])
+        if storedPins.contains(where: Self.retired.contains) {
+            pinned = Self.filled(pinned)
+        }
+        self.init(order: kinds(parts[0]), pinned: pinned)
+    }
+
+    /// Completa las fijadas con las de por defecto, sin repetir, hasta llegar a 3.
+    static func filled(_ pinned: [QuickActionKind]) -> [QuickActionKind] {
+        var result: [QuickActionKind] = []
+        for kind in pinned where !result.contains(kind) { result.append(kind) }
+        for kind in standard.pinned + QuickActionKind.allCases where result.count < pinnedLimit && !result.contains(kind) {
+            result.append(kind)
+        }
+        return result
     }
 
     var stored: String {

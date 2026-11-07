@@ -45,7 +45,10 @@ object BackupCodec {
         put("spaces", JSONArray().put(stamps(JSONObject().put("id", SPACE).put("ownerId", OWNER).put("name", "Personal").put("kindRaw", "personal")
             .put("currencyCode", currency.code).put("colorHex", "F55F1F").opt("icon", null).put("shareTotalsOnly", false).put("defaultSplit", 50).opt("endsOn", null))))
         put("categories", JSONArray(Categories.all.map { stamps(JSONObject().put("id", it.id).opt("ownerSpaceId", null).put("name", it.name).put("icon", it.icon)
-            .opt("colorHex", null).put("sort", it.sort).opt("lastUsedAt", null)) }))
+            .opt("colorHex", null).put("sort", it.sort).opt("lastUsedAt", null)) } +
+            // Las propias van con su espacio, como en iOS.
+            l.categories.map { stamps(JSONObject().put("id", it.id).put("ownerSpaceId", SPACE).put("name", it.name).put("icon", it.icon)
+                .opt("colorHex", null).put("sort", it.sort).opt("lastUsedAt", null)) }))
         put("institutions", JSONArray(l.institutions.mapIndexed { i, it -> stamps(JSONObject().put("id", it.id).put("spaceId", SPACE).put("name", it.name)
             .opt("colorHex", hex(it.colorHex)).opt("icon", null).put("hidden", it.hidden).put("sort", i)) }))
         put("products", JSONArray(l.products.map { stamps(JSONObject().put("id", it.id).put("spaceId", SPACE).put("institutionId", it.institutionId)
@@ -55,7 +58,7 @@ object BackupCodec {
             .put("hidden", it.hidden).opt("rewardProgramId", it.rewardProgramId).opt("pointsPerThousand", it.pointsPerThousand)) }))
         put("recurring", JSONArray(l.recurring.map { stamps(JSONObject().put("id", it.id).put("spaceId", SPACE).put("kindRaw", it.kind.name.lowercase()).put("name", it.name)
             .opt("icon", null).put("amountMinor", it.amountMinor).put("cycleRaw", it.cycle.raw).opt("intervalDays", it.cycle.intervalDays).put("nextDate", iso(it.nextDate))
-            .put("intervalMonths", it.cycle.intervalMonths)
+            .put("intervalMonths", it.cycle.intervalMonths).opt("firstDay", it.cycle.firstDay).opt("secondDay", it.cycle.secondDay)
             .put("anchorDay", it.anchor.day).put("anchorMonth", it.anchor.month).opt("categoryId", it.categoryId).opt("productId", it.productId).opt("responsibleId", null)
             .put("active", it.active).opt("createdBy", null).put("dateUnset", it.dateUnset).opt("endDate", it.endDate?.let(::iso)).opt("totalCount", it.totalCount)
             .put("paidCount", it.paidCount)) }))
@@ -79,6 +82,9 @@ object BackupCodec {
             .put("balanceAt", now())) }))
         put("merchantAliases", JSONArray(l.merchantAliases.map { stamps(JSONObject().put("id", it.id).put("spaceId", SPACE).put("key", it.key).put("name", it.name)
             .opt("categoryId", it.categoryId)) }))
+        // Quién te debe: mismas claves que BackupSnapshot.debts y debtPayments de iOS.
+        put("debts", JSONArray(l.debts.map { stamps(DebtRows.debt(it, SPACE, ::iso)) }))
+        put("debtPayments", JSONArray(l.debtPayments.map { stamps(DebtRows.payment(it, SPACE, ::iso)) }))
     }
 
     class NotMProgress : Exception("Este archivo no es un respaldo de MProgress.")
@@ -102,7 +108,7 @@ object BackupCodec {
             recurring = o.optJSONArray("recurring").rows {
                 val rem = reminders[it.getString("id")]
                 RecurringRecord(id = it.getString("id"), kind = kind(it.getString("kindRaw")), name = it.getString("name"), amountMinor = it.getLong("amountMinor"),
-                    cycle = Cycle.from(it.getString("cycleRaw"), it.int("intervalDays"), it.int("intervalMonths")), nextDate = day(it.getString("nextDate")),
+                    cycle = Cycle.from(it.getString("cycleRaw"), it.int("intervalDays"), it.int("intervalMonths"), it.int("firstDay"), it.int("secondDay")), nextDate = day(it.getString("nextDate")),
                     anchor = CycleAnchor(it.getInt("anchorDay"), it.getInt("anchorMonth")), active = it.optBoolean("active", true), dateUnset = it.optBoolean("dateUnset", false),
                     categoryId = it.str("categoryId"), productId = it.str("productId"), endDate = it.str("endDate")?.let(::day), totalCount = it.int("totalCount"),
                     paidCount = it.optInt("paidCount", 0),
@@ -120,8 +126,14 @@ object BackupCodec {
             contributions = o.optJSONArray("contributions").rows { ContributionRecord(it.getString("id"), it.getString("goalId"), it.getLong("amountMinor"), day(it.getString("occurredAt"))) },
             rewards = o.optJSONArray("rewards").rows { RewardRecord(it.getString("id"), it.getString("name"), RewardKind.from(it.str("kindRaw")), it.optLong("balance"), it.dbl("valuePerPoint"), it.str("expiresAt")?.let(::day)) },
             merchantAliases = o.optJSONArray("merchantAliases").rows { MerchantAliasRule(it.getString("id"), it.getString("key"), it.getString("name"), it.str("categoryId")) },
+            // Solo las propias (con espacio); las de la app ya están en Categories.all.
+            categories = o.optJSONArray("categories").rows { c ->
+                if (c.str("ownerSpaceId") == null) null else CategoryRecord(c.getString("id"), c.getString("name"), c.optString("icon", "square.grid.2x2"), c.optInt("sort", 50))
+            },
         )
-        return ledger to currency
+        val withDebts = ledger.copy(debts = DebtRows.alive(o.optJSONArray("debts")) { DebtRows.debtFrom(it) { t -> day(t) } },
+            debtPayments = DebtRows.alive(o.optJSONArray("debtPayments")) { DebtRows.paymentFrom(it) { t -> day(t) } })
+        return withDebts to currency
     }
 
     fun summary(l: Ledger) = "${l.entries.size} movimientos, ${l.recurring.size} pagos fijos y ${l.institutions.size} bancos"

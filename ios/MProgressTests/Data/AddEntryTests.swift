@@ -63,8 +63,33 @@ struct AddEntryTests {
         let model = AddEntryModel(cycle: .mensual)
         model.date = fecha(2026, 11, 8)
         #expect(model.cycleSummary(calendar: bogota) == "Mensual · el 8 de cada mes")
-        model.cycleChoice = .otra
-        model.everyDays = 10
+        model.selectRepeat(.otra, calendar: bogota)
+        model.repeatDraft.unit = .dias
+        model.repeatDraft.countText = "10"
         #expect(model.cycleSummary(calendar: bogota) == "Cada 10 días")
+        model.repeatDraft.countText = "400"
+        #expect(!model.canSave)
+        model.selectRepeat(.unaVez, calendar: bogota)
+        #expect(model.cycleSummary(calendar: bogota) == "Una vez")
+    }
+
+    @Test("Quincenal lleva la fecha al próximo día de quincena y guarda los dos días")
+    func quincenal() throws {
+        let model = modelo("Sueldo", ["2", "0", "0", "0", "0", "0", "0"], ciclo: .puntual, fecha: fecha(2026, 11, 7, 9))
+        model.kind = .ingreso
+        model.selectRepeat(.quincenal, now: fecha(2026, 11, 7, 10), calendar: bogota)
+        #expect(dia(model.date) == "2026-11-15")
+        #expect(model.cycleSummary(calendar: bogota) == "Quincenal · 15 y último día")
+        model.selectRepeat(.unaVez, now: fecha(2026, 11, 7, 10), calendar: bogota)
+        #expect(dia(model.date) == "2026-11-07")
+        model.selectRepeat(.quincenal, now: fecha(2026, 11, 7, 10), calendar: bogota)
+        let entry = try model.save(context: container.mainContext, spaceId: space.id, now: fecha(2026, 11, 7, 10), calendar: bogota)
+        #expect(entry == nil)
+        let item = try #require(try container.mainContext.fetch(FetchDescriptor<Recurring>()).first)
+        #expect(item.cycleRaw == "quincenal")
+        #expect(item.firstDay == 15)
+        #expect(item.secondDay == 31)
+        #expect(item.cycle == .quincenal(.standard))
+        #expect(BackupRows.make(BackupRows.row(item)).cycle == .quincenal(.standard))
     }
 }

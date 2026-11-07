@@ -63,6 +63,11 @@ data class Ledger(
     val captures: List<PendingCapture> = emptyList(),
     /** Nombres de comercios aprendidos (Ajustes › Nombres de comercios). */
     val merchantAliases: List<MerchantAliasRule> = emptyList(),
+    /** Categorías propias (las de la app viven en `Categories.all` y no se guardan aquí). */
+    val categories: List<CategoryRecord> = emptyList(),
+    /** Quién te debe: deudas con otras personas y sus abonos (data/DebtStore.kt). */
+    val debts: List<DebtRecord> = emptyList(),
+    val debtPayments: List<DebtPaymentRecord> = emptyList(),
 ) {
     val productRecords get() = products.map { it.record }
     fun balance(p: Product) = MoneyCalculator.currentBalance(p.record, productRecords, entries, transfers)
@@ -138,7 +143,8 @@ class Store internal constructor(private val file: File, val prefs: SharedPrefer
     fun showUndo(text: String, undo: (() -> Unit)? = null) { _undo.value = UndoMessage(text, undo = undo) }
     fun clearUndo() { _undo.value = null }
 
-    private fun update(change: (Ledger) -> Ledger) {
+    /** Todo cambio local pasa por aquí (también los de data/DebtStore.kt). */
+    internal fun update(change: (Ledger) -> Ledger) {
         val old = _ledger.value
         val next = change(old)
         _ledger.value = next
@@ -248,6 +254,31 @@ class Store internal constructor(private val file: File, val prefs: SharedPrefer
     fun restoreMerchantAlias(rule: MerchantAliasRule) = update { l ->
         if (l.merchantAliases.any { it.id == rule.id || it.key == rule.key }) l else l.copy(merchantAliases = l.merchantAliases + rule)
     }
+
+    // ---------- Categorías propias ----------
+
+    /** Crea una categoría propia (el nombre ya validado con CategoryForm) y la devuelve para elegirla de una vez. */
+    fun addCategory(name: String, icon: String): CategoryRecord {
+        val sorts = Categories.all.map { it.sort } + _ledger.value.categories.map { it.sort }
+        val c = CategoryRecord(UUID.randomUUID().toString(), CategoryForm.cleanName(name), icon, CategoryForm.nextSort(sorts))
+        update { l -> l.copy(categories = l.categories + c) }
+        return c
+    }
+
+    /** Cambia nombre o ícono de una propia. Las de la app no se tocan. */
+    fun updateCategory(id: String, name: String, icon: String) {
+        val clean = CategoryForm.cleanName(name)
+        if (clean.isEmpty() || Categories.isBuiltIn(id)) return
+        update { l -> l.copy(categories = l.categories.map { if (it.id == id) it.copy(name = clean, icon = icon) else it }) }
+    }
+
+    /** Borra una propia. Los movimientos conservan el id, así Deshacer la devuelve con todo. */
+    fun deleteCategory(id: String) {
+        if (Categories.isBuiltIn(id)) return
+        update { l -> l.copy(categories = l.categories.filter { it.id != id }) }
+    }
+
+    fun restoreCategory(c: CategoryRecord) = update { l -> if (l.categories.any { it.id == c.id }) l else l.copy(categories = l.categories + c) }
 
     fun deleteEntry(id: String) = update { l ->
         val e = l.entries.firstOrNull { it.id == id } ?: return@update l
@@ -447,6 +478,7 @@ class Store internal constructor(private val file: File, val prefs: SharedPrefer
         journal.clear()
         prefs.edit().clear().apply()
         _ledger.value = Ledger()
+        Categories.custom = emptyList()
         onChange?.invoke(Ledger())
         _theme.value = "oscuro"; _glass.value = "normal"; _lock.value = false; _alerts.value = AlertSettings()
         _currency.value = Currency.COP; Currency.current = Currency.COP
@@ -457,11 +489,12 @@ class Store internal constructor(private val file: File, val prefs: SharedPrefer
 
     // ---------- JSON ----------
 
-    private fun load(): Ledger = try {
+    private fun load(): Ledger = (try {
         if (!file.exists()) Ledger() else SyncRows.canonical(LedgerJson.decode(JSONObject(file.readText())))
-    } catch (e: Exception) { Ledger() }
+    } catch (e: Exception) { Ledger() }).also { Categories.custom = it.categories }
 
     private fun save(l: Ledger) {
+        Categories.custom = l.categories
         val tmp = File(file.parentFile, file.name + ".tmp")
         tmp.writeText(encode(l).toString())
         tmp.renameTo(file)

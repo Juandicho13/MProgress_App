@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ícono temático (Samsung, Android 13+): el símbolo más pequeño para que no se corte al teñirlo. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:drawable="@mipmap/ic_fg_anillo" android:inset="16%" />

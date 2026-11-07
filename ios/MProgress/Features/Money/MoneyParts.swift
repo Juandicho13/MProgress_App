@@ -33,6 +33,7 @@ enum InstitutionStyle {
         case .cuenta: "building.columns"
         case .debito, .credito: "creditcard"
         case .bolsillo: "archivebox"
+        case .cajita: "chart.line.uptrend.xyaxis"
         case .efectivo: "banknote"
         }
     }

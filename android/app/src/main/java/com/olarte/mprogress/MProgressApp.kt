@@ -24,14 +24,8 @@ class MProgressApp : Application() {
         val cloud = runCatching { com.olarte.mprogress.data.cloud.CloudAccount.get(this) }.getOrNull() ?: return
         runCatching { cloud.start() }
         store.onLocalChange = { cloud.scheduleSync() }
-        runCatching {
-            val cm = getSystemService(android.net.ConnectivityManager::class.java)
-            cm?.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: android.net.Network) {
-                    android.os.Handler(android.os.Looper.getMainLooper()).post { cloud.scheduleSync() }
-                }
-            })
-        }
+        // Sin conexión la pastilla lo dice; al volver el internet se sincroniza de una vez (F10-04).
+        runCatching { com.olarte.mprogress.data.cloud.Connectivity.watch(this) { online -> cloud.connectivityChanged(online) } }
     }
 }
 

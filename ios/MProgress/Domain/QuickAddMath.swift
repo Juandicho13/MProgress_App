@@ -37,9 +37,9 @@ enum QuickAddMath {
     }
 
     /// Productos que se ofrecen: un gasto sale de tarjetas, cuentas y efectivo; un ingreso entra a cuentas,
-    /// cajitas y efectivo. Lo oculto también se ofrece (ocultar es solo para los saldos).
+    /// bolsillos, cajitas y efectivo. Lo oculto también se ofrece (ocultar es solo para los saldos).
     static func offers(_ kind: ProductKind, for entry: EntryKind) -> Bool {
-        entry == .gasto ? kind != .bolsillo : kind != .credito && kind != .debito
+        entry == .gasto ? kind != .bolsillo && kind != .cajita : kind != .credito && kind != .debito
     }
 }
 

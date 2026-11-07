@@ -87,4 +87,46 @@ struct CloudSyncTests {
         _ = try await SyncEngine(local: SwiftDataSyncStore(context: containerA.mainContext, defaults: defaultsA), remote: remoteA).run()
         #expect(try LedgerStore(context: containerA.mainContext).entries(spaceId: spaceId).isEmpty)
     }
+
+    @Test("Primera subida (F10-05): el segundo iPhone une su categoría repetida con la de la nube y no duplica nada")
+    func primeraSubida() async throws {
+        let crypto = CryptoKitProvider()
+        let key = SpaceKeyWrap.newSpaceKey(crypto: crypto)
+        let server = FakeEnvelopeServer()
+        let spaceId = UUID()
+
+        let (containerA, _, defaultsA) = try phone()
+        let contextA = containerA.mainContext
+        try SpaceAdoption.adopt(spaceId, ownerId: UUID(), context: contextA)
+        let petsA = SpendCategory(ownerSpaceId: spaceId, name: "Mascotas", icon: "pawprint", sort: 20)
+        contextA.insert(petsA)
+        try contextA.save()
+        try LedgerStore(context: contextA, calendar: bogota)
+            .addEntry(spaceId: spaceId, kind: .gasto, amountMinor: pesos(60_000), name: "Concentrado", categoryId: petsA.id)
+        let remoteA = EncryptedRemote(transport: server, crypto: crypto, defaultSpaceId: spaceId) { $0 == spaceId ? key : nil }
+        let first = try await SyncEngine(local: SwiftDataSyncStore(context: contextA, defaults: defaultsA), remote: remoteA,
+                                         batchSize: InitialUpload.batchSize).initialUpload()
+        #expect(first.pushed >= 3)
+
+        let (containerB, _, defaultsB) = try phone()
+        let contextB = containerB.mainContext
+        try SpaceAdoption.adopt(spaceId, ownerId: UUID(), context: contextB)
+        let petsB = SpendCategory(ownerSpaceId: spaceId, name: "mascotas ", icon: "pawprint", sort: 20)
+        contextB.insert(petsB)
+        try contextB.save()
+        let vet = try LedgerStore(context: contextB, calendar: bogota)
+            .addEntry(spaceId: spaceId, kind: .gasto, amountMinor: pesos(90_000), name: "Veterinaria", categoryId: petsB.id)
+        let storeB = SwiftDataSyncStore(context: contextB, defaults: defaultsB)
+        let remoteB = EncryptedRemote(transport: server, crypto: crypto, defaultSpaceId: spaceId) { $0 == spaceId ? key : nil }
+        var seen: [Int] = []
+        _ = try await SyncEngine(local: storeB, remote: remoteB, batchSize: InitialUpload.batchSize).initialUpload { done, _ in seen.append(done) }
+
+        let ownCategories = try contextB.fetch(FetchDescriptor<SpendCategory>()).filter { $0.ownerSpaceId != nil }
+        #expect(ownCategories.map(\.id) == [petsA.id])
+        #expect(vet.categoryId == petsA.id)
+        #expect(server.rows.values.filter { $0.entity == "categories" }.count == 1)
+        #expect(server.rows.values.filter { $0.entity == "entries" }.count == 2)
+        #expect(seen.first == 0)
+        #expect(try SwiftDataSyncStore(context: contextB, defaults: defaultsB).pending().isEmpty)
+    }
 }

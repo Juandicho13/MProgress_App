@@ -52,9 +52,11 @@ import com.olarte.mprogress.domain.EntryKind
 import com.olarte.mprogress.domain.EntryRecord
 import com.olarte.mprogress.domain.Money
 import com.olarte.mprogress.domain.SummaryMath
+import com.olarte.mprogress.domain.SummaryFilter
 import com.olarte.mprogress.domain.BalanceCalculator
 import com.olarte.mprogress.ui.components.Card
-import com.olarte.mprogress.ui.components.Chip
+import com.olarte.mprogress.ui.components.FilterPill
+import com.olarte.mprogress.ui.components.Sym
 import com.olarte.mprogress.ui.components.T
 import com.olarte.mprogress.ui.components.Type
 import com.olarte.mprogress.ui.theme.Palette
@@ -68,45 +70,62 @@ private fun money(minor: Long, sign: Boolean = false) = Money(minor).formatted(s
 
 /** Resumen (pantalla 10), igual que SummaryView de iOS: periodo, este mes (solo datos reales), ingresos y gastos, cómo va tu gasto, en qué gastas, tu mes normal, el mes que viene y los próximos 3 meses con pagos fijos. */
 @Composable
-fun SummaryScreen(store: Store, today: LocalDate = LocalDate.now()) {
+fun SummaryScreen(store: Store, today: LocalDate = LocalDate.now(), initialCategories: Set<String> = emptySet()) {
     val ledger by store.ledger.collectAsState()
     var months by remember { mutableStateOf(12) }
-    var categoryId by remember { mutableStateOf<String?>(null) }
-    val start = YearMonth.from(today).minusMonths(months - 1L)
-    val inPeriod = ledger.entries.filter { !YearMonth.from(it.occurredAt).isBefore(start) && !YearMonth.from(it.occurredAt).isAfter(YearMonth.from(today)) }
-    val chipIds = inPeriod.filter { it.kind == EntryKind.GASTO }.mapNotNull { it.categoryId }.distinct().sortedBy { com.olarte.mprogress.domain.Categories.byId(it)?.sort ?: 999 }
-    val filtered = if (categoryId == null) ledger.entries else ledger.entries.filter { it.kind == EntryKind.GASTO && it.categoryId == categoryId }
-    val visible = inPeriod.filter { categoryId == null || (it.kind == EntryKind.GASTO && it.categoryId == categoryId) }
+    // Categorías elegidas en la barra de filtros; vacío es "Todas".
+    var selected by remember { mutableStateOf(initialCategories) }
+    val inPeriod = SummaryFilter.inPeriod(ledger.entries, today, months)
+    val chipIds = SummaryFilter.chips(inPeriod)
+    val filter = SummaryFilter.effective(selected, chipIds)
+    val filtered = SummaryFilter.apply(ledger.entries, filter)
+    val visible = SummaryFilter.apply(inPeriod, filter)
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(horizontal = Spacing.margen).padding(top = Spacing.s4, bottom = 120.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(top = Spacing.s4, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(Spacing.s5),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            T("Resumen", Type.titulo1, modifier = Modifier.weight(1f))
+        T("Resumen", Type.titulo1, modifier = Modifier.padding(horizontal = Spacing.margen))
+        // Barra de filtros: el periodo, "Todas" y una pastilla por categoría con gasto en el periodo (de mayor a menor).
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.margen), horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
             PeriodMenu(months) { months = it }
-        }
-        if (chipIds.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-            Chip("Todas", categoryId == null) { categoryId = null }
-            chipIds.forEach { id -> Chip(com.olarte.mprogress.domain.Categories.byId(id)?.name ?: "Sin categoría", categoryId == id) { categoryId = if (categoryId == id) null else id } }
-        }
-        if (ledger.entries.isEmpty()) EmptyCard() else {
-            MonthFactsCard(ledger.entries, ledger.recurring.filter { it.active }, today)
-            FlowsCard(SummaryMath.flows(filtered, today, months).map { Triple(it.month, it.incomeMinor, it.spentMinor) }, categoryId)
-            PaceCard(filtered, today)
-            CategoriesCard(visible)
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-                val normal = SummaryMath.normalMonth(ledger.entries, today)
-                val totals = (1..12).map { off -> val m = YearMonth.from(today).minusMonths(off.toLong())
-                    ledger.entries.filter { it.kind == EntryKind.GASTO && YearMonth.from(it.occurredAt) == m }.sumOf { it.amountMinor } }.filter { it > 0 }
-                SmallCard("Tu mes normal", normal?.let { money(it) } ?: "Sin datos",
-                    normal?.let { n -> "${totals.count { it > n }} de ${totals.size} meses arriba" } ?: "Necesita un mes completo", Modifier.weight(1f))
-                val next = today.withDayOfMonth(1).plusMonths(1)
-                var count = 0; var expense = 0L
-                ledger.recurring.forEach { r -> val c = BalanceCalculator.pendingOccurrences(r, next).size; count += c; if (r.kind == EntryKind.GASTO) expense += c * r.amountMinor }
-                SmallCard("El mes que viene", money(expense), if (count == 0) "Nada programado" else "ya previsto en $count ${if (count == 1) "pago" else "pagos"}", Modifier.weight(1f))
+            if (chipIds.isNotEmpty()) {
+                FilterPill("Todas", filter == null) { selected = emptySet() }
+                chipIds.forEach { id ->
+                    val category = com.olarte.mprogress.domain.Categories.byId(id)
+                    FilterPill(category?.name ?: "Sin categoría", filter?.contains(id) == true, icon = Sym.sf(category?.icon) ?: Sym.sf("square.grid.2x2")) {
+                        selected = SummaryFilter.toggle(filter ?: emptySet(), id)
+                    }
+                }
             }
-            NextMonthsCard(com.olarte.mprogress.domain.Forecast.nextMonths(3, ledger.recurring, today))
+        }
+        Column(Modifier.padding(horizontal = Spacing.margen), verticalArrangement = Arrangement.spacedBy(Spacing.s5)) {
+            if (ledger.entries.isEmpty()) {
+                // Sin movimientos todavía: si ya hay pagos fijos, igual se ve lo que viene (el sueldo, los cobros).
+                if (ledger.recurring.any { it.active }) {
+                    MonthFactsCard(ledger.entries, ledger.recurring.filter { it.active }, today)
+                    NextMonthsCard(com.olarte.mprogress.domain.Forecast.nextMonths(3, ledger.recurring, today))
+                }
+                EmptyCard()
+            } else {
+                MonthFactsCard(ledger.entries, ledger.recurring.filter { it.active }, today)
+                FlowsCard(SummaryMath.flows(filtered, today, months).map { Triple(it.month, it.incomeMinor, it.spentMinor) },
+                    SummaryFilter.spendTitle(chipIds.filter { filter?.contains(it) == true }.map { com.olarte.mprogress.domain.Categories.byId(it)?.name ?: "Sin categoría" }), filter == null)
+                PaceCard(filtered, today)
+                CategoriesCard(visible)
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
+                    val normal = SummaryMath.normalMonth(ledger.entries, today)
+                    val totals = (1..12).map { off -> val m = YearMonth.from(today).minusMonths(off.toLong())
+                        ledger.entries.filter { it.kind == EntryKind.GASTO && YearMonth.from(it.occurredAt) == m }.sumOf { it.amountMinor } }.filter { it > 0 }
+                    SmallCard("Tu mes normal", normal?.let { money(it) } ?: "Sin datos",
+                        normal?.let { n -> "${totals.count { it > n }} de ${totals.size} meses arriba" } ?: "Necesita un mes completo", Modifier.weight(1f))
+                    val next = today.withDayOfMonth(1).plusMonths(1)
+                    var count = 0; var expense = 0L
+                    ledger.recurring.forEach { r -> val c = BalanceCalculator.pendingOccurrences(r, next).size; count += c; if (r.kind == EntryKind.GASTO) expense += c * r.amountMinor }
+                    SmallCard("El mes que viene", money(expense), if (count == 0) "Nada programado" else "ya previsto en $count ${if (count == 1) "pago" else "pagos"}", Modifier.weight(1f))
+                }
+                NextMonthsCard(com.olarte.mprogress.domain.Forecast.nextMonths(3, ledger.recurring, today))
+            }
         }
     }
 }
@@ -115,11 +134,7 @@ fun SummaryScreen(store: Store, today: LocalDate = LocalDate.now()) {
 private fun PeriodMenu(months: Int, onPick: (Int) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        Row(Modifier.heightIn(min = 36.dp).clip(CircleShape).background(Palette.superficie1).clickable { open = true }.padding(horizontal = Spacing.s4),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s1)) {
-            T(presets.first { it.first == months }.second, Type.etiqueta)
-            Icon(Icons.Rounded.KeyboardArrowDown, null, Modifier.size(16.dp), tint = Palette.texto1)
-        }
+        FilterPill(presets.first { it.first == months }.second, chevron = true) { open = true }
         DropdownMenu(open, { open = false }, containerColor = Palette.superficie2) {
             presets.forEach { (m, title) ->
                 DropdownMenuItem({ T(title, Type.cuerpo) }, { onPick(m); open = false },
@@ -138,13 +153,12 @@ private fun LegendDot(color: Color, text: String, textColor: Color = color) {
 }
 
 @Composable
-private fun FlowsCard(flows: List<Triple<YearMonth, Long, Long>>, categoryId: String?) {
+private fun FlowsCard(flows: List<Triple<YearMonth, Long, Long>>, title: String, showsIncome: Boolean) {
     val income = flows.sumOf { it.second }; val spent = flows.sumOf { it.third }
     val hielo = Palette.hielo
     Card {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.s3)) {
-            val showsIncome = categoryId == null
-            T(if (showsIncome) "Ingresos y gastos" else "Gastos de ${com.olarte.mprogress.domain.Categories.byId(categoryId)?.name ?: "Sin categoría"}", Type.cuerpo2, Palette.texto2)
+            T(title, Type.cuerpo2, Palette.texto2)
             T(if (showsIncome) money(income - spent, sign = true) else money(spent), Type.cifraGrande, maxLines = 1)
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s3)) {
                 if (showsIncome) LegendDot(hielo, "Ingresos ${money(income)}")

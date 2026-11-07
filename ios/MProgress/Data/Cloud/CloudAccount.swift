@@ -42,6 +42,29 @@ final class CloudAccount {
     /// Aviso "Aprueba tu otro iPhone" (se muestra una vez por dispositivo y por sesión).
     var approvalPrompt: RemoteDevice?
 
+    /// Avance de la primera subida (F10-05): "Subiendo tus datos: 120 de 340".
+    struct UploadProgress: Equatable {
+        var done: Int
+        var total: Int
+    }
+
+    private(set) var uploadProgress: UploadProgress?
+    /// La primera subida de este usuario a este espacio ya se hizo: "Tus datos ya están en la nube, cifrados".
+    private(set) var initialUploadDone = false
+    /// Cambios sin subir por tabla (pastilla y hoja de estado, F10-04).
+    private(set) var pendingCounts: [String: Int] = [:]
+    /// Los que no subieron después de 3 intentos.
+    private(set) var failedCount = 0
+    /// Último error de la nube en palabras (los de conexión no: esos los dice la pastilla).
+    private(set) var lastError: String?
+    /// Lo que dice NWPathMonitor.
+    private(set) var isOnline = true
+    /// La nube no respondió por la red aunque el sistema diga que hay ruta (portal cautivo, red caída).
+    private var offlineByError = false
+    /// Errores seguidos de la nube, para esperar más antes de reintentar (`SyncBackoff`).
+    private var failures = 0
+    private var retryTask: Task<Void, Never>?
+
     private var session: CloudSession?
     private var spaceId: UUID?
     private var isSyncing = false
@@ -53,6 +76,21 @@ final class CloudAccount {
     var isSignedIn: Bool { session != nil }
     var thisDeviceId: UUID { deviceId() }
 
+    /// Hay internet y la nube responde.
+    var isReachable: Bool { isOnline && !offlineByError }
+    var pendingTotal: Int { pendingCounts.values.reduce(0, +) }
+
+    /// Estado de la pastilla de Inicio. Nil sin cuenta (o mientras este dispositivo no tiene la llave).
+    var pill: SyncPill? {
+        SyncPill.state(signedIn: phase == .ready, online: isReachable, running: isSyncing, pending: pendingTotal,
+                       failed: failedCount, hasError: lastError != nil)
+    }
+
+    /// Marca "Pendiente" junto a un movimiento: con cuenta y con un cambio que todavía no sube.
+    func showsPendingMark(_ model: some SyncTracked) -> Bool {
+        phase == .ready && model.syncStateRaw != SyncState.synced.rawValue
+    }
+
     private var api: CloudAPI { CloudAPI(accessToken: { [unowned self] in try await self.validAccessToken() }) }
 
     private var context: ModelContext? { try? Persistence.shared().mainContext }
@@ -61,12 +99,16 @@ final class CloudAccount {
 
     /// Lee la sesión del llavero. Si ya tenía la llave, queda lista sin esperar a la red.
     func start() {
+        // Sin conexión la pastilla lo dice; al volver el internet se sincroniza (F10-04).
+        Connectivity.shared.start { online in CloudAccount.shared.connectivityChanged(online) }
         guard let data = Keychain.read(Keychain.session), let saved = try? JSONDecoder().decode(CloudSession.self, from: data) else { return }
         session = saved
         email = saved.email
         if let stored = UserDefaults.standard.string(forKey: Self.spaceIdKey), let id = UUID(uuidString: stored), spaceKey(id) != nil {
             spaceId = id
             phase = .ready
+            initialUploadDone = UserDefaults.standard.bool(forKey: InitialUpload.storageKey(spaceId: id, userId: saved.userId))
+            refreshPending()
         } else {
             phase = .connecting
         }
@@ -155,6 +197,7 @@ final class CloudAccount {
             try SpaceAdoption.adopt(remoteSpace, ownerId: session.userId, context: context)
             spaceId = remoteSpace
             UserDefaults.standard.set(E2EEFormat.id(remoteSpace), forKey: Self.spaceIdKey)
+            initialUploadDone = UserDefaults.standard.bool(forKey: InitialUpload.storageKey(spaceId: remoteSpace, userId: session.userId))
 
             let keys = deviceKeys()
             try await api.registerDevice(id: deviceId(), userId: session.userId, publicKey: keys.publicKey, name: "iPhone")
@@ -196,7 +239,10 @@ final class CloudAccount {
         } catch {
             // Sin conexión con la llave ya guardada se sigue trabajando; al volver la red se sincroniza.
             if let spaceId, spaceKey(spaceId) != nil { phase = .ready }
-            status = (error as? CloudError) == .offline ? .sinConexion(pending: pendingCount()) : .error(error.localizedDescription)
+            let offline = (error as? CloudError) == .offline
+            if offline { offlineByError = true }
+            refreshPending()
+            status = offline ? .sinConexion(pending: pendingCount()) : .error(error.localizedDescription)
             errorText = error.localizedDescription
         }
     }
@@ -302,22 +348,44 @@ final class CloudAccount {
 
     // MARK: Sincronizar
 
-    /// Al abrir, al volver a primer plano, después de guardar (con retraso) y con "Sincronizar ahora".
+    /// Al abrir, al volver a primer plano, después de guardar (con retraso), al volver el internet y con "Sincronizar ahora".
+    /// La primera vez de este usuario en este espacio es la primera subida (F10-05): baja primero, une duplicados y sube
+    /// todo lo local una sola vez, con avance.
     func sync() async {
-        guard phase == .ready, !isSyncing, let spaceId, let key = spaceKey(spaceId), let context else { return }
+        guard phase == .ready, !isSyncing, let spaceId, let key = spaceKey(spaceId), let context, let userId = session?.userId else { return }
+        retryTask?.cancel()
+        retryTask = nil
         isSyncing = true
         status = .sincronizando
-        defer { isSyncing = false }
+        defer {
+            isSyncing = false
+            uploadProgress = nil
+            refreshPending()
+        }
         let local = SwiftDataSyncStore(context: context)
         let remote = EncryptedRemote(transport: PostgrestEnvelopeTransport(api: api), crypto: crypto, defaultSpaceId: spaceId) { id in
             id == spaceId ? key : nil
         }
+        let doneKey = InitialUpload.storageKey(spaceId: spaceId, userId: userId)
         do {
-            _ = try await SyncEngine(local: local, remote: remote).run()
+            if UserDefaults.standard.bool(forKey: doneKey) {
+                _ = try await SyncEngine(local: local, remote: remote).run()
+            } else {
+                uploadProgress = UploadProgress(done: 0, total: 0)
+                let engine = SyncEngine(local: local, remote: remote, batchSize: InitialUpload.batchSize)
+                _ = try await engine.initialUpload { [weak self] done, total in
+                    self?.uploadProgress = UploadProgress(done: done, total: total)
+                }
+                UserDefaults.standard.set(true, forKey: doneKey)
+                initialUploadDone = true
+            }
             lastSyncAt = .now
             let failed = local.failedCount()
             status = SyncEngine.status(online: true, pending: 0, failed: failed, running: false)
             errorText = nil
+            lastError = nil
+            offlineByError = false
+            failures = 0
             if local.appliedChanges > 0 {
                 WidgetPublisher.publish(context: context)
                 await NotificationScheduler.reschedule(context: context)
@@ -327,14 +395,20 @@ final class CloudAccount {
             forgetSession()
             errorText = CloudError.notSignedIn.localizedDescription
         } catch CloudError.offline {
+            // Sin internet no se reintenta con reloj: se espera a que vuelva la conexión (connectivityChanged).
+            offlineByError = true
             status = .sinConexion(pending: local.pendingCount())
         } catch {
-            status = .error(error.localizedDescription)
+            let text = Self.describe(error)
+            lastError = text
+            status = .error(text)
+            scheduleRetry()
         }
     }
 
     /// Sincroniza unos segundos después del último cambio guardado.
     func scheduleSync() {
+        refreshPending()
         guard phase == .ready, !isSyncing else { return }
         scheduled?.cancel()
         scheduled = Task { [weak self] in
@@ -344,11 +418,63 @@ final class CloudAccount {
         }
     }
 
-    /// Vuelve a intentar lo que no subió después de 3 intentos.
+    /// Vuelve a intentar lo que no subió después de 3 intentos ("Reintentar" en la hoja de estado).
     func retryFailed() async {
         guard let context else { return }
         try? SwiftDataSyncStore(context: context).retryFailed()
+        failures = 0
+        lastError = nil
         await sync()
+    }
+
+    /// NWPathMonitor cambió. Al volver el internet se sincroniza de una vez (o se vuelve a conectar si no alcanzó).
+    func connectivityChanged(_ online: Bool) {
+        let cameBack = online && (!isOnline || offlineByError)
+        isOnline = online
+        if !online {
+            if phase == .ready { status = .sinConexion(pending: pendingTotal) }
+            return
+        }
+        guard cameBack else { return }
+        offlineByError = false
+        failures = 0
+        Task { [weak self] in
+            guard let self else { return }
+            if self.phase == .ready { await self.sync() } else if self.isSignedIn, self.phase == .connecting { await self.connect() }
+        }
+    }
+
+    /// Vuelve a intentar después de un error de la nube, cada vez esperando más (5 s hasta 5 min). Una sola espera a la vez.
+    private func scheduleRetry() {
+        failures += 1
+        let wait = SyncBackoff.delay(failures: failures)
+        retryTask?.cancel()
+        retryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(wait))
+            guard !Task.isCancelled else { return }
+            await self?.sync()
+        }
+    }
+
+    /// Cuenta lo que falta por subir, por tipo (para la pastilla, la hoja y las marcas).
+    func refreshPending() {
+        guard phase == .ready, let context else {
+            if !pendingCounts.isEmpty { pendingCounts = [:] }
+            if failedCount != 0 { failedCount = 0 }
+            return
+        }
+        let store = SwiftDataSyncStore(context: context)
+        let counts = store.pendingCounts()
+        if counts != pendingCounts { pendingCounts = counts }
+        let failed = store.failedCount()
+        if failed != failedCount { failedCount = failed }
+    }
+
+    /// El error en palabras para la persona.
+    private static func describe(_ error: Error) -> String {
+        if let cloud = error as? CloudError { return cloud.localizedDescription }
+        if let e2ee = error as? E2EEError { return e2ee == .missingKey ? SyncText.missingKeyError : e2ee.localizedDescription }
+        return SyncText.genericError
     }
 
     func pendingCount() -> Int {
@@ -390,6 +516,15 @@ final class CloudAccount {
         pendingApprovals = []
         lastSyncAt = nil
         status = .sincronizado
+        retryTask?.cancel()
+        retryTask = nil
+        failures = 0
+        lastError = nil
+        offlineByError = false
+        uploadProgress = nil
+        initialUploadDone = false
+        pendingCounts = [:]
+        failedCount = 0
     }
 
     private func forgetSession() {

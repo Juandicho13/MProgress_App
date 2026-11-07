@@ -113,6 +113,7 @@ fun SettingsScreen(store: Store) {
                     com.olarte.mprogress.ui.Biometric.authenticate(activity, "Activar el bloqueo") { ok -> store.setLock(ok) }
                 } else store.showUndo("Configura una huella, rostro o código en el teléfono para usar el bloqueo.")
             }
+            if (lock) { Divider(); LockDelayRow(store.prefs) }
             Divider()
             Row("Moneda", "${currency.code} ${currency.symbol}") { page = "moneda" }
             Divider()
@@ -145,6 +146,15 @@ fun SettingsScreen(store: Store) {
             Row("Novedades", version) { page = "novedades" }
             Divider()
             Row("Escríbeme", "Pronto", enabled = false)
+            // Primeros pasos ocultos con la X en Inicio: aquí se vuelven a mostrar.
+            var guideHidden by remember { mutableStateOf(store.prefs.getBoolean(com.olarte.mprogress.domain.Guide.DISMISSED_KEY, false)) }
+            if (guideHidden) {
+                Divider()
+                Row(com.olarte.mprogress.domain.Guide.SETTINGS_TITLE, com.olarte.mprogress.domain.Guide.SETTINGS_VALUE) {
+                    store.prefs.edit().putBoolean(com.olarte.mprogress.domain.Guide.DISMISSED_KEY, false).apply(); guideHidden = false
+                    store.showUndo("Los primeros pasos vuelven a Inicio")
+                }
+            }
         }
         SectionLabel("Cuenta")
         Card(padding = Spacing.s2) {

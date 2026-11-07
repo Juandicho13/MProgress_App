@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Detalle de banco (pantalla 32): total, cuentas, cajitas con rendimiento y tarjetas.
+/// Detalle de banco (pantalla 32): total, cuentas, bolsillos, cajitas con rendimiento y tarjetas.
 struct InstitutionDetailView: View {
     let institutionId: UUID
 
@@ -54,18 +54,22 @@ private struct InstitutionDetailContent: View {
                         .foregroundStyle(Palette.texto2)
                 } else {
                     section("Cuenta", kinds: [.cuenta, .efectivo])
-                    section("Cajitas", kinds: [.bolsillo])
+                    section("Bolsillos", kinds: [.bolsillo])
+                    section("Cajitas", kinds: [.cajita])
                     section("Tarjetas", kinds: [.credito, .debito])
                     if products.isEmpty {
-                        Text("Agrega la cuenta, cajitas o tarjetas que tienes en \(institution.name).")
+                        Text("Agrega la cuenta, bolsillos, cajitas o tarjetas que tienes en \(institution.name).")
                             .appFont(.cuerpo)
                             .foregroundStyle(Palette.texto2)
                     }
                     HStack(spacing: Spacing.s3) {
-                        Button("+ Cajita") { adding = .bolsillo }.buttonStyle(.secondary)
-                        Button("+ Tarjeta") { adding = .credito }.buttonStyle(.secondary)
+                        Button("+ Bolsillo") { adding = .bolsillo }.buttonStyle(.secondary)
+                        Button("+ Cajita") { adding = .cajita }.buttonStyle(.secondary)
                     }
-                    Button("+ Cuenta") { adding = .cuenta }.buttonStyle(.secondary)
+                    HStack(spacing: Spacing.s3) {
+                        Button("+ Tarjeta") { adding = .credito }.buttonStyle(.secondary)
+                        Button("+ Cuenta") { adding = .cuenta }.buttonStyle(.secondary)
+                    }
                 }
             }
             .padding(.horizontal, Spacing.margen)
@@ -120,7 +124,7 @@ private struct InstitutionDetailContent: View {
         .confirmationDialog("¿Borrar \(institution.name)?", isPresented: $confirmsDelete, titleVisibility: .visible) {
             Button("Borrar", role: .destructive) { delete() }
         } message: {
-            Text("Se borran sus cuentas, cajitas y tarjetas. Tus movimientos se quedan.")
+            Text("Se borran sus cuentas, bolsillos, cajitas y tarjetas. Tus movimientos se quedan.")
         }
     }
 
@@ -169,7 +173,7 @@ private struct InstitutionDetailContent: View {
         var extra: String?
         var extraColor = Palette.exito
         switch product.kind {
-        case .bolsillo:
+        case .bolsillo, .cajita:
             let yield = MoneyCalculator.monthlyYield(balanceMinor: balance, rateEA: product.rateEA)
             if yield > 0 { extra = "+ \(Money(minor: yield, currency: currency).formatted())" }
         case .credito:
@@ -189,7 +193,7 @@ private struct InstitutionDetailContent: View {
         switch product.kind {
         case .cuenta: return "Disponible para gastar"
         case .efectivo: return "Efectivo"
-        case .bolsillo:
+        case .bolsillo, .cajita:
             if let rate = product.rateEA { return "Rentabilidad \(rate.formatted(.number.precision(.fractionLength(0...2))))% E.A." }
             return "Sin rentabilidad"
         case .debito:

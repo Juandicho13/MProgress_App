@@ -47,7 +47,9 @@ object Notifier {
         val prefs = store.prefs
         prefs.getStringSet(KEY_IDS, emptySet())!!.forEach { id -> am.cancel(pending(context, id, "", "")) }
         val cards = ledger.products.filter { it.kind == ProductKind.CREDITO && it.dueDay != null }.map { Triple(it.id, it.name, it.dueDay!!) }
-        val plan = ReminderPlanner.plan(ledger.recurring, store.alerts.value, store.currency.value, LocalDateTime.now(), cards = cards)
+        val plan = ReminderPlanner.plan(ledger.recurring, store.alerts.value, store.currency.value, LocalDateTime.now(), cards = cards) +
+            // Quién te debe: el día antes de cada fecha límite, a la hora de los avisos.
+            com.olarte.mprogress.domain.DebtMath.reminders(ledger.debts, ledger.debtPayments, store.alerts.value.atMinutes, store.currency.value, LocalDateTime.now())
         plan.forEach { n ->
             val at = n.fireAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending(context, n.id, n.title, n.body))

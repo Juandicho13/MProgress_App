@@ -169,6 +169,27 @@ struct AccountView: View {
                 }
             }
         }
+        // Primera subida (F10-05): avance y, al terminar, que todo quedó en la nube.
+        if let progress = cloud.uploadProgress {
+            Card {
+                HStack(spacing: Spacing.s3) {
+                    ProgressView()
+                    Text(InitialUpload.progressText(done: progress.done, total: progress.total))
+                        .appFont(.cuerpo)
+                        .foregroundStyle(Palette.texto1)
+                }
+                .frame(minHeight: Size.toqueMinimo)
+                .accessibilityElement(children: .combine)
+            }
+        } else if cloud.initialUploadDone {
+            Card {
+                HStack(spacing: Spacing.s3) {
+                    IconTile(content: .symbol("checkmark.icloud"), tint: Palette.superficie3, foreground: Palette.exito, size: 40)
+                    Text(InitialUpload.doneText).appFont(.cuerpo).foregroundStyle(Palette.texto1)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
         Card(padding: Spacing.s2) {
             VStack(spacing: 0) {
                 row("Correo", cloud.email ?? "")
@@ -205,12 +226,11 @@ struct AccountView: View {
             .buttonStyle(.secondary)
     }
 
+    /// "Al día · hace 2 min".
     private var statusText: String {
-        let base = cloud.status.title
+        let base = (cloud.pill ?? .alDia).text
         guard let last = cloud.lastSyncAt else { return base }
-        let minutes = Int(Date.now.timeIntervalSince(last) / 60)
-        let when = minutes < 1 ? "hace un momento" : minutes < 60 ? "hace \(minutes) min" : DueText.describe(last, now: .now, calendar: calendar).lowercased()
-        return "\(base) · \(when)"
+        return "\(base) · \(SyncText.relative(last, now: .now).lowercased())"
     }
 
     // MARK: Piezas

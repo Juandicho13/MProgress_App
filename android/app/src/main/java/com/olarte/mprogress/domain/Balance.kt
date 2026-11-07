@@ -81,6 +81,7 @@ object FixedMath {
         Cycle.Anual -> amountMinor / 12
         is Cycle.CadaDias -> amountMinor * 365 / (12L * maxOf(1, cycle.days))
         is Cycle.CadaMeses -> amountMinor / maxOf(1, cycle.months)
+        is Cycle.Quincenal -> amountMinor * 2
     }
 
     data class Totals(val expenseMinor: Long = 0, val incomeMinor: Long = 0, val withoutDate: Int = 0, val paused: Int = 0)
@@ -108,6 +109,7 @@ object FixedMath {
         dateUnset -> "${cycle.title} · sin fecha"
         cycle.isMonthly -> "${cycle.title} · el ${nextDate.dayOfMonth}"
         cycle == Cycle.Anual -> "Anual · ${DueText.shortDate(nextDate, today)}"
+        cycle is Cycle.Quincenal -> "Quincenal · ${cycle.days.title}"
         else -> cycle.title
     }
 }

@@ -1,5 +1,6 @@
 package com.olarte.mprogress.ui
 
+import android.os.SystemClock
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
@@ -27,6 +28,9 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.olarte.mprogress.data.Store
+import com.olarte.mprogress.domain.LockDelay
+import com.olarte.mprogress.domain.LockTimeout
 import com.olarte.mprogress.ui.components.IconTile
 import com.olarte.mprogress.ui.components.PrimaryButton
 import com.olarte.mprogress.ui.components.T
@@ -49,21 +53,42 @@ object Biometric {
     }
 }
 
-/** Bloqueo al abrir y al volver a la app, igual que LockGate de iOS. */
+/**
+ * Bloqueo al abrir y al volver a la app, igual que LockGate de iOS. Con "Bloquear" en Ajustes (como WhatsApp) solo pide la huella
+ * si estuvo fuera al menos ese tiempo; al abrirla en frío, siempre. Fuera de la app siempre queda tapada.
+ */
 @Composable
 fun LockGate(enabled: Boolean, content: @Composable () -> Unit) {
-    val activity = LocalContext.current as? FragmentActivity
+    val context = LocalContext.current
+    val activity = context as? FragmentActivity
     var locked by remember { mutableStateOf(enabled) }
+    var covered by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
+    /** Cuándo se fue a segundo plano (reloj que sigue contando con el teléfono dormido). */
+    var backgroundedAt by remember { mutableStateOf<Long?>(null) }
+    /** Mientras se muestra la huella o el código, salir y volver no cuenta como salir de la app. */
+    var authenticating by remember { mutableStateOf(false) }
     fun unlock() {
         val a = activity ?: run { locked = false; return }
-        Biometric.authenticate(a, "Desbloquear MProgress") { ok -> locked = !ok; failed = !ok }
+        authenticating = true
+        Biometric.authenticate(a, "Desbloquear MProgress") { ok -> authenticating = false; locked = !ok; failed = !ok }
     }
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner, enabled) {
         val obs = LifecycleEventObserver { _, e ->
-            if (e == Lifecycle.Event.ON_STOP && enabled) locked = true
-            if (e == Lifecycle.Event.ON_START && enabled && locked) unlock()
+            if (e == Lifecycle.Event.ON_STOP && enabled && !authenticating) {
+                covered = true
+                if (backgroundedAt == null) backgroundedAt = SystemClock.elapsedRealtime()
+            }
+            if (e == Lifecycle.Event.ON_START && enabled && !authenticating) {
+                covered = false
+                backgroundedAt?.let { at ->
+                    val delay = LockDelay.from(runCatching { Store.get(context).prefs.getInt(LockDelay.STORAGE_KEY, 0) }.getOrDefault(0))
+                    if (LockTimeout.requiresAuth(at, SystemClock.elapsedRealtime(), delay)) locked = true
+                }
+                backgroundedAt = null
+                if (locked) unlock()
+            }
         }
         owner.lifecycle.addObserver(obs)
         onDispose { owner.lifecycle.removeObserver(obs) }
@@ -71,6 +96,12 @@ fun LockGate(enabled: Boolean, content: @Composable () -> Unit) {
     LaunchedEffect(enabled) { if (!enabled) locked = false }
     Box(Modifier.fillMaxSize()) {
         content()
+        if (enabled && !locked && covered) {
+            // Lo que se ve en el selector de apps mientras no hace falta desbloquear.
+            Box(Modifier.fillMaxSize().background(Palette.fondo), contentAlignment = Alignment.Center) {
+                IconTile(Icons.Rounded.Lock, Palette.brasaVelo, Palette.brasaTinta, size = 72.dp, circle = true)
+            }
+        }
         if (enabled && locked) {
             Column(Modifier.fillMaxSize().background(Palette.fondo).padding(Spacing.margen), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(Spacing.s5, Alignment.CenterVertically)) {

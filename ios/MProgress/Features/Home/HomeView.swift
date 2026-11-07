@@ -37,6 +37,7 @@ struct HomeView: View {
     @Query(filter: #Predicate<Product> { $0.deletedAt == nil }) private var allProducts: [Product]
     @Query(filter: #Predicate<Transfer> { $0.deletedAt == nil }) private var allTransfers: [Transfer]
     @State private var errorText: String?
+    @State private var showsSyncStatus = false
 
     struct AddRequest: Identifiable {
         let id = UUID()
@@ -89,6 +90,8 @@ struct HomeView: View {
                 syncPill
                 balance
                 quickActions
+                // Primeros pasos ("Saca todo el provecho a MProgress"), debajo de los accesos rápidos.
+                GuideCard()
                 if isEmpty {
                     emptyCard
                 } else {
@@ -108,6 +111,11 @@ struct HomeView: View {
             .padding(.bottom, Spacing.s8)
         }
         .scrollIndicators(.hidden)
+        .sheet(isPresented: $showsSyncStatus) {
+            SyncStatusSheet()
+                .presentationDetents([.medium, .large])
+                .presentationCornerRadius(Radius.hoja)
+        }
         .sheet(item: $adding) { request in
             if let space {
                 AddEntryView(spaceId: space.id, kind: request.kind, cycle: request.cycle, currency: currency)
@@ -206,18 +214,22 @@ struct HomeView: View {
         }
     }
 
-    /// Pastilla de sincronización (F10): solo con cuenta, sin conexión o con error. "Sin conexión · 3 cambios sin sincronizar".
+    /// Pastilla de sincronización (F10-04, pantalla 36): solo con cuenta. "Al día", "Sincronizando…",
+    /// "Sin conexión · 3 pendientes" o "Error al sincronizar". Al tocarla abre la hoja de estado (pantalla 37).
     @ViewBuilder
     private var syncPill: some View {
-        let cloud = CloudAccount.shared
-        if cloud.isSignedIn, let text = SyncEngine.pillText(cloud.status) {
-            Label(text, systemImage: "icloud.slash")
-                .appFont(.etiqueta)
-                .foregroundStyle(Palette.texto1)
-                .padding(.horizontal, Spacing.s4)
-                .frame(minHeight: 36)
-                .glassBackground(Capsule())
-                .accessibilityElement(children: .combine)
+        if let pill = CloudAccount.shared.pill {
+            Button { showsSyncStatus = true } label: {
+                Label(pill.text, systemImage: pill.symbol)
+                    .appFont(.etiqueta)
+                    .foregroundStyle(pill == .error ? Palette.peligro : Palette.texto1)
+                    .padding(.horizontal, Spacing.s4)
+                    .frame(minHeight: 36)
+                    .glassBackground(Capsule())
+            }
+            .buttonStyle(.plain)
+            .frame(minHeight: Size.toqueMinimo)
+            .accessibilityHint("Toca para ver el estado de la sincronización")
         }
     }
 
@@ -269,13 +281,9 @@ struct HomeView: View {
         switch kind {
         case .gasto: adding = AddRequest(kind: .gasto, cycle: .puntual)
         case .ingreso: adding = AddRequest(kind: .ingreso, cycle: .puntual)
-        case .fijo: adding = AddRequest(kind: .gasto, cycle: .mensual)
-        case .sueldo: adding = AddRequest(kind: .ingreso, cycle: .mensual)
-        case .anual: adding = AddRequest(kind: .gasto, cycle: .anual)
         case .fijos: route = .fijos
         case .limites: route = .limites
         case .ahorro: route = .ahorro
-        case .historial: route = .historial
         case .automatico: route = .automatico
         case .recibo: scanning = true
         case .rapido:
@@ -502,7 +510,8 @@ struct HomeView: View {
                 }
                 ForEach(entries.prefix(5)) { entry in
                     Button { selected = entry } label: {
-                        EntryRow(entry: entry, subtitle: DueText.describe(entry.occurredAt, now: now, calendar: calendar), currency: currency)
+                        EntryRow(entry: entry, subtitle: DueText.describe(entry.occurredAt, now: now, calendar: calendar), currency: currency,
+                                 pending: CloudAccount.shared.showsPendingMark(entry))
                     }
                     .buttonStyle(.plain)
                 }

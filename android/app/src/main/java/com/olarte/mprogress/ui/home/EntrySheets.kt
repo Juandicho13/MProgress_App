@@ -42,24 +42,37 @@ import com.olarte.mprogress.ui.theme.Radius
 import com.olarte.mprogress.ui.theme.Spacing
 import java.time.LocalDate
 
-/** Categoría (pantalla 9): recientes y todas, igual que CategoryPickerView de iOS. */
+/**
+ * Categoría (pantalla 9): "+ Nueva categoría", recientes y todas, igual que CategoryPickerView de iOS. Una nueva queda
+ * elegida al guardarla; las propias se cambian o se borran manteniéndolas presionadas. `store` nulo usa el de la app.
+ */
 @Composable
-fun CategoryPickerSheet(entries: List<EntryRecord>, selection: String?, onDismiss: () -> Unit, onPick: (String?) -> Unit) {
-    val recent = entries.filter { it.categoryId != null }.sortedByDescending { it.occurredAt }.mapNotNull { it.categoryId }.distinct().take(3).mapNotNull { Categories.byId(it) }
-    FormSheet("Categoría", onDismiss, cancel = "Cerrar", onConfirm = null) {
-        @Composable
-        fun group(items: List<CategoryRecord>) = Card(padding = Spacing.s2) {
-            items.forEach { c ->
-                val on = c.id == selection
-                CheckRow(c.name, on, leading = {
-                    IconTile(Sym.sf(c.icon) ?: Sym.more, if (on) Palette.brasaVelo else Palette.superficie3, if (on) Palette.brasaTinta else Palette.texto1, size = 36.dp)
-                }) { onPick(c.id) }
+fun CategoryPickerSheet(entries: List<EntryRecord>, selection: String?, onDismiss: () -> Unit, store: Store? = null, onPick: (String?) -> Unit) {
+    val st = store ?: Store.get(androidx.compose.ui.platform.LocalContext.current)
+    val ledger by st.ledger.collectAsState()
+    var creating by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<CategoryRecord?>(null) }
+    val all = (Categories.all + ledger.categories).sortedBy { it.sort }
+    val recent = entries.filter { it.categoryId != null }.sortedByDescending { it.occurredAt }.mapNotNull { it.categoryId }.distinct()
+        .mapNotNull { id -> all.firstOrNull { it.id.equals(id, ignoreCase = true) } }.take(3)
+    Box(Modifier.fillMaxSize()) {
+        FormSheet("Categoría", onDismiss, cancel = "Cerrar", onConfirm = null) {
+            @Composable
+            fun group(items: List<CategoryRecord>) = Card(padding = Spacing.s2) {
+                items.forEach { c ->
+                    val custom = !Categories.isBuiltIn(c.id)
+                    CategoryChoiceRow(c, c.id.equals(selection, ignoreCase = true), onClick = { onPick(c.id) }, onLongClick = if (custom) ({ editing = c }) else null)
+                }
             }
+            Card(padding = Spacing.s2) { NewCategoryRow { creating = true } }
+            if (recent.isNotEmpty()) { SectionLabel("Recientes"); group(recent) }
+            SectionLabel("Todas")
+            group(all)
+            if (ledger.categories.isNotEmpty()) T("Mantén presionada una categoría tuya para cambiarla o borrarla.", Type.leyenda, Palette.texto2)
+            SecondaryButton("Sin categoría") { onPick(null) }
         }
-        if (recent.isNotEmpty()) { SectionLabel("Recientes"); group(recent) }
-        SectionLabel("Todas")
-        group(Categories.all)
-        SecondaryButton("Sin categoría") { onPick(null) }
+        if (creating) CategoryFormSheet(st, null, { creating = false }) { c -> creating = false; onPick(c.id) }
+        editing?.let { c -> CategoryFormSheet(st, c, { editing = null }) { editing = null } }
     }
 }
 
@@ -147,10 +160,10 @@ fun RecurringEditSheet(store: Store, recurringId: String, onDismiss: () -> Unit)
     var kind by remember { mutableStateOf(item.kind) }
     var name by remember { mutableStateOf(item.name) }
     var amount by remember { mutableStateOf(item.amountMinor) }
-    var choice by remember { mutableStateOf(choiceOf(item.cycle)) }
-    var everyDays by remember { mutableStateOf(item.cycle.intervalDays ?: 15) }
-    var monthInterval by remember { mutableStateOf(MonthInterval.of(item.cycle.intervalMonths)) }
-    var everyMonths by remember { mutableStateOf(item.cycle.intervalMonths.takeIf { MonthInterval.of(it) == MonthInterval.OTRO } ?: 4) }
+    // "¿Cada cuánto?" igual que en el pago fijo nuevo: Semanal, Quincenal, Mensual u Otra.
+    var draft by remember { mutableStateOf(RepeatDraft.of(item.cycle)) }
+    // Fila plegable abierta (una a la vez).
+    var open by remember { mutableStateOf<AddSection?>(null) }
     var paying by remember { mutableStateOf(false) }
     var hasDate by remember { mutableStateOf(!item.dateUnset) }
     var date by remember { mutableStateOf(item.nextDate) }
@@ -164,15 +177,18 @@ fun RecurringEditSheet(store: Store, recurringId: String, onDismiss: () -> Unit)
     var payWith by remember { mutableStateOf(false) }
     var categories by remember { mutableStateOf(false) }
     var reminder by remember { mutableStateOf(false) }
-    var pickDay by remember { mutableStateOf(false) }
-    var pickDate by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
-    val canSave = name.isNotBlank() && amount > 0
+    val canSave = name.isNotBlank() && amount > 0 && draft.isValid
+    // Quincenal: la fecha que ya tenía si sigue con los mismos días; si no, el próximo día de quincena desde hoy (igual que iOS).
+    val quincenaNext = (draft.cycle as? Cycle.Quincenal)?.let { q ->
+        if (item.cycle == q && !item.dateUnset) item.nextDate else QuincenaMath.onOrAfter(LocalDate.now(), q.days)
+    }
 
     Box(Modifier.fillMaxSize()) {
         FormSheet("Pago fijo", onDismiss, canConfirm = canSave, onConfirm = {
-            val cycle = choice.cycle(everyDays, MonthInterval.cycle(monthInterval, everyMonths))
+            val cycle = draft.cycle
             val total = if (end == EndChoice.CUOTAS) maxOf(count, item.paidCount + 1) else null
+            val date = if (hasDate) quincenaNext ?: date else date
             var updated = item.copy(kind = kind, name = name.trim(), amountMinor = amount, cycle = cycle, nextDate = date,
                 anchor = if (hasDate) CycleAnchor.of(date) else item.anchor, dateUnset = !hasDate, productId = productId, categoryId = categoryId,
                 endDate = if (end == EndChoice.FECHA) endDate else null, totalCount = total, alert = alert, active = active, finished = false)
@@ -185,18 +201,51 @@ fun RecurringEditSheet(store: Store, recurringId: String, onDismiss: () -> Unit)
                 FormTextField(name, "Nombre") { name = it }
             }
             MoneyField("Monto", amount) { amount = it }
-            FormGroup("Cuándo") {
-                Segmented(CycleChoice.entries.filter { it != CycleChoice.PUNTUAL }.map { it.name to it.title }, choice.name) { choice = CycleChoice.valueOf(it) }
-                if (choice == CycleChoice.OTRA) Stepper("Cada $everyDays días", everyDays, 1..365) { everyDays = it }
-                if (choice == CycleChoice.MENSUAL) MonthIntervalPicker(monthInterval, everyMonths, { monthInterval = it }, { everyMonths = it })
+            fun toggle(section: AddSection) { open = if (open == section) null else section }
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                SectionLabel("¿Cada cuánto?")
+                Segmented(RepeatChoice.entries.filter { it != RepeatChoice.UNA_VEZ }.map { it.name to it.title }, draft.choice.name) {
+                    val choice = RepeatChoice.valueOf(it)
+                    draft = draft.copy(choice = choice)
+                    if (choice == RepeatChoice.OTRA) open = AddSection.CADA_CUANTO else if (open == AddSection.CADA_CUANTO || open == AddSection.DIAS) open = null
+                }
+            }
+            Card(padding = Spacing.s2) {
+                if (draft.choice == RepeatChoice.OTRA) {
+                    DisclosureRow("Cada cuánto", draft.title, open == AddSection.CADA_CUANTO, { toggle(AddSection.CADA_CUANTO) }) {
+                        RepeatOtherEditor(draft, if (hasDate) draft.summary(date, LocalDate.now()) else null) { draft = it }
+                    }
+                    FormDivider()
+                }
+                if (draft.choice == RepeatChoice.QUINCENAL) {
+                    DisclosureRow("Días", draft.quincena.title, open == AddSection.DIAS, { toggle(AddSection.DIAS) }) {
+                        QuincenaDaysEditor(draft.quincena) { draft = draft.copy(quincena = it) }
+                    }
+                    FormDivider()
+                }
                 FormToggle("Ya sé la fecha", hasDate) { hasDate = it }
                 if (hasDate) {
                     FormDivider()
-                    if (choice == CycleChoice.MENSUAL) FormRow("Día del mes", "Día ${date.dayOfMonth}", onClick = { pickDay = true })
-                    else FormRow("Próximo cobro", "${date.dayOfMonth} ${DueText.months[date.monthValue - 1]} ${date.year}", onClick = { pickDate = true })
+                    val nextTitle = if (kind == EntryKind.INGRESO) "Próximo pago" else "Próximo cobro"
+                    if (quincenaNext != null) FormRow(nextTitle, DueText.shortDate(quincenaNext, LocalDate.now()), chevron = false)
+                    else if (draft.cycle.isMonthly) DisclosureRow("Día del mes", "el ${date.dayOfMonth}", open == AddSection.DIA_DEL_MES, { toggle(AddSection.DIA_DEL_MES) }) {
+                        DayGrid(date.dayOfMonth) { d ->
+                            val today = LocalDate.now()
+                            var n = today.withDayOfMonth(minOf(d, today.lengthOfMonth()))
+                            if (n.isBefore(today)) n = n.plusMonths(1).let { it.withDayOfMonth(minOf(d, it.lengthOfMonth())) }
+                            date = n
+                        }
+                        T("$nextTitle: ${DueText.shortDate(date, LocalDate.now())}.", Type.leyenda, Palette.texto2)
+                    }
+                    else DisclosureRow(nextTitle, DueText.shortDate(date, LocalDate.now()), open == AddSection.FECHA, { toggle(AddSection.FECHA) }) {
+                        WeekDatePicker("Fecha de pago", date) { date = it }
+                    }
+                }
+                FormDivider()
+                DisclosureRow("Termina", endSummary(end, endDate, count), open == AddSection.TERMINA, { toggle(AddSection.TERMINA) }) {
+                    EndPicker(end, endDate, count, { end = it }, { endDate = it }, { count = it }, inline = true)
                 }
             }
-            EndPicker(end, endDate, count, { end = it }, { endDate = it }, { count = it })
             if (item.totalCount != null && item.paidCount > 0) T("Ya van ${item.paidCount} cuotas pagadas.", Type.cuerpo2, Palette.texto2)
             Card(padding = Spacing.s2) {
                 FormRow("Categoría", Categories.byId(categoryId)?.name ?: "Sin categoría", onClick = { categories = true })
@@ -219,14 +268,7 @@ fun RecurringEditSheet(store: Store, recurringId: String, onDismiss: () -> Unit)
         if (categories) CategoryPickerSheet(ledger.entries, categoryId, { categories = false }) { categoryId = it; categories = false }
         if (paying) MarkPaidSheet(store, item.id) { paying = false; onDismiss() }
         if (reminder) AlertEditSheet(store, item.copy(name = name, amountMinor = amount, kind = kind), alert, { reminder = false }) { alert = it; reminder = false }
-        if (pickDay) DayGridSheet("¿Qué día se paga ${name.ifBlank { "este pago" }}?", date.dayOfMonth, { pickDay = false }) { d ->
-            val today = LocalDate.now()
-            var n = today.withDayOfMonth(minOf(d, today.lengthOfMonth()))
-            if (n.isBefore(today)) n = n.plusMonths(1).let { it.withDayOfMonth(minOf(d, it.lengthOfMonth())) }
-            date = n; pickDay = false
-        }
     }
-    if (pickDate) DatePickDialog(date, { pickDate = false }) { date = it; pickDate = false }
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },

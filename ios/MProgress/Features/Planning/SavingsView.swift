@@ -165,7 +165,7 @@ private struct GoalFormView: View {
                 Section {
                     Picker("Ligada a una cajita", selection: $productId) {
                         Text("No, sumo aportes").tag(UUID?.none)
-                        ForEach(wallet.products.filter { $0.kind == .bolsillo || $0.kind == .cuenta }) { product in
+                        ForEach(wallet.products.filter { $0.kind.earnsYield || $0.kind == .cuenta }) { product in
                             Text(product.name).tag(UUID?.some(product.id))
                         }
                     }

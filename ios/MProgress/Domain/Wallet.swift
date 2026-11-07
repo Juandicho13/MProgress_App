@@ -24,11 +24,11 @@ struct CardDue: Hashable, Sendable {
 
 /// Resumen de un banco o billetera para la lista de Mi dinero (pantalla 31).
 struct InstitutionTotals: Hashable, Sendable {
-    /// Lo que hay en cuentas, bolsillos y efectivo.
+    /// Lo que hay en cuentas, bolsillos, cajitas y efectivo.
     var haveMinor: Int64
     /// Lo que se debe en tarjetas de crédito.
     var oweMinor: Int64
-    /// Rendimiento aproximado del mes de los bolsillos.
+    /// Rendimiento aproximado del mes de los bolsillos y cajitas.
     var monthlyYieldMinor: Int64
     var netMinor: Int64 { haveMinor - oweMinor }
 }
@@ -44,7 +44,7 @@ enum WalletMath {
                 result.oweMinor += balance
             } else {
                 result.haveMinor += balance
-                if product.kind == .bolsillo {
+                if product.kind.earnsYield {
                     result.monthlyYieldMinor += MoneyCalculator.monthlyYield(balanceMinor: balance, rateEA: product.rateEA)
                 }
             }
@@ -60,7 +60,9 @@ enum WalletMath {
         let accounts = count(.cuenta)
         if accounts == 1 { parts.append("Cuenta") } else if accounts > 1 { parts.append("\(accounts) cuentas") }
         let pockets = count(.bolsillo)
-        if pockets == 1 { parts.append("1 cajita") } else if pockets > 1 { parts.append("\(pockets) cajitas") }
+        if pockets == 1 { parts.append("1 bolsillo") } else if pockets > 1 { parts.append("\(pockets) bolsillos") }
+        let boxes = count(.cajita)
+        if boxes == 1 { parts.append("1 cajita") } else if boxes > 1 { parts.append("\(boxes) cajitas") }
         let debit = count(.debito)
         if debit == 1 { parts.append("débito") } else if debit > 1 { parts.append("\(debit) débito") }
         let credit = count(.credito)
@@ -138,7 +140,7 @@ enum WalletMath {
         var kinds: Set<ProductKind> {
             switch self {
             case .tarjeta: [.credito, .debito]
-            case .cuenta: [.cuenta, .bolsillo]
+            case .cuenta: [.cuenta, .bolsillo, .cajita]
             case .efectivo: [.efectivo]
             }
         }

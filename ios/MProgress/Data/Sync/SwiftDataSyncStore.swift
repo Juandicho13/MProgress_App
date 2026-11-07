@@ -5,7 +5,7 @@ import SwiftData
 /// (fechas ISO 8601 con 6 decimales), y al bajar se escribe en el mismo modelo, sin borrarlo.
 /// Las categorías globales (las de la semilla, iguales para todos) no se sincronizan.
 @MainActor
-final class SwiftDataSyncStore: LocalSyncStore {
+final class SwiftDataSyncStore: InitialUploadLocal {
     typealias S = BackupSnapshot
 
     static let cursorPrefix = "sync.cursor."
@@ -84,6 +84,8 @@ final class SwiftDataSyncStore: LocalSyncStore {
         case "savings_goals": try upsert(record, as: S.GoalRow.self, make: { BackupRows.make($0) }, fill: { BackupRows.fill($0, $1) })
         case "goal_contributions": try upsert(record, as: S.ContributionRow.self, make: { BackupRows.make($0) }, fill: { BackupRows.fill($0, $1) })
         case "merchant_alias": try upsert(record, as: S.MerchantAliasRow.self, make: { BackupRows.make($0) }, fill: { BackupRows.fill($0, $1) })
+        case "debts": try upsert(record, as: S.DebtRow.self, make: { BackupRows.make($0) }, fill: { BackupRows.fill($0, $1) })
+        case "debt_payments": try upsert(record, as: S.DebtPaymentRow.self, make: { BackupRows.make($0) }, fill: { BackupRows.fill($0, $1) })
         default: return
         }
     }
@@ -128,6 +130,71 @@ final class SwiftDataSyncStore: LocalSyncStore {
         if context.hasChanges { try context.save() }
     }
 
+    /// Cambios sin subir por tabla (pendientes y los que fallaron), para la hoja de estado: "3 movimientos, 1 pago fijo".
+    func pendingCounts() -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for table in SyncEngine.tables {
+            let count = ((try? allModels(table: table)) ?? []).filter { $0.syncStateRaw != SyncState.synced.rawValue }.count
+            if count > 0 { counts[table] = count }
+        }
+        return counts
+    }
+
+    // MARK: Primera subida (F10-05)
+
+    func uploadItems() throws -> [InitialUpload.Item] {
+        var items: [InitialUpload.Item] = []
+        for table in SyncEngine.tables {
+            items += try records(table: table).map {
+                InitialUpload.Item(table: table, id: $0.id, updatedAt: $0.updatedAt, deleted: $0.deletedAt != nil,
+                                   seedKey: InitialUpload.seedKey(table: table, payload: $0.payload))
+            }
+        }
+        return items
+    }
+
+    /// Las categorías y reglas de comercio repetidas pasan a la de la nube. El duplicado nunca subió: se borra de verdad.
+    func resolveDuplicates(_ remap: [String: [UUID: UUID]]) throws {
+        let categories = remap["categories"] ?? [:]
+        let aliases = remap["merchant_alias"] ?? [:]
+        guard !categories.isEmpty || !aliases.isEmpty else { return }
+        if !categories.isEmpty {
+            for m in try context.fetch(FetchDescriptor<Entry>()) {
+                if let id = m.categoryId, let to = categories[id] { m.categoryId = to; m.touch() }
+            }
+            for m in try context.fetch(FetchDescriptor<Recurring>()) {
+                if let id = m.categoryId, let to = categories[id] { m.categoryId = to; m.touch() }
+            }
+            for m in try context.fetch(FetchDescriptor<Budget>()) {
+                if let id = m.categoryId, let to = categories[id] { m.categoryId = to; m.touch() }
+            }
+            for m in try context.fetch(FetchDescriptor<MerchantAlias>()) {
+                if let id = m.categoryId, let to = categories[id] { m.categoryId = to; m.touch() }
+            }
+            for m in try context.fetch(FetchDescriptor<SpendCategory>()) where categories[m.id] != nil {
+                context.delete(m)
+            }
+        }
+        if !aliases.isEmpty {
+            for m in try context.fetch(FetchDescriptor<MerchantAlias>()) where aliases[m.id] != nil {
+                context.delete(m)
+            }
+        }
+        cache = [:]
+        if context.hasChanges { try context.save() }
+    }
+
+    /// Deja pendientes las filas que el plan sube (por ejemplo, las que quedaron sincronizadas con otra cuenta).
+    func queue(_ refs: [InitialUpload.Ref]) throws {
+        for ref in refs {
+            guard let model = try model(table: ref.table, id: ref.id) else { continue }
+            if model.syncStateRaw == SyncState.synced.rawValue || model.syncStateRaw == SyncState.failed.rawValue {
+                model.syncStateRaw = SyncState.pending.rawValue
+            }
+        }
+        if context.hasChanges { try context.save() }
+    }
+
     // MARK: Filas
 
     private func isPending(table: String, id: UUID) -> Bool {
@@ -165,6 +232,10 @@ final class SwiftDataSyncStore: LocalSyncStore {
             return try context.fetch(FetchDescriptor<GoalContribution>()).map { try record(table, $0, BackupRows.row($0), space: $0.spaceId) }
         case "merchant_alias":
             return try context.fetch(FetchDescriptor<MerchantAlias>()).map { try record(table, $0, BackupRows.row($0), space: $0.spaceId) }
+        case "debts":
+            return try context.fetch(FetchDescriptor<Debt>()).map { try record(table, $0, BackupRows.row($0), space: $0.spaceId) }
+        case "debt_payments":
+            return try context.fetch(FetchDescriptor<DebtPayment>()).map { try record(table, $0, BackupRows.row($0), space: $0.spaceId) }
         default:
             return []
         }
@@ -191,6 +262,8 @@ final class SwiftDataSyncStore: LocalSyncStore {
         case "savings_goals": return try context.fetch(FetchDescriptor<SavingsGoal>())
         case "goal_contributions": return try context.fetch(FetchDescriptor<GoalContribution>())
         case "merchant_alias": return try context.fetch(FetchDescriptor<MerchantAlias>())
+        case "debts": return try context.fetch(FetchDescriptor<Debt>())
+        case "debt_payments": return try context.fetch(FetchDescriptor<DebtPayment>())
         default: return []
         }
     }
@@ -258,6 +331,8 @@ enum SpaceAdoption {
         for m in try context.fetch(FetchDescriptor<GoalContribution>()) where m.spaceId == old { m.spaceId = newId; m.syncStateRaw = pending }
         for m in try context.fetch(FetchDescriptor<RewardProgram>()) where m.spaceId == old { m.spaceId = newId; m.syncStateRaw = pending }
         for m in try context.fetch(FetchDescriptor<MerchantAlias>()) where m.spaceId == old { m.spaceId = newId; m.syncStateRaw = pending }
+        for m in try context.fetch(FetchDescriptor<Debt>()) where m.spaceId == old { m.spaceId = newId; m.syncStateRaw = pending }
+        for m in try context.fetch(FetchDescriptor<DebtPayment>()) where m.spaceId == old { m.spaceId = newId; m.syncStateRaw = pending }
         try context.save()
     }
 }

@@ -19,8 +19,8 @@ android {
         applicationId = "com.olarte.mprogress"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 13
-        versionName = "1.2"
+        versionCode = 14
+        versionName = "1.3"
     }
     // estandar: la que Juan descarga e instala por archivo; sin SMS ni lector de notificaciones, porque Play Protect la bloquea.
     // completo: todo el registro automático; se instala desde el Mac (Android Studio o ADB). Mismo applicationId: los datos se conservan.

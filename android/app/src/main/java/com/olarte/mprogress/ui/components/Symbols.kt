@@ -1,5 +1,21 @@
 package com.olarte.mprogress.ui.components
 
+import androidx.compose.material.icons.outlined.LocalCafe
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.WaterDrop
+import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.material.icons.outlined.PhoneIphone
+import androidx.compose.material.icons.outlined.DirectionsBus
+import androidx.compose.material.icons.outlined.Flight
+import androidx.compose.material.icons.outlined.SportsEsports
+import androidx.compose.material.icons.outlined.Medication
+import androidx.compose.material.icons.outlined.Book
+import androidx.compose.material.icons.outlined.Pets
+import androidx.compose.material.icons.outlined.CardGiftcard
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Checkroom
+import androidx.compose.material.icons.outlined.ContentCut
+import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.outlined.AccountBalance
@@ -68,14 +84,10 @@ object Sym {
     fun of(kind: QuickActionKind): ImageVector = when (kind) {
         QuickActionKind.GASTO -> Icons.Rounded.Add
         QuickActionKind.INGRESO -> Icons.Rounded.ArrowDownward
-        QuickActionKind.FIJO -> Icons.Rounded.Repeat
-        QuickActionKind.SUELDO -> Icons.Outlined.Payments
-        QuickActionKind.ANUAL -> Icons.Rounded.CalendarMonth
         QuickActionKind.FIJOS -> Icons.AutoMirrored.Rounded.ReceiptLong
         QuickActionKind.RAPIDO -> Icons.Rounded.TouchApp
         QuickActionKind.LIMITES -> Icons.Rounded.Speed
         QuickActionKind.AHORRO -> Icons.Rounded.TrackChanges
-        QuickActionKind.HISTORIAL -> Icons.Rounded.History
         QuickActionKind.RECIBO -> Icons.Rounded.DocumentScanner
         QuickActionKind.AUTOMATICO -> Icons.Rounded.AutoFixHigh
     }
@@ -101,6 +113,22 @@ object Sym {
         "square.grid.2x2" -> Icons.Outlined.GridView
         "icloud" -> Icons.Outlined.Cloud
         "sparkles" -> Icons.Rounded.AutoAwesome
+        "cup.and.saucer" -> Icons.Outlined.LocalCafe
+        "bolt" -> Icons.Outlined.Bolt
+        "drop" -> Icons.Outlined.WaterDrop
+        "wifi" -> Icons.Outlined.Wifi
+        "iphone" -> Icons.Outlined.PhoneIphone
+        "bus" -> Icons.Outlined.DirectionsBus
+        "airplane" -> Icons.Outlined.Flight
+        "gamecontroller" -> Icons.Outlined.SportsEsports
+        "pills" -> Icons.Outlined.Medication
+        "book" -> Icons.Outlined.Book
+        "pawprint" -> Icons.Outlined.Pets
+        "gift" -> Icons.Outlined.CardGiftcard
+        "heart" -> Icons.Outlined.FavoriteBorder
+        "tshirt" -> Icons.Outlined.Checkroom
+        "scissors" -> Icons.Outlined.ContentCut
+        "creditcard" -> Icons.Outlined.CreditCard
         else -> null
     }
 }

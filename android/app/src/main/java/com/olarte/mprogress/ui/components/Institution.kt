@@ -1,6 +1,7 @@
 package com.olarte.mprogress.ui.components
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.AccountBalance
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Payments
@@ -40,6 +41,7 @@ object InstitutionStyle {
         ProductKind.CUENTA -> Icons.Outlined.AccountBalance
         ProductKind.DEBITO, ProductKind.CREDITO -> Icons.Rounded.CreditCard
         ProductKind.BOLSILLO -> Icons.Outlined.Inventory2
+        ProductKind.CAJITA -> Icons.AutoMirrored.Outlined.TrendingUp
         ProductKind.EFECTIVO -> Icons.Outlined.Payments
     }
 }

@@ -4,14 +4,10 @@ package com.olarte.mprogress.domain
 enum class QuickActionKind(val raw: String, val title: String, val shortTitle: String, val glyph: String) {
     GASTO("gasto", "Gasto", "Gasto", "+"),
     INGRESO("ingreso", "Ingreso extra", "Ingreso", "↓"),
-    FIJO("fijo", "Gasto fijo", "Fijo", "↻"),
-    SUELDO("sueldo", "Sueldo o fijo", "Sueldo", "$"),
-    ANUAL("anual", "Pago anual", "Anual", "▦"),
     FIJOS("fijos", "Pagos fijos", "Fijos", "≡"),
     RAPIDO("rapido", "Registro rápido", "Rápido", "⚡"),
     LIMITES("limites", "Límites", "Límites", "◔"),
     AHORRO("ahorro", "Ahorro", "Ahorro", "◎"),
-    HISTORIAL("historial", "Historial", "Historial", "⟲"),
     RECIBO("recibo", "Escanear recibo", "Recibo", "▤"),
     AUTOMATICO("automatico", "Registro automático", "Auto", "✦");
 
@@ -34,7 +30,19 @@ data class QuickActionLayout private constructor(val order: List<QuickActionKind
     companion object {
         const val STORAGE_KEY = "inicio.acciones"
         const val LIMIT = 3
-        val standard = of(QuickActionKind.entries, listOf(QuickActionKind.GASTO, QuickActionKind.INGRESO, QuickActionKind.FIJO))
+        val standard = of(QuickActionKind.entries, listOf(QuickActionKind.GASTO, QuickActionKind.INGRESO, QuickActionKind.FIJOS))
+        /**
+         * Acciones que existieron y se quitaron (Gasto fijo, Sueldo o fijo y Pago anual repetían Pagos fijos; Historial ya está en
+         * Inicio › Movimientos › Ver todo). Si estaban fijadas, su lugar se llena con las de por defecto.
+         */
+        val retired = setOf("fijo", "sueldo", "anual", "historial")
+
+        /** Completa las fijadas con las de por defecto, sin repetir, hasta llegar a 3. */
+        fun filled(pinned: List<QuickActionKind>): List<QuickActionKind> {
+            val result = pinned.distinct().toMutableList()
+            for (kind in standard.pinned + QuickActionKind.entries) if (result.size < LIMIT && kind !in result) result += kind
+            return result
+        }
 
         fun of(order: List<QuickActionKind>, pinned: List<QuickActionKind>): QuickActionLayout {
             val o = order.distinct().toMutableList()
@@ -46,7 +54,8 @@ data class QuickActionLayout private constructor(val order: List<QuickActionKind
             val parts = stored?.split("|") ?: return standard
             if (parts.size != 2) return standard
             fun kinds(t: String) = t.split(",").mapNotNull { QuickActionKind.from(it) }
-            return of(kinds(parts[0]), kinds(parts[1]))
+            val pinned = kinds(parts[1])
+            return of(kinds(parts[0]), if (parts[1].split(",").any { it in retired }) filled(pinned) else pinned)
         }
 
         private fun moved(list: List<QuickActionKind>, from: Int, to: Int): List<QuickActionKind> {

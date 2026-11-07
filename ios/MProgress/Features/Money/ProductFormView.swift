@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Agregar a un banco (pantalla 33): cuenta, débito, crédito o bolsillo; en el grupo Efectivo, un efectivo con
+/// Agregar a un banco (pantalla 33): cuenta, débito, crédito, bolsillo o cajita; en el grupo Efectivo, un efectivo con
 /// nombre propio. También edita. Las tarjetas pueden acumular puntos o millas en un programa.
 /// Solo guarda los últimos 4 dígitos de las tarjetas, nunca el número completo.
 struct ProductFormView: View {
@@ -140,7 +140,8 @@ struct ProductFormView: View {
                 kindTile(.cuenta, "Cuenta", "Ahorros o corriente")
                 kindTile(.debito, "Tarjeta débito", "Ligada a una cuenta")
                 kindTile(.credito, "Tarjeta crédito", "Cupo, corte y pago")
-                kindTile(.bolsillo, "Bolsillo o cajita", "Con o sin rentabilidad")
+                kindTile(.bolsillo, "Bolsillo", "Apartada en tu cuenta")
+                kindTile(.cajita, "Cajita", "Ahorro aparte que rinde")
             }
         }
     }
@@ -175,7 +176,7 @@ struct ProductFormView: View {
             MoneyField(title: "Deuda de hoy", minor: $balance, currency: wallet.currency)
         case .debito:
             last4Field
-        case .bolsillo:
+        case .bolsillo, .cajita:
             HStack(alignment: .top, spacing: Spacing.s3) {
                 MoneyField(title: "Saldo de hoy", minor: $balance, currency: wallet.currency)
                 field("Tasa E.A. (%)") {
@@ -332,7 +333,8 @@ struct ProductFormView: View {
         case .cuenta: "Ahorros"
         case .debito: "Débito"
         case .credito: "Crédito Oro"
-        case .bolsillo: "Emergencias"
+        case .bolsillo: "Arriendo, Mercado"
+        case .cajita: "Emergencias, Viaje"
         case .efectivo: "Billetera, Casa, Alcancía"
         }
     }
@@ -341,7 +343,8 @@ struct ProductFormView: View {
         switch draft.kind {
         case .cuenta: "Cuenta"
         case .debito, .credito: "Tarjeta"
-        case .bolsillo: "Cajita"
+        case .bolsillo: "Bolsillo"
+        case .cajita: "Cajita"
         case .efectivo: "Efectivo"
         }
     }

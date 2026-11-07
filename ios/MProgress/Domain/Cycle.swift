@@ -9,6 +9,9 @@ enum Cycle: Hashable, Codable, Sendable {
     case cadaDias(Int)
     /// Cada N meses (2 a 24, sin 12, que es anual). Se guarda como "mensual" con `intervalMonths`.
     case cadaMeses(Int)
+    /// Dos veces al mes en dos días fijos (la quincena de Colombia: 15 y último día). Se guarda como
+    /// "quincenal" con `firstDay` y `secondDay`.
+    case quincenal(QuincenaDays)
 
     var rawValue: String {
         switch self {
@@ -17,16 +20,20 @@ enum Cycle: Hashable, Codable, Sendable {
         case .mensual, .cadaMeses: "mensual"
         case .anual: "anual"
         case .cadaDias: "otra"
+        case .quincenal: "quincenal"
         }
     }
 
     /// `intervalMonths` solo cuenta para "mensual": 1 (o nil, los datos de antes) es mensual.
-    init(rawValue: String, intervalDays: Int? = nil, intervalMonths: Int? = nil) {
+    /// `firstDay` y `secondDay` solo cuentan para "quincenal": sin ellos es 15 y último día.
+    init(rawValue: String, intervalDays: Int? = nil, intervalMonths: Int? = nil, firstDay: Int? = nil, secondDay: Int? = nil) {
         switch rawValue {
         case "semanal": self = .semanal
         case "mensual": self = Cycle.months(intervalMonths ?? 1)
         case "anual": self = .anual
         case "otra": self = .cadaDias(max(1, intervalDays ?? 30))
+        case "quincenal":
+            self = .quincenal(QuincenaDays(first: firstDay ?? QuincenaDays.standard.first, second: secondDay ?? QuincenaDays.standard.second))
         default: self = .puntual
         }
     }
@@ -52,6 +59,18 @@ enum Cycle: Hashable, Codable, Sendable {
         return 1
     }
 
+    /// Primer día de la quincena que se guarda (`first_day`). Nil si no es quincenal.
+    var firstDay: Int? {
+        if case .quincenal(let days) = self { return days.first }
+        return nil
+    }
+
+    /// Segundo día de la quincena que se guarda (`second_day`, 31 es el último día). Nil si no es quincenal.
+    var secondDay: Int? {
+        if case .quincenal(let days) = self { return days.second }
+        return nil
+    }
+
     /// Mensual o cada N meses: los que usan "Día del mes".
     var isMonthly: Bool {
         switch self {
@@ -62,12 +81,13 @@ enum Cycle: Hashable, Codable, Sendable {
 
     var title: String {
         switch self {
-        case .puntual: "Puntual"
+        case .puntual: "Una vez"
         case .semanal: "Semanal"
         case .mensual: "Mensual"
         case .anual: "Anual"
-        case .cadaDias(let days): "Cada \(days) días"
-        case .cadaMeses(let months): MonthInterval.title(months: months)
+        case .cadaDias(let days): days % 7 == 0 && days >= 14 ? "Cada \(days / 7) semanas" : "Cada \(days) días"
+        case .cadaMeses(let months): months == 24 ? "Cada 2 años" : MonthInterval.title(months: months)
+        case .quincenal: "Quincenal"
         }
     }
 
@@ -155,6 +175,8 @@ enum CycleMath {
             return addMonths(1, to: date, anchor: anchor, calendar: calendar)
         case .cadaMeses(let months):
             return addMonths(max(1, months), to: date, anchor: anchor, calendar: calendar)
+        case .quincenal(let days):
+            return nextQuincena(after: date, days: days, calendar: calendar)
         case .anual:
             let year = calendar.component(.year, from: date) + 1
             var parts = DateComponents()
@@ -182,6 +204,19 @@ enum CycleMath {
     static func addMonths(_ months: Int, to date: Date, anchor: CycleAnchor, calendar: Calendar) -> Date? {
         guard let month = calendar.date(byAdding: .month, value: months, to: startOfMonth(date, calendar)) else { return nil }
         return clamp(day: anchor.day, inMonthOf: month, matching: date, calendar: calendar)
+    }
+
+    /// Siguiente día de quincena después de `date`: el primero del mes si no ha llegado, luego el segundo y luego el
+    /// primero del mes que viene. Los días que el mes no tiene caen en su último día (el 30 es el 28 en febrero).
+    /// No usa el ancla: los dos días van en el ciclo.
+    static func nextQuincena(after date: Date, days: QuincenaDays, calendar: Calendar) -> Date? {
+        let month = startOfMonth(date, calendar)
+        let today = calendar.component(.day, from: date)
+        let last = daysInMonth(month, calendar)
+        if today < min(days.low, last) { return clamp(day: days.low, inMonthOf: month, matching: date, calendar: calendar) }
+        if today < min(days.high, last) { return clamp(day: days.high, inMonthOf: month, matching: date, calendar: calendar) }
+        guard let next = calendar.date(byAdding: .month, value: 1, to: month) else { return nil }
+        return clamp(day: days.low, inMonthOf: next, matching: date, calendar: calendar)
     }
 
     static func startOfMonth(_ date: Date, _ calendar: Calendar) -> Date {

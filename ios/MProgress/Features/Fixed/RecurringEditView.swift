@@ -16,10 +16,11 @@ struct RecurringEditView: View {
     @State private var kind: EntryKind
     @State private var name: String
     @State private var amount: Int64
-    @State private var cycle: AddEntryModel.CycleChoice
-    @State private var everyDays: Int
-    @State private var monthInterval: MonthInterval
-    @State private var everyMonths: Int
+    /// "¿Cada cuánto?" igual que en el pago fijo nuevo: Semanal, Quincenal, Mensual u Otra.
+    @State private var repeatDraft: RepeatDraft
+    @FocusState private var countFocused: Bool
+    /// Fila plegable abierta (una a la vez): Cada cuánto, Días, Día del mes o Próximo cobro, y Termina.
+    @State private var open: NewFixedView.AddSection?
     @State private var hasDate: Bool
     @State private var date: Date
     @State private var productId: UUID?
@@ -41,17 +42,7 @@ struct RecurringEditView: View {
         _kind = State(initialValue: item.kind)
         _name = State(initialValue: item.name)
         _amount = State(initialValue: item.amountMinor)
-        let choice: AddEntryModel.CycleChoice = switch item.cycle {
-        case .anual: .anual
-        case .cadaDias: .otra
-        case .puntual: .puntual
-        default: .mensual
-        }
-        _cycle = State(initialValue: choice)
-        _everyDays = State(initialValue: item.cycle.intervalDays ?? 15)
-        let months = item.cycle.intervalMonths
-        _monthInterval = State(initialValue: MonthInterval.of(months: months))
-        _everyMonths = State(initialValue: MonthInterval.of(months: months) == .otro ? months : 4)
+        _repeatDraft = State(initialValue: RepeatDraft(cycle: item.cycle))
         _hasDate = State(initialValue: !item.dateUnset)
         _date = State(initialValue: item.nextDate)
         _productId = State(initialValue: item.productId)
@@ -62,16 +53,34 @@ struct RecurringEditView: View {
         _totalCount = State(initialValue: max(item.totalCount ?? 12, max(1, item.paidCount)))
     }
 
-    private var resolvedCycle: Cycle {
-        switch cycle {
-        case .puntual: .puntual
-        case .mensual: MonthInterval.cycle(monthInterval, months: everyMonths)
-        case .anual: .anual
-        case .otra: .cadaDias(max(1, everyDays))
+    private var resolvedCycle: Cycle { repeatDraft.cycle }
+
+    private var isQuincenal: Bool { repeatDraft.choice == .quincenal }
+
+    /// "Nunca", "Hasta 15 mar 2027" o "12 cuotas".
+    private var endSummary: String {
+        switch endChoice {
+        case .nunca: "Nunca"
+        case .fecha: "Hasta \(RecurringEnd.fullDate(endDate, calendar: calendar))"
+        case .cuotas: "\(totalCount) \(totalCount == 1 ? "cuota" : "cuotas")"
         }
     }
 
-    private var canSave: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && amount > 0 }
+    /// Abre una fila y cierra la que estaba abierta (o la cierra si era esa).
+    private func toggle(_ section: NewFixedView.AddSection) {
+        countFocused = false
+        withAnimation(.snappy) { open = open == section ? nil : section }
+    }
+
+    /// "¿Cada cuánto?". Otra abre de una su fila; las filas que ya no aplican se cierran.
+    private func choose(_ choice: RepeatChoice) {
+        repeatDraft.choice = choice
+        withAnimation(.snappy) {
+            if choice == .otra { open = .cadaCuanto } else if open == .cadaCuanto || open == .dias { open = nil }
+        }
+    }
+
+    private var canSave: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty && amount > 0 && repeatDraft.isValid }
 
     private var payWithText: String {
         guard let product = products.first(where: { $0.id == productId }) else { return "Sin elegir" }
@@ -91,39 +100,65 @@ struct RecurringEditView: View {
                     MoneyField(title: "Monto", minor: $amount, currency: currency)
                         .listRowBackground(Color.clear)
                 }
-                Section("Cuándo") {
-                    Picker("Ciclo", selection: $cycle) {
-                        ForEach(AddEntryModel.CycleChoice.allCases) { choice in Text(choice.title).tag(choice) }
+                Section {
+                    SegmentedPill(options: RepeatChoice.allCases.filter { $0 != .unaVez }.map { (value: $0, title: $0.title) },
+                                  selection: Binding(get: { repeatDraft.choice }, set: { choose($0) }))
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
+                    if repeatDraft.choice == .otra {
+                        DisclosureRow(title: "Cada cuánto", value: repeatDraft.title, expanded: open == .cadaCuanto) {
+                            toggle(.cadaCuanto)
+                        } content: {
+                            RepeatOtherEditor(draft: $repeatDraft, summary: hasDate ? repeatDraft.summary(next: resolvedDate, calendar: calendar, now: .now) : nil,
+                                              focused: $countFocused)
+                        }
                     }
-                    if cycle == .otra {
-                        Stepper("Cada \(everyDays) días", value: $everyDays, in: 1...365)
-                    }
-                    if cycle == .mensual {
-                        MonthIntervalPicker(interval: $monthInterval, months: $everyMonths)
+                    if isQuincenal {
+                        DisclosureRow(title: "Días", value: repeatDraft.quincena.title, expanded: open == .dias) {
+                            toggle(.dias)
+                        } content: {
+                            QuincenaDaysEditor(days: $repeatDraft.quincena)
+                        }
                     }
                     Toggle("Ya sé la fecha", isOn: $hasDate).tint(Palette.brasa)
                     if hasDate {
-                        if cycle == .mensual {
-                            VStack(alignment: .leading, spacing: Spacing.s2) {
-                                Text("Día del mes").foregroundStyle(Palette.texto1)
-                                DayOfMonthGrid(day: $dayOfMonth)
-                                Text("Próximo \(kind == .ingreso ? "pago" : "cobro"): \(DueText.shortDate(resolvedDate, calendar: calendar))")
-                                    .appFont(.leyenda)
-                                    .foregroundStyle(Palette.texto2)
+                        if isQuincenal {
+                            HStack {
+                                Text(kind == .ingreso ? "Próximo pago" : "Próximo cobro").foregroundStyle(Palette.texto1)
+                                Spacer()
+                                Text(DueText.shortDate(resolvedDate, calendar: calendar)).foregroundStyle(Palette.texto2)
                             }
-                            .padding(.vertical, Spacing.s1)
+                        } else if resolvedCycle.isMonthly {
+                            DisclosureRow(title: "Día del mes", value: "el \(dayOfMonth)", expanded: open == .diaDelMes) {
+                                toggle(.diaDelMes)
+                            } content: {
+                                VStack(alignment: .leading, spacing: Spacing.s2) {
+                                    DayOfMonthGrid(day: $dayOfMonth)
+                                    Text("Próximo \(kind == .ingreso ? "pago" : "cobro"): \(DueText.shortDate(resolvedDate, calendar: calendar))")
+                                        .appFont(.leyenda)
+                                        .foregroundStyle(Palette.texto2)
+                                }
+                            }
                         } else {
-                            DatePicker("Próximo cobro", selection: $date, displayedComponents: .date).tint(Palette.brasa)
+                            DisclosureRow(title: kind == .ingreso ? "Próximo pago" : "Próximo cobro",
+                                          value: DueText.shortDate(date, calendar: calendar), expanded: open == .fecha) {
+                                toggle(.fecha)
+                            } content: {
+                                EasyDatePicker(title: "Fecha de pago", date: $date, allowsTime: false)
+                            }
                         }
                     }
-                }
-                if cycle != .puntual {
-                    Section {
-                        EndRuleEditor(choice: $endChoice, endDate: $endDate, count: $totalCount, paidCount: item.paidCount)
-                            .padding(.vertical, Spacing.s1)
-                    } footer: {
-                        if let text = item.endText(calendar: calendar) { Text("Ahora: \(text)") }
+                    if resolvedCycle.repeats {
+                        DisclosureRow(title: "Termina", value: endSummary, expanded: open == .termina) {
+                            toggle(.termina)
+                        } content: {
+                            EndRuleEditor(choice: $endChoice, endDate: $endDate, count: $totalCount, paidCount: item.paidCount, showsTitle: false)
+                        }
                     }
+                } header: {
+                    Text("¿Cada cuánto?")
+                } footer: {
+                    if let text = item.endText(calendar: calendar) { Text("Ahora: \(text)") }
                 }
                 Section {
                     Button { showsPayWith = true } label: {
@@ -179,7 +214,12 @@ struct RecurringEditView: View {
     /// Mensual: si se cambió el día, el próximo cobro con ese día desde hoy; si no, la fecha que ya tenía
     /// (así un cobro vencido sin pagar no se salta).
     private var resolvedDate: Date {
-        guard cycle == .mensual else { return date }
+        if case .quincenal(let days) = resolvedCycle {
+            // Quincenal: la fecha que ya tenía si sigue con los mismos días; si no, el próximo día de quincena desde hoy.
+            if item.cycle == resolvedCycle && !item.dateUnset { return item.nextDate }
+            return QuincenaMath.onOrAfter(.now, days: days, calendar: calendar)
+        }
+        guard resolvedCycle.isMonthly else { return date }
         if dayOfMonth == item.anchorDay && !item.dateUnset && item.cycle.isMonthly { return item.nextDate }
         return OnboardingPlan.nextDate(day: dayOfMonth, from: .now, calendar: calendar)
     }
@@ -205,7 +245,7 @@ struct RecurringEditView: View {
                 nextDate: hasDate ? resolvedDate : nil, productId: productId, categoryId: item.categoryId, active: active,
                 endDate: repeats && endChoice == .fecha ? endDate : nil,
                 totalCount: repeats && endChoice == .cuotas ? totalCount : nil,
-                anchorDay: cycle == .mensual && hasDate ? dayOfMonth : nil)
+                anchorDay: resolvedCycle.isMonthly && hasDate ? dayOfMonth : nil)
             Task { await NotificationScheduler.reschedule(context: context) }
             dismiss()
         } catch {

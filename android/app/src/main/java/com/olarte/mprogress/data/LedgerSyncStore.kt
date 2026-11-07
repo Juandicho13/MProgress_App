@@ -3,7 +3,9 @@ package com.olarte.mprogress.data
 import com.olarte.mprogress.domain.AlertMode
 import com.olarte.mprogress.domain.AlertRule
 import com.olarte.mprogress.domain.Currency
-import com.olarte.mprogress.domain.LocalSyncStore
+import com.olarte.mprogress.domain.InitialUpload
+import com.olarte.mprogress.domain.InitialUploadLocal
+import com.olarte.mprogress.domain.MerchantAliasRule
 import com.olarte.mprogress.domain.ServerTime
 import com.olarte.mprogress.domain.SyncEngine
 import com.olarte.mprogress.domain.SyncRecord
@@ -15,7 +17,7 @@ import java.time.Instant
  * (fechas ISO 8601 con 6 decimales). Lo que baja se escribe en los datos de Android de una vez por tabla.
  * Se usa siempre en el hilo principal, igual que Store.
  */
-class LedgerSyncStore(private val store: Store, private val spaceId: String, private val ownerId: String) : LocalSyncStore {
+class LedgerSyncStore(private val store: Store, private val spaceId: String, private val ownerId: String) : InitialUploadLocal {
     private val journal = store.journal
     private val ctx = SyncRows.Ctx(spaceId.lowercase(), ownerId.lowercase())
     /** Lo que Android tenía de cada registro al armar los pendientes, para guardarlo como `base` si sube bien. */
@@ -148,6 +150,9 @@ class LedgerSyncStore(private val store: Store, private val spaceId: String, pri
     /** Escribe una fila en los datos. Devuelve el valor como lo ve el diario, para guardar la `base`. */
     private fun upsert(l: Ledger, table: String, id: String, o: JSONObject): Pair<Ledger, Any?> = when (table) {
         "spaces" -> { val c = Currency.from(o.optString("currencyCode", "COP")); workingCurrency = c; l to c.code }
+        // Solo las propias (con espacio); las de la app ya están en Categories.all.
+        "categories" -> if (o.isNull("ownerSpaceId") || !o.has("ownerSpaceId")) l to null
+            else SyncRows.categoryFrom(o).let { l.copy(categories = l.categories.upsertBy(it) { x -> x.id }) to it }
         "institutions" -> SyncRows.institutionFrom(o).let { l.copy(institutions = l.institutions.upsertBy(it) { x -> x.id }) to it }
         "reward_programs" -> SyncRows.rewardFrom(o).let { l.copy(rewards = l.rewards.upsertBy(it) { x -> x.id }) to it }
         "products" -> SyncRows.productFrom(o).let { l.copy(products = l.products.upsertBy(it) { x -> x.id }) to it }
@@ -174,6 +179,7 @@ class LedgerSyncStore(private val store: Store, private val spaceId: String, pri
         "budgets" -> SyncRows.budgetFrom(o).let { l.copy(budgets = l.budgets.upsertBy(it) { x -> x.id }) to it }
         "savings_goals" -> SyncRows.goalFrom(o).let { l.copy(goals = l.goals.upsertBy(it) { x -> x.id }) to it }
         "goal_contributions" -> SyncRows.contributionFrom(o).let { l.copy(contributions = l.contributions.upsertBy(it) { x -> x.id }) to it }
+        DebtRows.DEBTS, DebtRows.PAYMENTS -> DebtRows.upsert(l, table, o)
         "merchant_alias" -> SyncRows.merchantAliasFrom(o).let { rule ->
             // Una sola regla por comercio: si este teléfono ya aprendió la misma clave con otro id, gana la que llega.
             l.copy(merchantAliases = l.merchantAliases.filter { it.key != rule.key || it.id == rule.id }.upsertBy(rule) { x -> x.id }) to rule
@@ -182,6 +188,7 @@ class LedgerSyncStore(private val store: Store, private val spaceId: String, pri
     }
 
     private fun remove(l: Ledger, table: String, id: String, o: JSONObject): Ledger = when (table) {
+        "categories" -> l.copy(categories = l.categories.filter { it.id != id })
         "institutions" -> l.copy(institutions = l.institutions.filter { it.id != id })
         "reward_programs" -> l.copy(rewards = l.rewards.filter { it.id != id })
         "products" -> l.copy(products = l.products.filter { it.id != id })
@@ -197,6 +204,7 @@ class LedgerSyncStore(private val store: Store, private val spaceId: String, pri
         "savings_goals" -> l.copy(goals = l.goals.filter { it.id != id })
         "goal_contributions" -> l.copy(contributions = l.contributions.filter { it.id != id })
         "merchant_alias" -> l.copy(merchantAliases = l.merchantAliases.filter { it.id != id })
+        DebtRows.DEBTS, DebtRows.PAYMENTS -> DebtRows.remove(l, table, id)
         else -> l
     }
 
@@ -225,6 +233,115 @@ class LedgerSyncStore(private val store: Store, private val spaceId: String, pri
     }
 
     fun failedCount() = journal.records.values.count { it.state == SyncJournal.State.FAILED }
+
+    /** Cambios sin subir por tabla (pendientes y los que fallaron), para la hoja de estado: "3 movimientos, 1 pago fijo". */
+    fun pendingCounts(): Map<String, Int> {
+        val snap = SyncRows.snapshot(store.ledger.value, store.currency.value, journal::reminderId)
+        val counts = linkedMapOf<String, Int>()
+        for ((table, items) in snap) for (id in items.keys) {
+            val m = journal.meta(table, id)
+            if ((m == null && table != "spaces") || (m != null && m.state != SyncJournal.State.SYNCED)) counts[table] = (counts[table] ?: 0) + 1
+        }
+        for ((key, m) in journal.records) {
+            if (m.deletedAt == null || m.state == SyncJournal.State.SYNCED) continue
+            val table = key.substringBefore('/')
+            counts[table] = (counts[table] ?: 0) + 1
+        }
+        return counts
+    }
+
+    /** Movimientos con cambios que todavía no suben (marca "Pendiente" en Inicio e Historial). */
+    fun pendingEntryIds(): Set<String> = store.ledger.value.entries.filter { e ->
+        SyncRows.isUuid(e.id) && journal.meta("entries", e.id).let { it == null || it.state != SyncJournal.State.SYNCED }
+    }.map { it.id }.toSet()
+
+    // ---------- Primera subida (F10-05) ----------
+
+    override fun uploadItems(): List<InitialUpload.Item> {
+        val snap = SyncRows.snapshot(store.ledger.value, store.currency.value, journal::reminderId)
+        val now = ServerTime.now()
+        val items = mutableListOf<InitialUpload.Item>()
+        for (table in SyncEngine.TABLES) {
+            val values = snap[table] ?: continue
+            for ((id, value) in values) {
+                val meta = journal.meta(table, id)
+                // La moneda del espacio solo cuenta si ya pasó por la nube (al entrar por primera vez se baja la de la cuenta).
+                if (table == "spaces" && meta == null) continue
+                // Clave estable desde la fila tal como se sube (nombre de la categoría, clave del comercio): cualquier tabla de
+                // InitialUpload.SEED_TABLES que Android sincronice pasa por aquí sin más cambios.
+                val key = if (table in InitialUpload.SEED_TABLES) {
+                    val row = runCatching { SyncRows.render(table, id, value, store.ledger.value, ctx) }.getOrNull()
+                    row?.let { o -> InitialUpload.seedKey(table) { k -> if (o.has(k) && !o.isNull(k)) o.optString(k) else null } }
+                } else null
+                items += InitialUpload.Item(table, remoteId(table, id), meta?.updatedAt ?: now, false, key)
+            }
+            val prefix = "$table/"
+            for ((k, meta) in journal.records) {
+                if (!k.startsWith(prefix) || meta.deletedAt == null) continue
+                items += InitialUpload.Item(table, remoteId(table, k.removePrefix(prefix)), meta.updatedAt, true)
+            }
+        }
+        return items
+    }
+
+    override fun seedKey(record: SyncRecord): String? {
+        if (record.table !in InitialUpload.SEED_TABLES) return null
+        val o = runCatching { JSONObject(String(record.payload)) }.getOrNull() ?: return null
+        return InitialUpload.seedKey(record.table) { k -> if (o.has(k) && !o.isNull(k)) o.optString(k) else null }
+    }
+
+    /**
+     * Duplicados que se unen con la fila de la nube (nunca subieron: se olvidan sin lápida).
+     * - Reglas de comercio: se quitan de los datos.
+     * - Categorías propias: los movimientos, pagos fijos, límites y reglas que las usan pasan al id de la nube y quedan pendientes.
+     *   La categoría repetida se quita de los datos con `dropDuplicateCategories`.
+     */
+    override fun resolveDuplicates(remap: Map<String, Map<String, String>>) {
+        val aliases = remap["merchant_alias"].orEmpty().keys.map { it.lowercase() }.toSet()
+        val categories = remap["categories"].orEmpty().entries.associate { it.key.lowercase() to it.value.lowercase() }
+        if (aliases.isEmpty() && categories.isEmpty()) return
+        var l = store.ledger.value
+        val changed = mutableListOf<Pair<String, String>>()
+        if (categories.isNotEmpty()) {
+            fun to(id: String?) = id?.let { categories[it.lowercase()] }
+            l = l.copy(
+                entries = l.entries.map { e -> to(e.categoryId)?.let { changed += "entries" to e.id; e.copy(categoryId = it) } ?: e },
+                recurring = l.recurring.map { r -> to(r.categoryId)?.let { changed += "recurring" to r.id; r.copy(categoryId = it) } ?: r },
+                budgets = l.budgets.map { b -> to(b.categoryId)?.let { changed += "budgets" to b.id; b.copy(categoryId = it) } ?: b },
+                merchantAliases = l.merchantAliases.map { a -> to(a.categoryId)?.let { changed += "merchant_alias" to a.id; a.copy(categoryId = it) } ?: a },
+            )
+            l = dropDuplicateCategories(l, categories.keys)
+        }
+        if (aliases.isNotEmpty()) l = l.copy(merchantAliases = l.merchantAliases.filter { it.id.lowercase() !in aliases })
+        if (l != store.ledger.value) store.applyRemote(l, null)
+        val now = ServerTime.now()
+        for ((table, id) in changed) {
+            val meta = journal.meta(table, id) ?: continue
+            meta.updatedAt = maxOf(now, meta.updatedAt.plusNanos(1000))
+            if (meta.state != SyncJournal.State.LOCAL) meta.state = SyncJournal.State.PENDING
+        }
+        aliases.forEach { journal.records.remove(journal.key("merchant_alias", it)) }
+        categories.keys.forEach { journal.records.remove(journal.key("categories", it)) }
+        journal.save()
+    }
+
+    /** Quita de los datos las categorías propias repetidas (la de la nube llega con su id al bajar). */
+    private fun dropDuplicateCategories(l: Ledger, ids: Set<String>): Ledger =
+        l.copy(categories = l.categories.filter { it.id.lowercase() !in ids })
+
+    override fun queue(refs: List<InitialUpload.Ref>) {
+        val now = ServerTime.now()
+        for (ref in refs) {
+            val key = journal.key(ref.table, localId(ref.table, ref.id))
+            val meta = journal.records[key]
+            when {
+                meta == null -> if (ref.table != "spaces") journal.records[key] = SyncJournal.Meta(now, now, state = SyncJournal.State.LOCAL)
+                meta.state == SyncJournal.State.SYNCED || meta.state == SyncJournal.State.FAILED -> meta.state = SyncJournal.State.PENDING
+                else -> {}
+            }
+        }
+        journal.save()
+    }
 
     /** Vuelve a intentar los que fallaron 3 veces. */
     fun retryFailed() {

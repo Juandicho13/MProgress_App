@@ -6,26 +6,16 @@ import Observation
 @MainActor
 @Observable
 final class AddEntryModel {
-    enum CycleChoice: String, CaseIterable, Identifiable {
-        case puntual, mensual, anual, otra
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .puntual: "Puntual"
-            case .mensual: "Mensual"
-            case .anual: "Anual"
-            case .otra: "Otra"
-            }
-        }
-    }
+    /// Con qué ciclo se abre Agregar (Inicio pide .puntual, .mensual o .anual). Lo que se elige adentro va en `repeatDraft`.
+    typealias CycleChoice = Cycle
 
     var kind: EntryKind
     var name = ""
     var icon: String?
     var amount: AmountInput
-    var cycleChoice: CycleChoice
-    var everyDays = 15
+    /// "¿Se repite?": Una vez, Semanal, Quincenal, Mensual u Otra (con Cada N días, semanas, meses o años).
+    /// Las opciones se cambian con `selectRepeat` y los días de quincena con `setQuincena`; lo de Otra se escribe directo.
+    var repeatDraft: RepeatDraft
     var date = Date.now
     var categoryId: UUID?
     var notes = ""
@@ -36,9 +26,8 @@ final class AddEntryModel {
     var source: EntrySource = .manual
     /// Comercio tal como llegó (recibo), para aprender el nombre que le da la persona.
     private(set) var rawMerchant: String?
-    /// Cada cuánto se repite un pago mensual (mensual, trimestral, cada N meses).
-    var monthInterval: MonthInterval = .mensual
-    var everyMonths = 4
+    /// Fecha que tenía antes de que Quincenal la moviera al próximo día de quincena (para devolverla si se cambia de opción).
+    @ObservationIgnored private var dateBeforeQuincena: (before: Date, set: Date)?
     /// Pagos fijos mensuales: día elegido en la cuadrícula de 1 a 31 (nil: el de `date`) y, si ya pasó
     /// este mes, si ya se pagó. La cuadrícula escribe en `date`, que sigue siendo la fecha que se guarda.
     private(set) var pickedDay: Int?
@@ -54,8 +43,9 @@ final class AddEntryModel {
 
     init(kind: EntryKind = .gasto, cycle: CycleChoice = .puntual, currency: Currency = .cop) {
         self.kind = kind
-        self.cycleChoice = cycle
+        self.repeatDraft = RepeatDraft(cycle: cycle)
         self.amount = AmountInput(currency: currency)
+        if case .quincenal(let days) = cycle { date = QuincenaMath.onOrAfter(date, days: days, calendar: .current) }
     }
 
     init(editing entry: Entry, currency: Currency = .cop) {
@@ -64,7 +54,7 @@ final class AddEntryModel {
         self.name = entry.name
         self.icon = entry.icon
         self.amount = AmountInput(minor: entry.amountMinor, currency: currency)
-        self.cycleChoice = .puntual
+        self.repeatDraft = RepeatDraft(choice: .unaVez)
         self.date = entry.occurredAt
         self.categoryId = entry.categoryId
         self.notes = entry.notes ?? ""
@@ -77,7 +67,7 @@ final class AddEntryModel {
     init(prefillName: String, amountMinor: Int64, source: EntrySource, currency: Currency = .cop,
          merchant: String? = nil, categoryId: UUID? = nil) {
         self.kind = .gasto
-        self.cycleChoice = .puntual
+        self.repeatDraft = RepeatDraft(choice: .unaVez)
         self.name = prefillName
         self.amount = AmountInput(minor: amountMinor, currency: currency)
         self.source = source
@@ -88,21 +78,47 @@ final class AddEntryModel {
 
     var isEditing: Bool { editing != nil }
 
-    var cycle: Cycle {
-        switch cycleChoice {
-        case .puntual: .puntual
-        case .mensual: MonthInterval.cycle(monthInterval, months: everyMonths)
-        case .anual: .anual
-        case .otra: .cadaDias(max(1, everyDays))
+    var cycle: Cycle { isEditing ? .puntual : repeatDraft.cycle }
+
+    var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespaces).isEmpty && amount.money.minor > 0 && (isEditing || repeatDraft.isValid)
+    }
+
+    /// Mensual o cada N meses al agregar: además del calendario, la fila "Día del mes" con la cuadrícula de 1 a 31.
+    var usesDayOfMonth: Bool { !isEditing && cycle.isMonthly }
+
+    /// Elegir en "¿Se repite?". Quincenal mueve la fecha al próximo día de quincena (o la deja si hoy lo es);
+    /// al salir de Quincenal, si nadie tocó esa fecha, vuelve la de antes.
+    func selectRepeat(_ choice: RepeatChoice, now: Date = .now, calendar: Calendar) {
+        let wasQuincena = repeatDraft.choice == .quincenal
+        repeatDraft.choice = choice
+        if choice == .quincenal {
+            moveToQuincena(now: now, calendar: calendar)
+        } else if wasQuincena, let saved = dateBeforeQuincena, saved.set == date {
+            date = saved.before
+            dateBeforeQuincena = nil
         }
     }
 
-    var canSave: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty && amount.money.minor > 0
+    /// Cambiar los días de la quincena mueve la fecha al próximo de esos días.
+    func setQuincena(_ days: QuincenaDays, now: Date = .now, calendar: Calendar) {
+        repeatDraft.quincena = days
+        moveToQuincena(now: now, calendar: calendar)
     }
 
-    /// Usa la cuadrícula "Día del mes" (mensual al agregar) en vez de Hoy, Ayer, Mañana.
-    var usesDayOfMonth: Bool { !isEditing && cycleChoice == .mensual }
+    /// Elegir un día en el calendario de semana o del mes. La cuadrícula "Día del mes" pasa a ese mismo día.
+    func setDate(_ newDate: Date) {
+        date = newDate
+        pickedDay = nil
+        dateBeforeQuincena = nil
+    }
+
+    private func moveToQuincena(now: Date, calendar: Calendar) {
+        let before = dateBeforeQuincena?.before ?? date
+        let start = DayShortcut.combine(day: now, time: date, calendar: calendar)
+        date = QuincenaMath.onOrAfter(start, days: repeatDraft.quincena, calendar: calendar)
+        dateBeforeQuincena = (before, date)
+    }
 
     /// Día que marca la cuadrícula.
     func dayOfMonth(calendar: Calendar) -> Int { pickedDay ?? calendar.component(.day, from: date) }
@@ -141,17 +157,33 @@ final class AddEntryModel {
         return "Próximo \(word): \(next)."
     }
 
-    /// "Mensual · cobra el 8 de cada mes", "Puntual", "Cada 15 días".
+    /// "Mensual · el 8 de cada mes", "Una vez", "Quincenal · 15 y último día", "Cada 15 días".
     func cycleSummary(calendar: Calendar) -> String {
         let date = resolvedDate(calendar: calendar)
         let day = calendar.component(.day, from: date)
         switch cycle {
-        case .puntual: return "Puntual"
+        case .puntual: return "Una vez"
         case .mensual: return "Mensual · el \(day) de cada mes"
-        case .cadaMeses(let months): return "\(MonthInterval.title(months: months)) · el \(day)"
+        case .cadaMeses: return "\(cycle.title) · el \(day)"
         case .anual: return "Anual · cada \(day) de \(DueText.monthName(date, calendar: calendar))"
-        case .semanal: return "Semanal"
-        case .cadaDias(let days): return "Cada \(days) días"
+        case .semanal, .cadaDias: return cycle.title
+        case .quincenal(let days): return "Quincenal · \(days.title)"
+        }
+    }
+
+    /// Bajo Otra: "Se repite cada 3 meses, el próximo es el 7 feb".
+    func otherSummary(now: Date = .now, calendar: Calendar) -> String? {
+        let date = resolvedDate(now: now, calendar: calendar)
+        let plan = AddPlan.decide(cycle: cycle, date: date, now: now, calendar: calendar, anchor: anchor(for: date, calendar: calendar))
+        return repeatDraft.summary(next: plan.recurringNext, calendar: calendar, now: now)
+    }
+
+    /// Lo que dice la fila "Termina" plegada: "Nunca", "Hasta 15 mar 2027" o "12 cuotas".
+    func endSummary(calendar: Calendar) -> String {
+        switch endChoice {
+        case .nunca: "Nunca"
+        case .fecha: "Hasta \(RecurringEnd.fullDate(endDate, calendar: calendar))"
+        case .cuotas: "\(max(1, totalCount)) \(totalCount == 1 ? "cuota" : "cuotas")"
         }
     }
 

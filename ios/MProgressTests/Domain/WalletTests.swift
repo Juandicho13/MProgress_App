@@ -28,10 +28,29 @@ struct WalletTests {
         #expect(totales.monthlyYieldMinor > 0)
     }
 
+    @Test("Una cajita cuenta como plata disponible, no como deuda, y suma su rendimiento")
+    func cajita() {
+        let cuenta = ProductRecord(kind: .cuenta, name: "Cuenta Nu", balanceMinor: pesos(200_000), balanceAt: inicio)
+        let cajita = ProductRecord(kind: .cajita, name: "Viaje", balanceMinor: pesos(1_000_000), balanceAt: inicio, rateEA: 9)
+        let bolsillo = ProductRecord(kind: .bolsillo, name: "Arriendo", balanceMinor: pesos(500_000), balanceAt: inicio)
+        let todos = [cuenta, cajita, bolsillo]
+        let paso = TransferRecord(fromProductId: cuenta.id, toProductId: cajita.id, amountMinor: pesos(100_000), occurredAt: fecha(2026, 11, 2))
+        let totales = WalletMath.totals(of: todos, allProducts: todos, entries: [], transfers: [paso])
+        #expect(totales.haveMinor == pesos(1_700_000))
+        #expect(totales.oweMinor == 0)
+        #expect(totales.monthlyYieldMinor == MoneyCalculator.monthlyYield(balanceMinor: pesos(1_100_000), rateEA: 9))
+        let worth = MoneyCalculator.netWorth(products: todos, entries: [], transfers: [paso])
+        #expect(worth.have == pesos(1_700_000) && worth.owe == 0)
+        #expect(!ProductKind.cajita.isDebt && ProductKind.cajita.earnsYield && ProductKind.bolsillo.earnsYield && !ProductKind.cuenta.earnsYield)
+        #expect(ProductKind.cajita.title == "Cajita" && ProductKind.bolsillo.title == "Bolsillo")
+        #expect(ProductKind(rawValue: "cajita") == .cajita && ProductKind(rawValue: "bolsillo") == .bolsillo)
+    }
+
     @Test("Subtítulo del banco según sus productos")
     func subtitulo() {
         #expect(WalletMath.subtitle(kinds: [.cuenta, .debito, .credito, .credito]) == "Cuenta · débito · 2 tarjetas de crédito")
-        #expect(WalletMath.subtitle(kinds: [.cuenta, .bolsillo, .bolsillo, .bolsillo, .credito]) == "Cuenta · 3 cajitas · tarjeta de crédito")
+        #expect(WalletMath.subtitle(kinds: [.cuenta, .bolsillo, .bolsillo, .bolsillo, .credito]) == "Cuenta · 3 bolsillos · tarjeta de crédito")
+        #expect(WalletMath.subtitle(kinds: [.cuenta, .bolsillo, .cajita, .cajita]) == "Cuenta · 1 bolsillo · 2 cajitas")
         #expect(WalletMath.subtitle(kinds: [.efectivo]) == "Billetera física")
         #expect(WalletMath.subtitle(kinds: []) == "Sin productos")
     }
@@ -66,6 +85,7 @@ struct WalletTests {
     func pestanas() {
         #expect(WalletMath.PayTab.of(.debito) == .tarjeta)
         #expect(WalletMath.PayTab.of(.bolsillo) == .cuenta)
+        #expect(WalletMath.PayTab.of(.cajita) == .cuenta)
         #expect(WalletMath.PayTab.of(.efectivo) == .efectivo)
         let debito = ProductRecord(kind: .debito, name: "D", balanceMinor: 0, balanceAt: inicio)
         let cuenta = ProductRecord(kind: .cuenta, name: "C", balanceMinor: 0, balanceAt: inicio)

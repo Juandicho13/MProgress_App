@@ -28,14 +28,14 @@ object LaunchAction {
         Intent(context, MainActivity::class.java).putExtra(EXTRA, action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
 }
 
-/** "Registro rápido" en los ajustes rápidos: abre Agregar encima de todo. */
+/** "Registro rápido" en los ajustes rápidos: abre la hoja corta de registro rápido encima de todo. */
 class QuickAddTile : TileService() {
     override fun onStartListening() {
         qsTile?.apply { state = Tile.STATE_INACTIVE; label = "Registro rápido"; updateTile() }
     }
 
     override fun onClick() {
-        val intent = LaunchAction.intent(this, "gasto")
+        val intent = LaunchAction.intent(this, "rapido")
         if (Build.VERSION.SDK_INT >= 34) startActivityAndCollapse(PendingIntent.getActivity(this, 7, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
         else @Suppress("DEPRECATION") startActivityAndCollapse(intent)
     }

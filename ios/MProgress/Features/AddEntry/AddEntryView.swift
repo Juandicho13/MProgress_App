@@ -1,7 +1,10 @@
 import SwiftUI
 import SwiftData
 
-/// Agregar movimiento (pantalla 7): hoja con teclado propio.
+/// Agregar movimiento (pantalla 7): un gasto o un ingreso de una vez, con teclado propio. Nombre, gasto o ingreso, monto, la fecha
+/// en el calendario de semana (con el mes completo y "Agregar hora") y una tarjeta con Categoría, con qué se pagó y Notas.
+/// Los pagos que se repiten se crean en NewFixedView: si alguien abre Agregar con un ciclo que se repite (Inicio, Pagos fijos o un
+/// atajo), esta hoja muestra el pago fijo nuevo.
 struct AddEntryView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -21,15 +24,28 @@ struct AddEntryView: View {
 
     private enum Field { case name, notes }
 
-    init(spaceId: UUID, kind: EntryKind = .gasto, cycle: AddEntryModel.CycleChoice = .puntual, currency: Currency = .cop) {
+    private let startsWithMonth: Bool
+    /// Pedido con un ciclo que se repite: se muestra el pago fijo nuevo.
+    private let fixedCycle: Cycle?
+    private let currency: Currency
+
+    /// `cycle` distinto de Una vez abre el pago fijo nuevo. `startsWithMonth` abre el mes completo de entrada (vistas previas).
+    init(spaceId: UUID, kind: EntryKind = .gasto, cycle: AddEntryModel.CycleChoice = .puntual, currency: Currency = .cop,
+         startsWithMonth: Bool = false) {
         self.spaceId = spaceId
-        _model = State(initialValue: AddEntryModel(kind: kind, cycle: cycle, currency: currency))
+        self.startsWithMonth = startsWithMonth
+        self.fixedCycle = cycle.repeats ? cycle : nil
+        self.currency = currency
+        _model = State(initialValue: AddEntryModel(kind: kind, cycle: .puntual, currency: currency))
     }
 
     /// Borrador con nombre y monto (recibo escaneado). `merchant` es el comercio leído y `categoryId` la categoría aprendida.
     init(spaceId: UUID, prefillName: String, amountMinor: Int64, source: EntrySource, currency: Currency = .cop,
          merchant: String? = nil, categoryId: UUID? = nil) {
         self.spaceId = spaceId
+        self.startsWithMonth = false
+        self.fixedCycle = nil
+        self.currency = currency
         _model = State(initialValue: AddEntryModel(prefillName: prefillName, amountMinor: amountMinor, source: source, currency: currency,
                                                    merchant: merchant, categoryId: categoryId))
     }
@@ -37,55 +53,38 @@ struct AddEntryView: View {
     /// Editar un movimiento ya guardado (F04-02).
     init(editing entry: Entry, currency: Currency = .cop) {
         self.spaceId = entry.spaceId
+        self.startsWithMonth = false
+        self.fixedCycle = nil
+        self.currency = currency
         _model = State(initialValue: AddEntryModel(editing: entry, currency: currency))
     }
 
     private var category: SpendCategory? { categories.first { $0.id == model.categoryId } }
 
     var body: some View {
+        if let fixedCycle {
+            NewFixedView(spaceId: spaceId, kind: model.kind, cycle: fixedCycle, currency: currency)
+        } else {
+            oneOff
+        }
+    }
+
+    private var oneOff: some View {
         VStack(spacing: 0) {
             topBar
             ScrollView {
-                VStack(spacing: Spacing.s5) {
+                VStack(spacing: Spacing.s4) {
                     nameRow
                     SegmentedPill(options: [(value: EntryKind.gasto, title: "Gasto"), (value: EntryKind.ingreso, title: "Ingreso")],
                                   selection: $model.kind)
-                    VStack(spacing: Spacing.s1) {
-                        AmountDisplay(input: model.amount, active: focus == nil)
-                        if !model.isEditing {
-                            Text(model.cycleSummary(calendar: calendar))
-                                .appFont(.cuerpo2)
-                                .foregroundStyle(Palette.texto2)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { focus = nil }
-                    if !model.isEditing {
-                        SectionLabel(text: "Ciclo de cobro")
-                        SegmentedPill(options: AddEntryModel.CycleChoice.allCases.map { (value: $0, title: $0.title) },
-                                      selection: $model.cycleChoice)
-                    }
-                    if !model.isEditing && model.cycleChoice == .otra {
-                        Stepper("Cada \(model.everyDays) días", value: $model.everyDays, in: 1...365)
-                            .appFont(.cuerpo)
-                            .foregroundStyle(Palette.texto1)
-                    }
-                    if !model.isEditing && model.cycleChoice == .mensual {
-                        Card(padding: Spacing.s2) {
-                            MonthIntervalPicker(interval: $model.monthInterval, months: $model.everyMonths)
-                                .padding(.horizontal, Spacing.s2)
-                        }
-                    }
-                    whenCard
-                    if !model.isEditing && model.cycleChoice != .puntual {
-                        Card {
-                            EndRuleEditor(choice: $model.endChoice, endDate: $model.endDate, count: $model.totalCount)
-                        }
+                    EditableAmountField(input: model.amount, editing: focus == nil, showsCaption: false) { focus = nil }
+                    Card(padding: Spacing.s3) {
+                        EasyDatePicker(title: "Fecha", date: $model.date, startsExpanded: startsWithMonth)
                     }
                     details
                 }
                 .padding(.horizontal, Spacing.margen)
-                .padding(.vertical, Spacing.s4)
+                .padding(.vertical, Spacing.s3)
             }
             .scrollDismissesKeyboard(.interactively)
             if focus == nil {
@@ -146,32 +145,6 @@ struct AddEntryView: View {
                     .focused($focus, equals: .name)
                     .submitLabel(.done)
                     .textInputAutocapitalization(.sentences)
-            }
-        }
-    }
-
-    /// Cuándo: Día del mes para los mensuales nuevos; Hoy, Ayer, Mañana u Otra fecha para lo demás.
-    private var whenCard: some View {
-        Card {
-            if model.usesDayOfMonth {
-                VStack(alignment: .leading, spacing: Spacing.s3) {
-                    Text("Día del mes").appFont(.titulo3).foregroundStyle(Palette.texto1)
-                    DayOfMonthGrid(day: Binding(get: { model.dayOfMonth(calendar: calendar) },
-                                                set: { model.pickDay($0, calendar: calendar) }))
-                    if DayOfMonth.hasPassed(day: model.dayOfMonth(calendar: calendar), now: .now, calendar: calendar) {
-                        Toggle(isOn: Binding(get: { model.paidThisMonth },
-                                             set: { model.setPaidThisMonth($0, calendar: calendar) })) {
-                            Text(model.kind == .ingreso ? "Ya me llegó este mes" : "Ya lo pagué este mes")
-                                .appFont(.cuerpo)
-                                .foregroundStyle(Palette.texto1)
-                        }
-                        .tint(Palette.brasa)
-                        .frame(minHeight: Size.toqueMinimo)
-                    }
-                    Text(model.planSummary(calendar: calendar)).appFont(.leyenda).foregroundStyle(Palette.texto2)
-                }
-            } else {
-                EasyDatePicker(title: model.cycleChoice == .puntual ? "Fecha" : "Fecha de pago", date: $model.date)
             }
         }
     }

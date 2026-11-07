@@ -1,0 +1,1603 @@
+{
+  "version": 1,
+  "checkedAt": "2026-11-07",
+  "usuraEA": 0.2834,
+  "usuraMonth": "2026-11",
+  "usuraSource": "https://www.portafolio.co/economia/finanzas/creditos-de-consumo-tendran-nuevo-tope-de-usura-en-noviembre-superfinanciera-lo-certifico-en-28-34-efectivo-anual-505461",
+  "usuraNote": "Tope legal de este mes, revisa tu extracto",
+  "note": "Catálogo indicativo. Las tasas no van aquí porque cambian cada mes. La cuota de manejo (handlingFeeCOP, en pesos al mes) solo aparece si el banco o un comparador la publica claro; null es que no se sabe.",
+  "banks": [
+    {
+      "id": "bancolombia",
+      "name": "Bancolombia",
+      "aliases": [
+        "Bancolombia"
+      ],
+      "source": "https://www.bancolombia.com/personas/tarifario/tarjeta-de-credito",
+      "sources": [
+        "https://www.bancolombia.com/personas/tarifario/tarjeta-de-credito",
+        "https://www.bancolombia.com/personas/tarjetas-de-credito/visa",
+        "https://www.bancolombia.com/personas/productos/tarjetas-credito/mastercard",
+        "https://www.bancolombia.com/personas/tarjetas-de-credito/american-express",
+        "https://www.bancolombia.com/personas/necesidades/mas-beneficios/millas-libres-bancolombia/"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": true,
+      "note": null,
+      "feeNote": "Cuota de manejo mensual sin IVA del tarifario 2026-2027 de Bancolombia (aplica desde el 1 dic 2026).",
+      "cards": [
+        {
+          "id": "bancolombia-mastercard-e-card",
+          "name": "Mastercard E-Card",
+          "franchise": "mastercard",
+          "tier": "virtual",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 0,
+          "note": "Virtual, sin cuota de manejo"
+        },
+        {
+          "id": "bancolombia-mastercard-unica",
+          "name": "Mastercard Única",
+          "franchise": "mastercard",
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 9900,
+          "note": "Virtual o física; se cobra una sola cuota"
+        },
+        {
+          "id": "bancolombia-mastercard-joven",
+          "name": "Mastercard Joven",
+          "franchise": "mastercard",
+          "tier": "joven",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 18400,
+          "note": null
+        },
+        {
+          "id": "bancolombia-mastercard-ideal",
+          "name": "Mastercard Ideal",
+          "franchise": "mastercard",
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 19700,
+          "note": "No acumula puntos"
+        },
+        {
+          "id": "bancolombia-mastercard-clasica",
+          "name": "Mastercard Clásica",
+          "franchise": "mastercard",
+          "tier": "clasica",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 32900,
+          "note": null
+        },
+        {
+          "id": "bancolombia-mastercard-oro",
+          "name": "Mastercard Oro",
+          "franchise": "mastercard",
+          "tier": "oro",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 39990,
+          "note": null
+        },
+        {
+          "id": "bancolombia-mastercard-platinum",
+          "name": "Mastercard Platinum",
+          "franchise": "mastercard",
+          "tier": "platinum",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 43650,
+          "note": null
+        },
+        {
+          "id": "bancolombia-mastercard-black",
+          "name": "Mastercard Black",
+          "franchise": "mastercard",
+          "tier": "black",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 54300,
+          "note": null
+        },
+        {
+          "id": "bancolombia-mastercard-world-legend",
+          "name": "Mastercard World Legend",
+          "franchise": "mastercard",
+          "tier": "world legend",
+          "rewards": null,
+          "handlingFeeCOP": 125000,
+          "note": null
+        },
+        {
+          "id": "bancolombia-visa-clasica",
+          "name": "Visa Clásica",
+          "franchise": "visa",
+          "tier": "clasica",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 32900,
+          "note": null
+        },
+        {
+          "id": "bancolombia-visa-seleccion-colombia",
+          "name": "Visa Selección Colombia",
+          "franchise": "visa",
+          "tier": "clasica",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 32900,
+          "note": null
+        },
+        {
+          "id": "bancolombia-visa-oro",
+          "name": "Visa Oro",
+          "franchise": "visa",
+          "tier": "oro",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 39990,
+          "note": null
+        },
+        {
+          "id": "bancolombia-visa-platinum",
+          "name": "Visa Platinum",
+          "franchise": "visa",
+          "tier": "platinum",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 43650,
+          "note": null
+        },
+        {
+          "id": "bancolombia-visa-lifemiles",
+          "name": "Visa LifeMiles",
+          "franchise": "visa",
+          "tier": null,
+          "rewards": "LifeMiles",
+          "handlingFeeCOP": 47900,
+          "note": null
+        },
+        {
+          "id": "bancolombia-visa-infinite",
+          "name": "Visa Infinite",
+          "franchise": "visa",
+          "tier": "infinite",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 54300,
+          "note": null
+        },
+        {
+          "id": "bancolombia-amex-libre",
+          "name": "Amex Libre",
+          "franchise": "amex",
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 0,
+          "note": "Sin cuota de manejo"
+        },
+        {
+          "id": "bancolombia-amex-blue",
+          "name": "Amex Blue",
+          "franchise": "amex",
+          "tier": "blue",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 32900,
+          "note": null
+        },
+        {
+          "id": "bancolombia-amex-green",
+          "name": "Amex Green",
+          "franchise": "amex",
+          "tier": "green",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 39990,
+          "note": null
+        },
+        {
+          "id": "bancolombia-amex-gold",
+          "name": "Amex Gold",
+          "franchise": "amex",
+          "tier": "oro",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 43650,
+          "note": null
+        },
+        {
+          "id": "bancolombia-amex-icon",
+          "name": "Amex Icon",
+          "franchise": "amex",
+          "tier": "icon",
+          "rewards": null,
+          "handlingFeeCOP": 54300,
+          "note": null
+        },
+        {
+          "id": "bancolombia-amex-platinum-metal",
+          "name": "Amex Platinum Metal",
+          "franchise": "amex",
+          "tier": "platinum",
+          "rewards": null,
+          "handlingFeeCOP": 125000,
+          "note": null
+        }
+      ]
+    },
+    {
+      "id": "davivienda",
+      "name": "Davivienda",
+      "aliases": [
+        "Davivienda",
+        "Banco Davivienda"
+      ],
+      "source": "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/3818833-tarjetas-credito-banco-davivienda",
+      "sources": [
+        "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/3818833-tarjetas-credito-banco-davivienda",
+        "https://www.rankia.co/tarjetas/tarjeta-visa-signature-banco-davivienda",
+        "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/4092895-mejores-tarjetas-credito-para-viajar",
+        "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/4686564-tarjetas-para-acumular-millas",
+        "https://newsroom.rcnradio.com/colombia/tarjetas-de-credito-sin-cuota-de-manejo-en-2026-estas-son-algunas-de-las-opciones-en-colombia"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": true,
+      "note": "El sitio oficial no se pudo leer; lista tomada de comparadores actualizados en 2026. Emite también Diners Club, sin un producto confirmado.",
+      "feeNote": null,
+      "cards": [
+        {
+          "id": "davivienda-visa-clasica",
+          "name": "Visa Clásica",
+          "franchise": "visa",
+          "tier": "clasica",
+          "rewards": "Puntos Davivienda",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davivienda-visa-oro",
+          "name": "Visa Oro",
+          "franchise": "visa",
+          "tier": "oro",
+          "rewards": "Puntos Davivienda",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davivienda-visa-platinum",
+          "name": "Visa Platinum",
+          "franchise": "visa",
+          "tier": "platinum",
+          "rewards": "Puntos Davivienda",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davivienda-visa-signature",
+          "name": "Visa Signature",
+          "franchise": "visa",
+          "tier": "signature",
+          "rewards": "Puntos Davivienda",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davivienda-mastercard-clasica",
+          "name": "Mastercard Clásica",
+          "franchise": "mastercard",
+          "tier": "clasica",
+          "rewards": "Puntos Davivienda",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davivienda-mastercard-oro",
+          "name": "Mastercard Oro",
+          "franchise": "mastercard",
+          "tier": "oro",
+          "rewards": "Puntos Davivienda",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davivienda-mastercard-platinum",
+          "name": "Mastercard Platinum",
+          "franchise": "mastercard",
+          "tier": "platinum",
+          "rewards": "Puntos Davivienda",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davivienda-mastercard-black",
+          "name": "Mastercard Black",
+          "franchise": "mastercard",
+          "tier": "black",
+          "rewards": "Puntos Davivienda",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davivienda-lifemiles-clasica",
+          "name": "LifeMiles Clásica",
+          "franchise": null,
+          "tier": "clasica",
+          "rewards": "LifeMiles",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davivienda-lifemiles-gold",
+          "name": "LifeMiles Gold",
+          "franchise": null,
+          "tier": "oro",
+          "rewards": "LifeMiles",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davivienda-lifemiles-platinum",
+          "name": "LifeMiles Platinum",
+          "franchise": null,
+          "tier": "platinum",
+          "rewards": "LifeMiles",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davivienda-lifemiles-visa-signature",
+          "name": "LifeMiles Visa Signature",
+          "franchise": "visa",
+          "tier": "signature",
+          "rewards": "LifeMiles",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davivienda-g-zero",
+          "name": "G-Zero",
+          "franchise": null,
+          "tier": null,
+          "rewards": "Cashback",
+          "handlingFeeCOP": 0,
+          "note": "Sin cuota de manejo"
+        },
+        {
+          "id": "davivienda-tarjeta-de-credito-movil",
+          "name": "Tarjeta de crédito móvil",
+          "franchise": null,
+          "tier": "virtual",
+          "rewards": "Puntos Davivienda",
+          "handlingFeeCOP": 0,
+          "note": "Virtual, número temporal por compra"
+        }
+      ]
+    },
+    {
+      "id": "bbva",
+      "name": "BBVA Colombia",
+      "aliases": [
+        "BBVA",
+        "BBVA Colombia",
+        "Banco BBVA"
+      ],
+      "source": "https://www.bbva.com.co/personas/productos/tarjetas-de-credito/mastercard.html",
+      "sources": [
+        "https://www.bbva.com.co/personas/productos/tarjetas-de-credito/mastercard.html",
+        "https://www.bbva.com.co/personas/productos/tarjetas-de-credito/visa/platinum.html",
+        "https://www.bbva.com.co/personas/productos/tarjetas/credito/visa/aqua.html"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": true,
+      "note": null,
+      "feeNote": "BBVA no publica el valor de la cuota en estas páginas; 0 quiere decir exoneración permanente publicada.",
+      "cards": [
+        {
+          "id": "bbva-aqua",
+          "name": "Aqua",
+          "franchise": "visa",
+          "tier": null,
+          "rewards": "Puntos BBVA",
+          "handlingFeeCOP": null,
+          "note": "Cuota de manejo exonerable con compras al mes en la Clásica; sin cuota en Gold y Platinum"
+        },
+        {
+          "id": "bbva-visa-clasica",
+          "name": "Visa Clásica",
+          "franchise": "visa",
+          "tier": "clasica",
+          "rewards": "Puntos BBVA",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "bbva-visa-oro",
+          "name": "Visa Oro",
+          "franchise": "visa",
+          "tier": "oro",
+          "rewards": "Puntos BBVA",
+          "handlingFeeCOP": 0,
+          "note": "Exoneración permanente de la cuota de manejo"
+        },
+        {
+          "id": "bbva-visa-platinum",
+          "name": "Visa Platinum",
+          "franchise": "visa",
+          "tier": "platinum",
+          "rewards": "Puntos BBVA",
+          "handlingFeeCOP": 0,
+          "note": "Exoneración permanente de la cuota de manejo"
+        },
+        {
+          "id": "bbva-visa-infinite",
+          "name": "Visa Infinite",
+          "franchise": "visa",
+          "tier": "infinite",
+          "rewards": "Puntos BBVA",
+          "handlingFeeCOP": 0,
+          "note": "Exoneración permanente de la cuota de manejo"
+        },
+        {
+          "id": "bbva-mastercard-coral",
+          "name": "Mastercard Coral",
+          "franchise": "mastercard",
+          "tier": null,
+          "rewards": "Puntos BBVA",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "bbva-mastercard-standard",
+          "name": "Mastercard Standard",
+          "franchise": "mastercard",
+          "tier": "clasica",
+          "rewards": "Puntos BBVA",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "bbva-mastercard-gold",
+          "name": "Mastercard Gold",
+          "franchise": "mastercard",
+          "tier": "oro",
+          "rewards": "Puntos BBVA",
+          "handlingFeeCOP": 0,
+          "note": "Exoneración permanente de la cuota de manejo"
+        },
+        {
+          "id": "bbva-mastercard-platinum",
+          "name": "Mastercard Platinum",
+          "franchise": "mastercard",
+          "tier": "platinum",
+          "rewards": "Puntos BBVA",
+          "handlingFeeCOP": 0,
+          "note": "Exoneración permanente de la cuota de manejo"
+        },
+        {
+          "id": "bbva-mastercard-black",
+          "name": "Mastercard Black",
+          "franchise": "mastercard",
+          "tier": "black",
+          "rewards": "Puntos BBVA",
+          "handlingFeeCOP": 0,
+          "note": "Exoneración permanente de la cuota de manejo"
+        },
+        {
+          "id": "bbva-mastercard-heroes",
+          "name": "Mastercard Héroes",
+          "franchise": "mastercard",
+          "tier": null,
+          "rewards": "Puntos BBVA",
+          "handlingFeeCOP": null,
+          "note": "Para miembros de las Fuerzas Militares"
+        }
+      ]
+    },
+    {
+      "id": "banco-de-bogota",
+      "name": "Banco de Bogotá",
+      "aliases": [
+        "Banco de Bogotá",
+        "Banco de Bogota",
+        "Bogotá",
+        "Bogota",
+        "BdB",
+        "Itaú",
+        "Itau",
+        "Banco Itaú",
+        "Itaú Colombia"
+      ],
+      "source": "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/5415054-tarjetas-credito-banco-bogota",
+      "sources": [
+        "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/5415054-tarjetas-credito-banco-bogota",
+        "https://www.larepublica.co/finanzas/banco-de-bogota-despegar-y-mastercard-lanzan-tarjeta-que-convierte-compras-en-beneficios-para-viajar-4482203",
+        "https://www.bloomberglinea.com/latinoamerica/colombia/tarjetas-itau-dejaran-de-funcionar-el-21-de-octubre-que-deben-hacer-los-clientes-que-pasaron-a-banco-de-bogota/",
+        "https://banco.itau.co/documents/d/guest/q-a-tarjeta-de-credito-itau-lifemiles-31-jul-v2",
+        "https://newsroom.rcnradio.com/colombia/tarjetas-de-credito-sin-cuota-de-manejo-en-2026-estas-son-algunas-de-las-opciones-en-colombia"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": true,
+      "note": "La banca de personas de Itaú pasó a Banco de Bogotá en agosto de 2026; las tarjetas Itaú (también la Itaú LifeMiles) dejaron de funcionar y Banco de Bogotá las cambió por tarjetas propias. Por eso Itaú no tiene tarjetas propias aquí: busca la tuya en esta lista.",
+      "feeNote": "Cuota mensual anticipada de la tarifa 2026 según Rankia; Banco de Bogotá da 6 meses sin cuota a las nuevas.",
+      "cards": [
+        {
+          "id": "banco-de-bogota-clasica",
+          "name": "Clásica",
+          "franchise": null,
+          "tier": "clasica",
+          "rewards": "Tuplús",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-gold",
+          "name": "Gold",
+          "franchise": null,
+          "tier": "oro",
+          "rewards": "Tuplús",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-platinum",
+          "name": "Platinum",
+          "franchise": null,
+          "tier": "platinum",
+          "rewards": "Tuplús",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-visa-signature",
+          "name": "Visa Signature",
+          "franchise": "visa",
+          "tier": "signature",
+          "rewards": null,
+          "handlingFeeCOP": 48410,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-mastercard-black",
+          "name": "Mastercard Black",
+          "franchise": "mastercard",
+          "tier": "black",
+          "rewards": null,
+          "handlingFeeCOP": 48410,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-visa-infinite",
+          "name": "Visa Infinite",
+          "franchise": "visa",
+          "tier": "infinite",
+          "rewards": null,
+          "handlingFeeCOP": 51890,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-visa-economia",
+          "name": "Visa Economía",
+          "franchise": "visa",
+          "tier": null,
+          "rewards": "Cashback",
+          "handlingFeeCOP": 33100,
+          "note": "5 % de vuelta en supermercados"
+        },
+        {
+          "id": "banco-de-bogota-movistar-aliada",
+          "name": "Movistar Aliada",
+          "franchise": null,
+          "tier": null,
+          "rewards": "Cashback",
+          "handlingFeeCOP": 26010,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-movistar-clasica",
+          "name": "Movistar Clásica",
+          "franchise": null,
+          "tier": "clasica",
+          "rewards": "Cashback",
+          "handlingFeeCOP": 30790,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-movistar-gold",
+          "name": "Movistar Gold",
+          "franchise": null,
+          "tier": "oro",
+          "rewards": "Cashback",
+          "handlingFeeCOP": 35520,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-movistar-platinum",
+          "name": "Movistar Platinum",
+          "franchise": null,
+          "tier": "platinum",
+          "rewards": "Cashback",
+          "handlingFeeCOP": 40260,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-biomax-clasica",
+          "name": "Biomax Clásica",
+          "franchise": null,
+          "tier": "clasica",
+          "rewards": "Cashback",
+          "handlingFeeCOP": 30790,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-biomax-gold",
+          "name": "Biomax Gold",
+          "franchise": null,
+          "tier": "oro",
+          "rewards": "Cashback",
+          "handlingFeeCOP": 35520,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-aliada",
+          "name": "Aliada",
+          "franchise": null,
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 26010,
+          "note": "Descuentos en comercios aliados"
+        },
+        {
+          "id": "banco-de-bogota-cero-rollo-visa",
+          "name": "Cero Rollo Visa",
+          "franchise": "visa",
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 0,
+          "note": "Sin cuota de manejo"
+        },
+        {
+          "id": "banco-de-bogota-latam-pass-visa-clasica",
+          "name": "LATAM Pass Visa Clásica",
+          "franchise": "visa",
+          "tier": "clasica",
+          "rewards": "LATAM Pass",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-latam-pass-visa-gold",
+          "name": "LATAM Pass Visa Gold",
+          "franchise": "visa",
+          "tier": "oro",
+          "rewards": "LATAM Pass",
+          "handlingFeeCOP": 35520,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-latam-pass-visa-platinum",
+          "name": "LATAM Pass Visa Platinum",
+          "franchise": "visa",
+          "tier": "platinum",
+          "rewards": "LATAM Pass",
+          "handlingFeeCOP": 40260,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-latam-pass-visa-signature",
+          "name": "LATAM Pass Visa Signature",
+          "franchise": "visa",
+          "tier": "signature",
+          "rewards": "LATAM Pass",
+          "handlingFeeCOP": 47980,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-pasaporte-mastercard-clasica",
+          "name": "Pasaporte Mastercard Clásica",
+          "franchise": "mastercard",
+          "tier": "clasica",
+          "rewards": "Puntos Pasaporte",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-pasaporte-mastercard-gold",
+          "name": "Pasaporte Mastercard Gold",
+          "franchise": "mastercard",
+          "tier": "oro",
+          "rewards": "Puntos Pasaporte",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-pasaporte-mastercard-platinum",
+          "name": "Pasaporte Mastercard Platinum",
+          "franchise": "mastercard",
+          "tier": "platinum",
+          "rewards": "Puntos Pasaporte",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "banco-de-bogota-pasaporte-mastercard-black",
+          "name": "Pasaporte Mastercard Black",
+          "franchise": "mastercard",
+          "tier": "black",
+          "rewards": "Puntos Pasaporte",
+          "handlingFeeCOP": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "id": "davibank",
+      "name": "DAVIbank (antes Scotiabank Colpatria)",
+      "aliases": [
+        "DAVIbank",
+        "Davibank",
+        "Scotiabank Colpatria",
+        "Colpatria",
+        "Scotiabank",
+        "Banco Colpatria"
+      ],
+      "source": "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/4092895-mejores-tarjetas-credito-para-viajar",
+      "sources": [
+        "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/4092895-mejores-tarjetas-credito-para-viajar",
+        "https://cdn.agilitycms.com/scotiabank-colombia/scotiabank-colpatria/pdf/Legales-Tarjetas-cr%C3%A9dito-Avianca-LifeMiles-V2024.pdf",
+        "https://www.valoraanalitik.com/?p=216533",
+        "https://www.noticiascaracol.com/economia/que-pasara-con-las-tarjetas-y-productos-de-scotiabank-colpatria-tras-integracion-con-davivienda-rg10"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": false,
+      "note": "Scotiabank Colpatria se llama DAVIbank desde abril de 2026 y sus tarjetas siguen con las mismas condiciones. La lista sale de documentos de 2022 a 2025 y de Rankia (sep 2026); solo la LifeMiles Visa Infinite está confirmada en 2026.",
+      "feeNote": null,
+      "cards": [
+        {
+          "id": "davibank-lifemiles-visa-clasica",
+          "name": "LifeMiles Visa Clásica",
+          "franchise": "visa",
+          "tier": "clasica",
+          "rewards": "LifeMiles",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davibank-lifemiles-visa-gold",
+          "name": "LifeMiles Visa Gold",
+          "franchise": "visa",
+          "tier": "oro",
+          "rewards": "LifeMiles",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davibank-lifemiles-visa-platinum",
+          "name": "LifeMiles Visa Platinum",
+          "franchise": "visa",
+          "tier": "platinum",
+          "rewards": "LifeMiles",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davibank-lifemiles-visa-infinite",
+          "name": "LifeMiles Visa Infinite",
+          "franchise": "visa",
+          "tier": "infinite",
+          "rewards": "LifeMiles",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davibank-one-light-american-express",
+          "name": "One Light American Express",
+          "franchise": "amex",
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 0,
+          "note": "Sin cuota de manejo"
+        },
+        {
+          "id": "davibank-one-cashback-american-express",
+          "name": "One Cashback American Express",
+          "franchise": "amex",
+          "tier": null,
+          "rewards": "Cashback",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "davibank-one-rewards-black-american-express",
+          "name": "One Rewards Black American Express",
+          "franchise": "amex",
+          "tier": "black",
+          "rewards": "Puntos",
+          "handlingFeeCOP": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "id": "occidente",
+      "name": "Banco de Occidente",
+      "aliases": [
+        "Banco de Occidente",
+        "Occidente",
+        "Credencial"
+      ],
+      "source": "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/5994157-mejores-tarjetas-bancarias-banco-occidente",
+      "sources": [
+        "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/5994157-mejores-tarjetas-bancarias-banco-occidente",
+        "https://latampass.latam.com/es_co/acumula-millas/tarjetas-de-credito-latam-pass/visa-signature"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": true,
+      "note": null,
+      "feeNote": "Cuota mensual según Rankia (jul 2026). Donde Rankia trae dos valores distintos queda vacía.",
+      "cards": [
+        {
+          "id": "occidente-credencial-clasica-visa",
+          "name": "Credencial Clásica Visa",
+          "franchise": "visa",
+          "tier": "clasica",
+          "rewards": "Tuplús",
+          "handlingFeeCOP": 26533,
+          "note": null
+        },
+        {
+          "id": "occidente-credencial-clasica-mastercard",
+          "name": "Credencial Clásica Mastercard",
+          "franchise": "mastercard",
+          "tier": "clasica",
+          "rewards": "Tuplús",
+          "handlingFeeCOP": 26533,
+          "note": null
+        },
+        {
+          "id": "occidente-credencial-gold-visa",
+          "name": "Credencial Gold Visa",
+          "franchise": "visa",
+          "tier": "oro",
+          "rewards": null,
+          "handlingFeeCOP": 31000,
+          "note": null
+        },
+        {
+          "id": "occidente-credencial-gold-mastercard",
+          "name": "Credencial Gold Mastercard",
+          "franchise": "mastercard",
+          "tier": "oro",
+          "rewards": null,
+          "handlingFeeCOP": 31000,
+          "note": null
+        },
+        {
+          "id": "occidente-credencial-platinum",
+          "name": "Credencial Platinum",
+          "franchise": null,
+          "tier": "platinum",
+          "rewards": "Tuplús",
+          "handlingFeeCOP": 34623,
+          "note": null
+        },
+        {
+          "id": "occidente-credencial-premium",
+          "name": "Credencial Premium",
+          "franchise": null,
+          "tier": null,
+          "rewards": "Tuplús",
+          "handlingFeeCOP": 34623,
+          "note": null
+        },
+        {
+          "id": "occidente-credencial-mastercard-black",
+          "name": "Credencial Mastercard Black",
+          "franchise": "mastercard",
+          "tier": "black",
+          "rewards": null,
+          "handlingFeeCOP": 43900,
+          "note": null
+        },
+        {
+          "id": "occidente-credencial-visa-infinite",
+          "name": "Credencial Visa Infinite",
+          "franchise": "visa",
+          "tier": "infinite",
+          "rewards": null,
+          "handlingFeeCOP": 47487,
+          "note": null
+        },
+        {
+          "id": "occidente-credencial-free-visa",
+          "name": "Credencial Free Visa",
+          "franchise": "visa",
+          "tier": null,
+          "rewards": "Cashback",
+          "handlingFeeCOP": 0,
+          "note": "Sin cuota de manejo"
+        },
+        {
+          "id": "occidente-credencial-mascotas-visa",
+          "name": "Credencial Mascotas Visa",
+          "franchise": "visa",
+          "tier": null,
+          "rewards": "Cashback",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "occidente-credencial-santafe-visa",
+          "name": "Credencial Santafé Visa",
+          "franchise": "visa",
+          "tier": null,
+          "rewards": "Cashback",
+          "handlingFeeCOP": 31000,
+          "note": null
+        },
+        {
+          "id": "occidente-credencial-unicef-mastercard",
+          "name": "Credencial UNICEF Mastercard",
+          "franchise": "mastercard",
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 31000,
+          "note": "Dona parte de tus compras a UNICEF"
+        },
+        {
+          "id": "occidente-credencial-latam-pass-visa-clasica",
+          "name": "Credencial LATAM Pass Visa Clásica",
+          "franchise": "visa",
+          "tier": "clasica",
+          "rewards": "LATAM Pass",
+          "handlingFeeCOP": 26900,
+          "note": null
+        },
+        {
+          "id": "occidente-credencial-latam-pass-visa-gold",
+          "name": "Credencial LATAM Pass Visa Gold",
+          "franchise": "visa",
+          "tier": "oro",
+          "rewards": "LATAM Pass",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "occidente-credencial-latam-pass-visa-platinum",
+          "name": "Credencial LATAM Pass Visa Platinum",
+          "franchise": "visa",
+          "tier": "platinum",
+          "rewards": "LATAM Pass",
+          "handlingFeeCOP": 35500,
+          "note": null
+        },
+        {
+          "id": "occidente-credencial-latam-pass-visa-signature",
+          "name": "Credencial LATAM Pass Visa Signature",
+          "franchise": "visa",
+          "tier": "signature",
+          "rewards": "LATAM Pass",
+          "handlingFeeCOP": 44400,
+          "note": null
+        }
+      ]
+    },
+    {
+      "id": "av-villas",
+      "name": "Banco AV Villas",
+      "aliases": [
+        "AV Villas",
+        "Banco AV Villas",
+        "AVVillas"
+      ],
+      "source": "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/5387298-tarjeta-credito-av-villas",
+      "sources": [
+        "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/5387298-tarjeta-credito-av-villas",
+        "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/4092895-mejores-tarjetas-credito-para-viajar"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": true,
+      "note": null,
+      "feeNote": "AV Villas publica meses sin cuota para tarjetas nuevas, no el valor.",
+      "cards": [
+        {
+          "id": "av-villas-clasica",
+          "name": "Clásica",
+          "franchise": "mastercard",
+          "tier": "clasica",
+          "rewards": "Tuplús",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "av-villas-oro",
+          "name": "Oro",
+          "franchise": null,
+          "tier": "oro",
+          "rewards": "Tuplús",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "av-villas-platinum",
+          "name": "Platinum",
+          "franchise": null,
+          "tier": "platinum",
+          "rewards": "Tuplús",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "av-villas-black",
+          "name": "Black",
+          "franchise": null,
+          "tier": "black",
+          "rewards": "Tuplús",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "av-villas-facilisima",
+          "name": "Facilísima",
+          "franchise": null,
+          "tier": null,
+          "rewards": "Tuplús",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "av-villas-talisman",
+          "name": "Talismán",
+          "franchise": null,
+          "tier": null,
+          "rewards": "Tuplús",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "av-villas-experto",
+          "name": "Experto",
+          "franchise": "mastercard",
+          "tier": null,
+          "rewards": "Cashback",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "av-villas-lifemiles",
+          "name": "LifeMiles",
+          "franchise": "visa",
+          "tier": null,
+          "rewards": "LifeMiles",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "av-villas-bikehouse",
+          "name": "Bikehouse",
+          "franchise": null,
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "av-villas-millonarios",
+          "name": "Millonarios",
+          "franchise": null,
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "av-villas-auteco",
+          "name": "Auteco",
+          "franchise": null,
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "id": "popular",
+      "name": "Banco Popular",
+      "aliases": [
+        "Banco Popular",
+        "Popular"
+      ],
+      "source": "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/4092895-mejores-tarjetas-credito-para-viajar",
+      "sources": [
+        "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/4092895-mejores-tarjetas-credito-para-viajar",
+        "https://newsroom.rcnradio.com/colombia/tarjetas-de-credito-sin-cuota-de-manejo-en-2026-estas-son-algunas-de-las-opciones-en-colombia",
+        "https://www.rankia.co/tarjetas/tarjeta-mastercard-platinum-banco-popular-colombia"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": false,
+      "note": "Solo se encontraron estas tres en fuentes de 2026; puede haber más.",
+      "feeNote": null,
+      "cards": [
+        {
+          "id": "popular-connectmiles-visa-signature",
+          "name": "ConnectMiles Visa Signature",
+          "franchise": "visa",
+          "tier": "signature",
+          "rewards": "ConnectMiles",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "popular-tarjeta-de-credito-cero",
+          "name": "Tarjeta de Crédito Cero",
+          "franchise": null,
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 0,
+          "note": "Sin cuota de manejo"
+        },
+        {
+          "id": "popular-mastercard-platinum",
+          "name": "Mastercard Platinum",
+          "franchise": "mastercard",
+          "tier": "platinum",
+          "rewards": "Tuplús",
+          "handlingFeeCOP": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "id": "caja-social",
+      "name": "Banco Caja Social",
+      "aliases": [
+        "Banco Caja Social",
+        "Caja Social",
+        "BCSC"
+      ],
+      "source": "https://www.bancocajasocial.com/content/dam/bcs/documentos/personas/tarjetas-de-credito/generales/cuota-cero/Cero-Miedo-Tarjeta-Platinum.pdf",
+      "sources": [
+        "https://www.bancocajasocial.com/content/dam/bcs/documentos/personas/tarjetas-de-credito/generales/cuota-cero/Cero-Miedo-Tarjeta-Platinum.pdf"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": false,
+      "note": "El sitio del banco no se pudo leer; solo se confirmó la Platinum. Si la tuya no aparece, escribe el nombre como sale en tu extracto.",
+      "feeNote": null,
+      "cards": [
+        {
+          "id": "caja-social-platinum",
+          "name": "Platinum",
+          "franchise": null,
+          "tier": "platinum",
+          "rewards": null,
+          "handlingFeeCOP": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "id": "nu",
+      "name": "Nu Colombia",
+      "aliases": [
+        "Nu",
+        "Nubank",
+        "Nu Colombia",
+        "Nu Financiera"
+      ],
+      "source": "https://finanzasplus.co/blog/que-es-la-tarjeta-de-credito-nu-descubre-sus-caracteristicas-y-tarifas",
+      "sources": [
+        "https://finanzasplus.co/blog/que-es-la-tarjeta-de-credito-nu-descubre-sus-caracteristicas-y-tarifas"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": true,
+      "note": null,
+      "feeNote": null,
+      "cards": [
+        {
+          "id": "nu-tarjeta-nu",
+          "name": "Tarjeta Nu",
+          "franchise": "mastercard",
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 0,
+          "note": "Sin cuota de manejo"
+        }
+      ]
+    },
+    {
+      "id": "falabella",
+      "name": "Banco Falabella",
+      "aliases": [
+        "Falabella",
+        "Banco Falabella",
+        "CMR",
+        "CMR Falabella"
+      ],
+      "source": "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/5446633-tarjetas-cmr-banco-falabella",
+      "sources": [
+        "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/5446633-tarjetas-cmr-banco-falabella"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": true,
+      "note": null,
+      "feeNote": null,
+      "cards": [
+        {
+          "id": "falabella-cmr-mastercard",
+          "name": "CMR Mastercard",
+          "franchise": "mastercard",
+          "tier": "clasica",
+          "rewards": "CMR Puntos",
+          "handlingFeeCOP": 31990,
+          "note": null
+        },
+        {
+          "id": "falabella-cmr-mastercard-black",
+          "name": "CMR Mastercard Black",
+          "franchise": "mastercard",
+          "tier": "black",
+          "rewards": "CMR Puntos",
+          "handlingFeeCOP": 46990,
+          "note": "Solo cobra cuota si la usas o debes en el mes"
+        }
+      ]
+    },
+    {
+      "id": "rappicard",
+      "name": "RappiCard",
+      "aliases": [
+        "RappiCard",
+        "Rappi",
+        "RappiPay",
+        "Rappi Pay"
+      ],
+      "source": "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/5891314-tarjeta-credito-rappicard-rappi",
+      "sources": [
+        "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/5891314-tarjeta-credito-rappicard-rappi"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": true,
+      "note": null,
+      "feeNote": null,
+      "cards": [
+        {
+          "id": "rappicard-rappicard-visa",
+          "name": "RappiCard Visa",
+          "franchise": "visa",
+          "tier": null,
+          "rewards": "Cashback",
+          "handlingFeeCOP": 0,
+          "note": "La emite Davivienda; 100 % digital"
+        }
+      ]
+    },
+    {
+      "id": "tuya",
+      "name": "Tuya (Éxito y Carulla)",
+      "aliases": [
+        "Tuya",
+        "Tarjeta Éxito",
+        "Éxito",
+        "Exito",
+        "Carulla",
+        "Tarjeta Carulla"
+      ],
+      "source": "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/5884436-tarjetas-credito-tuya",
+      "sources": [
+        "https://www.rankia.co/blog/ranking-tarjetas-credito-debito/5884436-tarjetas-credito-tuya"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": true,
+      "note": "La Tarjeta Viva ya no se expide y no se incluye.",
+      "feeNote": null,
+      "cards": [
+        {
+          "id": "tuya-tarjeta-exito",
+          "name": "Tarjeta Éxito",
+          "franchise": null,
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 13400,
+          "note": "Marca propia"
+        },
+        {
+          "id": "tuya-exito-mastercard",
+          "name": "Éxito Mastercard",
+          "franchise": "mastercard",
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "tuya-exito-digital-mastercard",
+          "name": "Éxito Digital Mastercard",
+          "franchise": "mastercard",
+          "tier": "virtual",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 13400,
+          "note": null
+        },
+        {
+          "id": "tuya-exito-pro-mastercard",
+          "name": "Éxito Pro Mastercard",
+          "franchise": "mastercard",
+          "tier": null,
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 22600,
+          "note": null
+        },
+        {
+          "id": "tuya-exito-gold-mastercard",
+          "name": "Éxito Gold Mastercard",
+          "franchise": "mastercard",
+          "tier": "oro",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "tuya-carulla-mastercard-black",
+          "name": "Carulla Mastercard Black",
+          "franchise": "mastercard",
+          "tier": "black",
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "tuya-claro-pay-mastercard",
+          "name": "Claro Pay Mastercard",
+          "franchise": "mastercard",
+          "tier": null,
+          "rewards": "Puntos Colombia",
+          "handlingFeeCOP": 11400,
+          "note": null
+        }
+      ]
+    },
+    {
+      "id": "lulo",
+      "name": "Lulo Bank",
+      "aliases": [
+        "Lulo",
+        "Lulo Bank"
+      ],
+      "source": "https://www.valoraanalitik.com/?p=511423",
+      "sources": [
+        "https://www.valoraanalitik.com/?p=511423",
+        "https://www.latamfintech.co/articles/lulo-bank-entra-al-mercado-de-tarjetas-de-credito-en-colombia-desde-septiembre"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": false,
+      "note": "Lanzada en 2025; el nombre comercial exacto no se pudo confirmar.",
+      "feeNote": null,
+      "cards": [
+        {
+          "id": "lulo-tarjeta-de-credito-lulo",
+          "name": "Tarjeta de crédito Lulo",
+          "franchise": "mastercard",
+          "tier": null,
+          "rewards": "Cashback",
+          "handlingFeeCOP": null,
+          "note": "1 % de vuelta a una cuota y 2 % a más cuotas"
+        }
+      ]
+    },
+    {
+      "id": "agrario",
+      "name": "Banco Agrario",
+      "aliases": [
+        "Banco Agrario",
+        "Agrario",
+        "Banco Agrario de Colombia"
+      ],
+      "source": "https://www.portafolio.co/economia/finanzas/cuales-son-los-requisitos-para-solicitar-la-tarjeta-de-credito-dinamica-del-banco-agrario-634509",
+      "sources": [
+        "https://www.portafolio.co/economia/finanzas/cuales-son-los-requisitos-para-solicitar-la-tarjeta-de-credito-dinamica-del-banco-agrario-634509",
+        "https://www.valoraanalitik.com/?p=399398"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": false,
+      "note": "Fuentes de 2024 y 2025; la franquicia no se pudo confirmar.",
+      "feeNote": null,
+      "cards": [
+        {
+          "id": "agrario-dinamica",
+          "name": "Dinámica",
+          "franchise": null,
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": null,
+          "note": null
+        },
+        {
+          "id": "agrario-mujer-agro",
+          "name": "Mujer Agro",
+          "franchise": null,
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 0,
+          "note": "Sin cuota de manejo"
+        }
+      ]
+    },
+    {
+      "id": "gnb-sudameris",
+      "name": "Banco GNB Sudameris",
+      "aliases": [
+        "GNB Sudameris",
+        "GNB",
+        "Sudameris",
+        "Banco GNB"
+      ],
+      "source": "https://www.rankia.co/bancos/banco-gnb-sudameris",
+      "sources": [
+        "https://www.rankia.co/bancos/banco-gnb-sudameris"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": false,
+      "note": "No se pudo verificar ninguna tarjeta de crédito; escribe el nombre como sale en tu extracto.",
+      "feeNote": null,
+      "cards": []
+    },
+    {
+      "id": "pichincha",
+      "name": "Banco Pichincha",
+      "aliases": [
+        "Banco Pichincha",
+        "Pichincha"
+      ],
+      "source": "https://www.rankia.co/tarjetas/tarjeta-credito-infinite-banco-pichincha-colombia",
+      "sources": [
+        "https://www.rankia.co/tarjetas/tarjeta-credito-infinite-banco-pichincha-colombia"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": false,
+      "note": "Solo se confirmó la Infinite; la Gold y la Platino aparecen como retiradas.",
+      "feeNote": null,
+      "cards": [
+        {
+          "id": "pichincha-visa-infinite",
+          "name": "Visa Infinite",
+          "franchise": "visa",
+          "tier": "infinite",
+          "rewards": "Experiencias Pichincha",
+          "handlingFeeCOP": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "id": "serfinanza",
+      "name": "Banco Serfinanza (Olímpica)",
+      "aliases": [
+        "Serfinanza",
+        "Banco Serfinanza",
+        "Olímpica",
+        "Olimpica",
+        "Tarjeta Olímpica"
+      ],
+      "source": "https://bancoserfinanza.com/wp-content/uploads/2026/08/TARIFAS-1-DE-AGOSTO-DE-2026-1.pdf",
+      "sources": [
+        "https://bancoserfinanza.com/wp-content/uploads/2026/08/TARIFAS-1-DE-AGOSTO-DE-2026-1.pdf"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": true,
+      "note": null,
+      "feeNote": "Tarifas de Serfinanza vigentes desde el 1 ago 2026.",
+      "cards": [
+        {
+          "id": "serfinanza-tarjeta-olimpica",
+          "name": "Tarjeta Olímpica",
+          "franchise": null,
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 34610,
+          "note": "Marca propia"
+        },
+        {
+          "id": "serfinanza-olimpica-mastercard",
+          "name": "Olímpica Mastercard",
+          "franchise": "mastercard",
+          "tier": "clasica",
+          "rewards": null,
+          "handlingFeeCOP": 34610,
+          "note": null
+        },
+        {
+          "id": "serfinanza-olimpica-mastercard-gold",
+          "name": "Olímpica Mastercard Gold",
+          "franchise": "mastercard",
+          "tier": "oro",
+          "rewards": null,
+          "handlingFeeCOP": 37000,
+          "note": null
+        },
+        {
+          "id": "serfinanza-dgo-mastercard",
+          "name": "DGO Mastercard",
+          "franchise": "mastercard",
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 23480,
+          "note": null
+        },
+        {
+          "id": "serfinanza-mastercard-black",
+          "name": "Mastercard Black",
+          "franchise": "mastercard",
+          "tier": "black",
+          "rewards": null,
+          "handlingFeeCOP": 47400,
+          "note": null
+        }
+      ]
+    },
+    {
+      "id": "finandina",
+      "name": "Banco Finandina",
+      "aliases": [
+        "Finandina",
+        "Banco Finandina",
+        "Finandina Digital"
+      ],
+      "source": "https://bancofinandina.com/hubfs/Backup%20Sitefinity/Files/historial%20tasas%20y%20tarifas/tarifas/tarifas-vigentes-desde-15-noviembre-2025.pdf?hsLang=es",
+      "sources": [
+        "https://bancofinandina.com/hubfs/Backup%20Sitefinity/Files/historial%20tasas%20y%20tarifas/tarifas/tarifas-vigentes-desde-15-noviembre-2025.pdf?hsLang=es"
+      ],
+      "checkedAt": "2026-11-07",
+      "verified": true,
+      "note": null,
+      "feeNote": "Tarifas de Finandina vigentes desde el 15 nov 2025, mes vencido sin IVA. La franquicia que nombra es Visa.",
+      "cards": [
+        {
+          "id": "finandina-tarjeta-de-credito-digital",
+          "name": "Tarjeta de Crédito Digital",
+          "franchise": "visa",
+          "tier": "virtual",
+          "rewards": null,
+          "handlingFeeCOP": 7400,
+          "note": null
+        },
+        {
+          "id": "finandina-clasica",
+          "name": "Clásica",
+          "franchise": "visa",
+          "tier": "clasica",
+          "rewards": null,
+          "handlingFeeCOP": 33900,
+          "note": "TC Garantizada"
+        },
+        {
+          "id": "finandina-oro",
+          "name": "Oro",
+          "franchise": "visa",
+          "tier": "oro",
+          "rewards": null,
+          "handlingFeeCOP": 38400,
+          "note": null
+        },
+        {
+          "id": "finandina-ligera",
+          "name": "Ligera",
+          "franchise": "visa",
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 21300,
+          "note": null
+        },
+        {
+          "id": "finandina-mi-primera-tarjeta",
+          "name": "Mi Primera Tarjeta",
+          "franchise": "visa",
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 21300,
+          "note": null
+        },
+        {
+          "id": "finandina-finanzauto",
+          "name": "Finanzauto",
+          "franchise": "visa",
+          "tier": null,
+          "rewards": null,
+          "handlingFeeCOP": 13800,
+          "note": null
+        }
+      ]
+    }
+  ]
+}

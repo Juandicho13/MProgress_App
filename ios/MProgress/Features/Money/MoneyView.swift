@@ -103,6 +103,7 @@ private struct MoneyContent: View {
                     }
                     SectionLabel(text: "Bancos y billeteras")
                     banksCard
+                    DebtsSection(wallet: wallet, hideBalances: hideBalances)
                     RewardsSection(wallet: wallet, hideBalances: hideBalances)
                     mostUsedSection
                 }
@@ -136,7 +137,7 @@ private struct MoneyContent: View {
                     dot(Palette.brasa, "Debes", worth.owe)
                 }
                 if yield > 0 && !hideBalances {
-                    Text("Tus cajitas rentan \(money(yield)) este mes").appFont(.leyenda).foregroundStyle(Palette.exito)
+                    Text("Tus bolsillos y cajitas rentan \(money(yield)) este mes").appFont(.leyenda).foregroundStyle(Palette.exito)
                 }
             }
         }

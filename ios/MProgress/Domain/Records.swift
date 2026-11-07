@@ -11,20 +11,25 @@ enum EntryKind: String, Codable, Sendable, CaseIterable {
 }
 
 enum ProductKind: String, Codable, Sendable, CaseIterable {
-    case cuenta, debito, credito, bolsillo, efectivo
+    /// Bolsillo: plata apartada dentro de una cuenta (Nequi, Bancolombia). Cajita: ahorro aparte que suele rendir (Nu).
+    case cuenta, debito, credito, bolsillo, efectivo, cajita
 
     var title: String {
         switch self {
         case .cuenta: "Cuenta"
         case .debito: "Tarjeta débito"
         case .credito: "Tarjeta crédito"
-        case .bolsillo: "Bolsillo o cajita"
+        case .bolsillo: "Bolsillo"
         case .efectivo: "Efectivo"
+        case .cajita: "Cajita"
         }
     }
 
     /// Las tarjetas de crédito guardan deuda; lo demás, dinero disponible.
     var isDebt: Bool { self == .credito }
+
+    /// Bolsillos y cajitas pueden tener tasa E.A. y rendimiento del mes.
+    var earnsYield: Bool { self == .bolsillo || self == .cajita }
 }
 
 struct EntryRecord: Hashable, Sendable {

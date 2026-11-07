@@ -7,9 +7,12 @@ enum class EntryKind { GASTO, INGRESO;
     val sign: Long get() = if (this == INGRESO) 1 else -1
 }
 
+/** Bolsillo: plata apartada dentro de una cuenta (Nequi, Bancolombia). Cajita: ahorro aparte que suele rendir (Nu). */
 enum class ProductKind(val title: String) {
-    CUENTA("Cuenta"), DEBITO("Tarjeta débito"), CREDITO("Tarjeta crédito"), BOLSILLO("Bolsillo o cajita"), EFECTIVO("Efectivo");
+    CUENTA("Cuenta"), DEBITO("Tarjeta débito"), CREDITO("Tarjeta crédito"), BOLSILLO("Bolsillo"), EFECTIVO("Efectivo"), CAJITA("Cajita");
     val isDebt get() = this == CREDITO
+    /** Bolsillos y cajitas pueden tener tasa E.A. y rendimiento del mes. */
+    val earnsYield get() = this == BOLSILLO || this == CAJITA
 }
 
 data class EntryRecord(
@@ -89,7 +92,13 @@ object Categories {
         CategoryRecord("0a000000-0000-4000-8000-000000000014", "Finanzas", "banknote", 14),
         CategoryRecord("0a000000-0000-4000-8000-000000000099", "Otros", "square.grid.2x2", 99),
     )
-    fun byId(id: String?) = all.firstOrNull { it.id.equals(id, ignoreCase = true) }
+    /** Categorías propias (las crea la persona en el selector). Las pone Store cada vez que cambia el ledger. */
+    @Volatile var custom: List<CategoryRecord> = emptyList()
+    /** Las que se pueden elegir: las de la app y las propias, por orden ("Otros" al final). */
+    fun available(): List<CategoryRecord> = (all + custom).sortedBy { it.sort }
+    /** Las de la app no se borran ni se cambian. */
+    fun isBuiltIn(id: String?) = all.any { it.id.equals(id, ignoreCase = true) }
+    fun byId(id: String?) = all.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: custom.firstOrNull { it.id.equals(id, ignoreCase = true) }
     fun byName(name: String?) = all.firstOrNull { it.name == name }
 }
 

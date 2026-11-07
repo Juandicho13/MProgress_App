@@ -46,6 +46,7 @@ import java.time.YearMonth
 @Composable
 fun HistoryScreen(store: Store, onAdd: () -> Unit = {}, onOpenEntry: ((String) -> Unit)? = null, onBack: () -> Unit) {
     val ledger by store.ledger.collectAsState()
+    val cloudUi = com.olarte.mprogress.ui.home.rememberCloudUi()
     var query by remember { mutableStateOf("") }
     var deleting by remember { mutableStateOf<EntryRecord?>(null) }
     val today = LocalDate.now()
@@ -86,7 +87,8 @@ fun HistoryScreen(store: Store, onAdd: () -> Unit = {}, onOpenEntry: ((String) -
                                 }
                                 day.entries.forEach { e ->
                                     val sub = listOfNotNull(com.olarte.mprogress.domain.Categories.byId(e.categoryId)?.name, if (e.recurringId != null) "Pago fijo" else null).joinToString(" · ").ifEmpty { "Sin categoría" }
-                                    EntryRow(e.name, e.kind, e.amountMinor, sub, onClick = { if (onOpenEntry != null) onOpenEntry(e.id) else deleting = e })
+                                    EntryRow(e.name, e.kind, e.amountMinor, sub, onClick = { if (onOpenEntry != null) onOpenEntry(e.id) else deleting = e },
+                                        pending = cloudUi?.showsPendingMark(e.id) == true)
                                 }
                             }
                         }

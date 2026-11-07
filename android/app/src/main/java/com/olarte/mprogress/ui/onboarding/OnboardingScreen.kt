@@ -484,6 +484,7 @@ private fun BanksStep(state: OnboardingState) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BankCard(state: OnboardingState, bank: PlannedBank, onAdd: (ProductKind) -> Unit) {
     Card(padding = Spacing.s3) {
@@ -505,28 +506,29 @@ private fun BankCard(state: OnboardingState, bank: PlannedBank, onAdd: (ProductK
                 }
             }
             if (bank.name != "Efectivo") {
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.s2), verticalArrangement = Arrangement.spacedBy(Spacing.s2)) {
                     Chip("+ Crédito") { onAdd(ProductKind.CREDITO) }
                     Chip("+ Débito") { onAdd(ProductKind.DEBITO) }
-                    Chip("+ Cajita") { onAdd(ProductKind.BOLSILLO) }
+                    Chip("+ Bolsillo") { onAdd(ProductKind.BOLSILLO) }
+                    Chip("+ Cajita") { onAdd(ProductKind.CAJITA) }
                 }
             }
         }
     }
 }
 
-/** Nombre y 4 últimos dígitos de una tarjeta, o nombre de una cajita. Nunca el número completo. */
+/** Nombre y 4 últimos dígitos de una tarjeta, o nombre de un bolsillo o una cajita. Nunca el número completo. */
 @Composable
 private fun PlannedCardSheet(kind: ProductKind, onDismiss: () -> Unit, onAdd: (PlannedProduct) -> Unit) {
     val isCard = kind == ProductKind.CREDITO || kind == ProductKind.DEBITO
-    var name by remember { mutableStateOf(when (kind) { ProductKind.CREDITO -> "Crédito"; ProductKind.DEBITO -> "Débito"; else -> "Cajita" }) }
+    var name by remember { mutableStateOf(when (kind) { ProductKind.CREDITO -> "Crédito"; ProductKind.DEBITO -> "Débito"; else -> kind.title }) }
     var last4 by remember { mutableStateOf("") }
     val canAdd = name.isNotBlank() && (last4.isEmpty() || last4.length == 4)
     OverlaySheet(onDismiss) {
         Column(Modifier.padding(horizontal = Spacing.margen).padding(bottom = Spacing.s8), verticalArrangement = Arrangement.spacedBy(Spacing.s5)) {
             Row(Modifier.fillMaxWidth().padding(top = Spacing.s2), verticalAlignment = Alignment.CenterVertically) {
                 T("Cancelar", Type.cuerpo, Palette.brasaTinta, Modifier.clip(CircleShape).clickable(onClick = onDismiss).padding(Spacing.s2))
-                T(if (isCard) "Nueva tarjeta" else "Nueva cajita", Type.titulo3, modifier = Modifier.weight(1f), align = TextAlign.Center)
+                T(if (isCard) "Nueva tarjeta" else if (kind == ProductKind.BOLSILLO) "Nuevo bolsillo" else "Nueva cajita", Type.titulo3, modifier = Modifier.weight(1f), align = TextAlign.Center)
                 T("Agregar", Type.cuerpo.copy(fontWeight = FontWeight.SemiBold), Palette.brasaTinta.copy(alpha = if (canAdd) 1f else 0.4f),
                     Modifier.clip(CircleShape).clickable(enabled = canAdd) { onAdd(PlannedProduct(kind, name.trim(), last4.ifEmpty { null })) }.padding(Spacing.s2))
             }

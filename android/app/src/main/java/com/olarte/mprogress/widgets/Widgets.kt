@@ -104,7 +104,7 @@ class RemainingWidget : GlanceAppWidget() {
                     Text("Te quedan", style = style(12.sp, Forja.texto2))
                     Text(Money(s.remaining).formatted(), style = style(21.sp, if (s.remaining < 0) Forja.peligro else Forja.texto1, true), maxLines = 1)
                     Spacer(GlanceModifier.defaultWeight())
-                    Box(GlanceModifier.fillMaxWidth().height(38.dp).background(Forja.brasa).cornerRadius(19.dp).clickable(open(context, "gasto")), contentAlignment = Alignment.Center) {
+                    Box(GlanceModifier.fillMaxWidth().height(38.dp).background(Forja.brasa).cornerRadius(19.dp).clickable(open(context, "rapido")), contentAlignment = Alignment.Center) {
                         Text("+ Gasto", style = style(14.sp, Color.White, true))
                     }
                 }

@@ -123,8 +123,8 @@ fun RewardsSection(store: Store, ledger: Ledger, hide: Boolean) {
         if (ledger.rewards.isEmpty()) {
             Box(Modifier.clickable { adding = true }) {
                 Card {
-                    ListRow(icon = Icons.Outlined.StarOutline, tint = Palette.oroRelleno.copy(alpha = 0.18f), fg = Palette.oro, title = "Puntos Colombia, LifeMiles…",
-                        subtitle = "Lleva tus puntos y millas junto a tu plata") { Icon(Icons.Rounded.Add, null, tint = Palette.texto2) }
+                    ListRow(icon = Icons.Outlined.StarOutline, tint = Palette.oroRelleno.copy(alpha = 0.18f), fg = Palette.oro, title = "Agrega tus puntos",
+                        subtitle = "Puntos Colombia, LifeMiles y más") { Icon(Icons.Rounded.Add, null, tint = Palette.texto2) }
                 }
             }
         } else Card(padding = Spacing.s3) {

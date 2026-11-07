@@ -68,7 +68,8 @@ import java.time.LocalDate
 
 /** Inicio (pantalla 1) e Inicio vacío (38), igual que en iOS. */
 @Composable
-fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> Unit, onOpenFixed: () -> Unit, onOpenHistory: () -> Unit, onOpenEntry: (String) -> Unit = {}) {
+fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> Unit, onOpenFixed: () -> Unit, onOpenHistory: () -> Unit, onOpenEntry: (String) -> Unit = {},
+               onOpenAlerts: () -> Unit = {}, onAddIncome: () -> Unit = {}) {
     val ledger by store.ledger.collectAsState()
     val actions by store.actions.collectAsState()
     val currency by store.currency.collectAsState()
@@ -76,6 +77,8 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
     val upcomingExpanded by store.upcomingExpanded.collectAsState()
     var charge by remember { mutableStateOf<UpcomingCharge?>(null) }
     var payingId by remember { mutableStateOf<String?>(null) }
+    // Primeros pasos: "+ Banco" se abre encima de Inicio.
+    var guideBank by remember { mutableStateOf(false) }
     val today = LocalDate.now()
     val active = ledger.recurring.filter { it.active }
     val summary = BalanceCalculator.monthSummary(ledger.entries, active, today)
@@ -85,6 +88,7 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
     val staleEntries = IncomeCheck.staleEntries(ledger.entries, active, currency, checkedIncomes)
     val recent = ledger.entries.sortedByDescending { it.occurredAt }.take(5)
     val isEmpty = ledger.entries.isEmpty() && active.isEmpty()
+    val cloudUi = rememberCloudUi()
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding()
@@ -102,7 +106,7 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
                 Icon(Icons.Rounded.KeyboardArrowDown, null, Modifier.size(16.dp), tint = Palette.texto2)
             }
             Spacer(Modifier.weight(1f))
-            CircleIconButton(Sym.bell, "Avisos") { }
+            CircleIconButton(Sym.bell, "Avisos", onClick = onOpenAlerts)
         }
 
         SyncPill()
@@ -114,7 +118,7 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
                 if (isEmpty) Palette.texto2 else if (summary.remainingMinor < 0) Palette.peligro else Palette.texto1, maxLines = 1)
             if (isEmpty) {
                 T("Agrega tu ingreso para calcularlo", Type.titulo3, Palette.brasaTinta,
-                    Modifier.heightIn(min = Size.toqueMinimo).clickable { onAction(QuickActionKind.SUELDO) }.padding(vertical = Spacing.s3))
+                    Modifier.heightIn(min = Size.toqueMinimo).clickable(onClick = onAddIncome).padding(vertical = Spacing.s3))
             } else {
                 Box(Modifier.fillMaxWidth().height(8.dp).clip(CircleShape).background(Palette.superficie3)) {
                     Box(Modifier.fillMaxWidth(summary.spentRatio.toFloat().coerceAtLeast(0.02f)).height(8.dp).clip(CircleShape).background(Palette.brasa))
@@ -137,6 +141,9 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
             }
             QuickButton(Sym.more, "Más", false, Modifier.weight(1f), onMore)
         }
+
+        // Primeros pasos ("Saca todo el provecho a MProgress"), debajo de los accesos rápidos.
+        GuideCard(store, onAction, onOpenFixed, onOpenAlerts, onAddIncome, onAddBank = { guideBank = true })
 
         if (isEmpty) {
             Card {
@@ -198,7 +205,10 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
                         val name = e.name.ifBlank { if (income) "Ingreso" else "Gasto" }
                         ListRow(name, title = name, subtitle = DueText.describe(e.occurredAt, today),
                             tint = if (income) Palette.hieloVelo else Palette.superficie3, fg = if (income) Palette.hielo else Palette.texto1, onClick = { onOpenEntry(e.id) }) {
-                            T((if (income) Money(e.amountMinor) else Money(-e.amountMinor)).formatted(sign = income), Type.cifra, if (income) Palette.hielo else Palette.texto1)
+                            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                T((if (income) Money(e.amountMinor) else Money(-e.amountMinor)).formatted(sign = income), Type.cifra, if (income) Palette.hielo else Palette.texto1)
+                                if (cloudUi?.showsPendingMark(e.id) == true) com.olarte.mprogress.ui.components.PendingMark()
+                            }
                         }
                     }
                 }
@@ -217,6 +227,7 @@ fun HomeScreen(store: Store, onAction: (QuickActionKind) -> Unit, onMore: () -> 
         )
     }
     payingId?.let { id -> MarkPaidSheet(store, id) { payingId = null } }
+    if (guideBank) com.olarte.mprogress.ui.money.AddInstitutionSheet(store) { guideBank = false }
 }
 
 /** "¿Tu sueldo es $ 2?": arreglo rápido de un ingreso fijo que parece mal escrito (igual que iOS). */
@@ -299,20 +310,3 @@ private fun EmptyArt() {
     }
 }
 
-/** Pastilla de sincronización (F10): solo con cuenta, sin conexión o con error. "Sin conexión · 3 cambios sin sincronizar". */
-@Composable
-fun SyncPill() {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val cloud = remember { runCatching { com.olarte.mprogress.data.cloud.CloudAccount.get(context) }.getOrNull() } ?: return
-    val ui by cloud.ui.collectAsState()
-    if (!ui.isSignedIn) return
-    val text = com.olarte.mprogress.domain.SyncEngine.pillText(ui.status) ?: return
-    Row(Modifier.heightIn(min = 36.dp).clip(CircleShape).background(Palette.vidrioTinte.copy(alpha = 0.78f))
-        .androidxBorder().padding(horizontal = Spacing.s4), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.s2)) {
-        Icon(androidx.compose.material.icons.Icons.Outlined.CloudOff, null, Modifier.size(16.dp), tint = Palette.texto1)
-        T(text, Type.etiqueta, maxLines = 1)
-    }
-}
-
-@Composable
-private fun Modifier.androidxBorder() = this.then(Modifier.border(1.dp, Palette.vidrioBorde, CircleShape))

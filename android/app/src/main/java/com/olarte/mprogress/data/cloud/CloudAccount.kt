@@ -5,13 +5,18 @@ import com.olarte.mprogress.data.LedgerSyncStore
 import com.olarte.mprogress.data.Store
 import com.olarte.mprogress.domain.CryptoProvider
 import com.olarte.mprogress.domain.DeviceKeyPair
+import com.olarte.mprogress.domain.E2EEError
 import com.olarte.mprogress.domain.E2EEFormat
 import com.olarte.mprogress.domain.EncryptedRemote
+import com.olarte.mprogress.domain.InitialUpload
 import com.olarte.mprogress.domain.PKCE
 import com.olarte.mprogress.domain.RecoveryCode
 import com.olarte.mprogress.domain.SpaceKeyWrap
+import com.olarte.mprogress.domain.SyncBackoff
 import com.olarte.mprogress.domain.SyncEngine
+import com.olarte.mprogress.domain.SyncPill
 import com.olarte.mprogress.domain.SyncStatus
+import com.olarte.mprogress.domain.SyncText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -52,9 +57,37 @@ data class CloudUi(
     /** Aviso "¿Apruebas tu otro dispositivo?" (una vez por dispositivo y por sesión). */
     val approvalPrompt: RemoteDevice? = null,
     val thisDeviceId: String = "",
+    /** Avance de la primera subida (F10-05): "Subiendo tus datos: 120 de 340". */
+    val upload: UploadProgress? = null,
+    /** La primera subida de este usuario a este espacio ya se hizo: "Tus datos ya están en la nube, cifrados". */
+    val initialUploadDone: Boolean = false,
+    /** Cambios sin subir por tabla (pastilla y hoja de estado, F10-04). */
+    val pendingCounts: Map<String, Int> = emptyMap(),
+    /** Movimientos con cambios que todavía no suben (marca "Pendiente"). */
+    val pendingEntryIds: Set<String> = emptySet(),
+    /** Los que no subieron después de 3 intentos. */
+    val failedCount: Int = 0,
+    /** Último error de la nube en palabras (los de conexión no: esos los dice la pastilla). */
+    val lastError: String? = null,
+    /** Lo que dice el ConnectivityManager. */
+    val online: Boolean = true,
+    /** La nube no respondió por la red aunque el sistema diga que hay ruta (portal cautivo, red caída). */
+    val unreachable: Boolean = false,
+    /** Hay una sincronización corriendo. */
+    val running: Boolean = false,
 ) {
     val isSignedIn get() = phase != CloudPhase.SignedOut && phase !is CloudPhase.LinkSent
+    /** Hay internet y la nube responde. */
+    val isReachable get() = online && !unreachable
+    val pendingTotal get() = pendingCounts.values.sum()
+    /** Estado de la pastilla de Inicio. Null sin cuenta (o mientras este dispositivo no tiene la llave). */
+    val pill: SyncPill? get() = SyncPill.state(phase == CloudPhase.Ready, isReachable, running, pendingTotal, failedCount, lastError != null)
+    /** Marca "Pendiente" junto a un movimiento. */
+    fun showsPendingMark(entryId: String) = phase == CloudPhase.Ready && entryId in pendingEntryIds
 }
+
+/** Avance de la primera subida. */
+data class UploadProgress(val done: Int, val total: Int)
 
 /**
  * Cuenta en la nube y sincronización cifrada (docs/PLAN_F10.md), como CloudAccount.swift. La app funciona igual sin cuenta.
@@ -79,6 +112,9 @@ class CloudAccount(
     private var spaceId: String? = null
     private var isSyncing = false
     private var scheduled: Job? = null
+    private var retryJob: Job? = null
+    /** Errores seguidos de la nube, para esperar más antes de reintentar (SyncBackoff). */
+    private var failures = 0
     private val dismissedApprovals = mutableSetOf<String>()
     private val refreshLock = Mutex()
 
@@ -108,7 +144,9 @@ class CloudAccount(
         val stored = store.prefs.getString(KEY_SPACE, null)
         if (stored != null && spaceKey(stored) != null) {
             spaceId = stored
-            set { it.copy(phase = CloudPhase.Ready, email = saved.email, status = statusNow()) }
+            set { it.copy(phase = CloudPhase.Ready, email = saved.email, status = statusNow(),
+                initialUploadDone = store.prefs.getBoolean(InitialUpload.storageKey(stored, saved.userId), false)) }
+            refreshPending()
         } else set { it.copy(phase = CloudPhase.Connecting, email = saved.email) }
         scope.launch { connect() }
     }
@@ -174,6 +212,7 @@ class CloudAccount(
             store.journal.resetForSpace(remoteSpace)
             spaceId = remoteSpace
             store.prefs.edit().putString(KEY_SPACE, remoteSpace).apply()
+            set { it.copy(initialUploadDone = store.prefs.getBoolean(InitialUpload.storageKey(remoteSpace, current.userId), false)) }
 
             val keys = deviceKeys()
             api.registerDevice(deviceId(), current.userId, keys.publicKey, deviceName)
@@ -216,7 +255,9 @@ class CloudAccount(
             // Sin conexión con la llave ya guardada se sigue trabajando; al volver la red se sincroniza.
             val space = spaceId
             if (space != null && spaceKey(space) != null) set { it.copy(phase = CloudPhase.Ready) }
-            set { it.copy(status = if (e is CloudError.Offline) SyncStatus.SinConexion(pendingCount()) else SyncStatus.Error(message(e)), errorText = message(e)) }
+            refreshPending()
+            set { it.copy(status = if (e is CloudError.Offline) SyncStatus.SinConexion(pendingCount()) else SyncStatus.Error(message(e)), errorText = message(e),
+                unreachable = it.unreachable || e is CloudError.Offline) }
         }
     }
 
@@ -324,28 +365,45 @@ class CloudAccount(
         val current = session ?: return
         if (_ui.value.phase != CloudPhase.Ready || isSyncing) return
         val key = spaceKey(space) ?: return
+        retryJob?.cancel()
+        retryJob = null
         isSyncing = true
-        set { it.copy(status = SyncStatus.Sincronizando) }
+        set { it.copy(status = SyncStatus.Sincronizando, running = true) }
         val local = LedgerSyncStore(store, space, current.userId)
         val remote = EncryptedRemote(PostgrestEnvelopeTransport(api), crypto, space) { id -> if (id == space) key else null }
+        val doneKey = InitialUpload.storageKey(space, current.userId)
         try {
-            SyncEngine(local, remote).run()
-            set { it.copy(lastSyncAt = Instant.now(), status = SyncEngine.status(true, 0, local.failedCount(), false), errorText = null) }
+            if (store.prefs.getBoolean(doneKey, false)) SyncEngine(local, remote).run()
+            else {
+                // Primera subida (F10-05): baja primero, une duplicados y sube todo lo local una sola vez, con avance.
+                set { it.copy(upload = UploadProgress(0, 0)) }
+                SyncEngine(local, remote, InitialUpload.BATCH_SIZE).initialUpload { done, total -> set { it.copy(upload = UploadProgress(done, total)) } }
+                store.prefs.edit().putBoolean(doneKey, true).apply()
+                set { it.copy(initialUploadDone = true) }
+            }
+            failures = 0
+            set { it.copy(lastSyncAt = Instant.now(), status = SyncEngine.status(true, 0, local.failedCount(), false), errorText = null, lastError = null, unreachable = false) }
             refreshDevicesNow()
         } catch (e: CloudError.NotSignedIn) {
             forgetSession()
             error(e.message)
         } catch (e: CloudError.Offline) {
-            set { it.copy(status = SyncStatus.SinConexion(local.pendingCount())) }
+            // Sin internet no se reintenta con reloj: se espera a que vuelva la conexión (connectivityChanged).
+            set { it.copy(status = SyncStatus.SinConexion(local.pendingCount()), unreachable = true) }
         } catch (e: Exception) {
-            set { it.copy(status = SyncStatus.Error(message(e))) }
+            val text = describe(e)
+            set { it.copy(status = SyncStatus.Error(text), lastError = text) }
+            scheduleRetry()
         } finally {
             isSyncing = false
+            set { it.copy(running = false, upload = null) }
+            refreshPending()
         }
     }
 
     /** Sincroniza unos segundos después del último cambio guardado. */
     fun scheduleSync() {
+        refreshPending()
         if (_ui.value.phase != CloudPhase.Ready) return
         scheduled?.cancel()
         scheduled = scope.launch {
@@ -354,11 +412,63 @@ class CloudAccount(
         }
     }
 
+    /** El ConnectivityManager cambió. Al volver el internet se sincroniza de una vez (o se vuelve a conectar si no alcanzó). */
+    fun connectivityChanged(online: Boolean) {
+        val before = _ui.value
+        val cameBack = online && (!before.online || before.unreachable)
+        set { it.copy(online = online, unreachable = if (cameBack) false else it.unreachable,
+            status = if (!online && it.phase == CloudPhase.Ready) SyncStatus.SinConexion(it.pendingTotal) else it.status) }
+        if (!cameBack) return
+        failures = 0
+        scope.launch {
+            when {
+                _ui.value.phase == CloudPhase.Ready -> sync()
+                session != null && _ui.value.phase == CloudPhase.Connecting -> connect()
+            }
+        }
+    }
+
+    /** Vuelve a intentar después de un error de la nube, cada vez esperando más (5 s hasta 5 min). Una sola espera a la vez. */
+    private fun scheduleRetry() {
+        failures++
+        val wait = SyncBackoff.delaySeconds(failures) * 1000
+        retryJob?.cancel()
+        retryJob = scope.launch {
+            delay(wait)
+            sync()
+        }
+    }
+
+    /** Cuenta lo que falta por subir, por tipo, y qué movimientos llevan la marca "Pendiente". */
+    fun refreshPending() {
+        val space = spaceId
+        val current = session
+        if (space == null || current == null || _ui.value.phase != CloudPhase.Ready) {
+            set { it.copy(pendingCounts = emptyMap(), pendingEntryIds = emptySet(), failedCount = 0) }
+            return
+        }
+        val local = LedgerSyncStore(store, space, current.userId)
+        val counts = local.pendingCounts()
+        val ids = local.pendingEntryIds()
+        val failed = local.failedCount()
+        set { it.copy(pendingCounts = counts, pendingEntryIds = ids, failedCount = failed) }
+    }
+
+    /** El error en palabras para la persona. */
+    private fun describe(e: Exception): String = when (e) {
+        is CloudError -> message(e)
+        is E2EEError.MissingKey -> SyncText.MISSING_KEY_ERROR
+        is E2EEError -> message(e)
+        else -> SyncText.GENERIC_ERROR
+    }
+
     /** Vuelve a intentar lo que no subió después de 3 intentos. */
     fun retryFailed() = scope.launch {
         val space = spaceId ?: return@launch
         val current = session ?: return@launch
         LedgerSyncStore(store, space, current.userId).retryFailed()
+        failures = 0
+        set { it.copy(lastError = null) }
         sync()
     }
 
@@ -404,14 +514,17 @@ class CloudAccount(
         store.journal.resetCursors()
         spaceId = null
         dismissedApprovals.clear()
-        set { CloudUi(thisDeviceId = deviceId()) }
+        set { CloudUi(thisDeviceId = deviceId(), online = it.online) }
     }
 
     private fun forgetSession() {
         secrets.delete(SecretStore.SESSION)
         session = null
         scheduled?.cancel()
-        set { it.copy(phase = CloudPhase.SignedOut, email = null, status = SyncStatus.Sincronizado, devices = emptyList(), pendingApprovals = emptyList(), approvalPrompt = null) }
+        retryJob?.cancel()
+        failures = 0
+        set { it.copy(phase = CloudPhase.SignedOut, email = null, status = SyncStatus.Sincronizado, devices = emptyList(), pendingApprovals = emptyList(), approvalPrompt = null,
+            pendingCounts = emptyMap(), pendingEntryIds = emptySet(), failedCount = 0, lastError = null, upload = null, unreachable = false, initialUploadDone = false) }
     }
 
     // ---------- Sesión y llaves ----------

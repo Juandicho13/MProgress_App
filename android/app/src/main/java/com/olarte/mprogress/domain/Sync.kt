@@ -62,20 +62,9 @@ class SyncEngine(private val local: LocalSyncStore, private val remote: RemoteSy
 
     suspend fun run(): Report {
         val report = Report()
-        val pending = local.pending()
-        for (batch in pending.chunked(batchSize)) {
-            try {
-                remote.push(batch)
-                local.markSynced(batch)
-                report.pushed += batch.size
-            } catch (e: Exception) {
-                val attempts = batch.maxOfOrNull { local.attempts(it) + 1 } ?: 1
-                local.markFailed(batch, attempts)
-                report.failed += batch.size
-                if (attempts >= MAX_ATTEMPTS) continue
-                throw e
-            }
-        }
+        val (pushed, failed) = pushPending()
+        report.pushed = pushed
+        report.failed = failed
         for (table in TABLES) {
             val rows = remote.pull(table, local.cursor(table))
             for (row in rows) {
@@ -90,11 +79,70 @@ class SyncEngine(private val local: LocalSyncStore, private val remote: RemoteSy
         return report
     }
 
+    /**
+     * Sube los pendientes en lotes y en el orden en que se hicieron. Un lote que falla suma un intento; al tercero queda con error y
+     * se sigue con el siguiente; antes, se detiene y lanza. `progress` recibe (procesadas, total). Devuelve (subidas, fallidas).
+     */
+    suspend fun pushPending(progress: (Int, Int) -> Unit = { _, _ -> }): Pair<Int, Int> {
+        var pushed = 0
+        var failed = 0
+        val pending = local.pending()
+        val step = batchSize.coerceAtLeast(1)
+        progress(0, pending.size)
+        var done = 0
+        for (batch in pending.chunked(step)) {
+            try {
+                remote.push(batch)
+                local.markSynced(batch)
+                pushed += batch.size
+            } catch (e: Exception) {
+                val attempts = batch.maxOfOrNull { local.attempts(it) + 1 } ?: 1
+                local.markFailed(batch, attempts)
+                failed += batch.size
+                if (attempts < MAX_ATTEMPTS) throw e
+            }
+            done += batch.size
+            progress(done, pending.size)
+        }
+        return pushed to failed
+    }
+
+    /**
+     * Primera subida (F10-05, igual que iOS): baja todo, une duplicados, escribe lo que gana la nube y sube el resto en lotes.
+     * `progress` recibe (subidas, total). Si la base local no sabe planear, es una sincronización normal.
+     */
+    suspend fun initialUpload(progress: (Int, Int) -> Unit = { _, _ -> }): Report {
+        val store = local as? InitialUploadLocal ?: return run()
+        val report = Report()
+        val rowsByTable = linkedMapOf<String, List<SyncRecord>>()
+        val remoteItems = mutableListOf<InitialUpload.Item>()
+        for (table in TABLES) {
+            val rows = remote.pull(table, null)
+            rowsByTable[table] = rows
+            rows.forEach { remoteItems += InitialUpload.Item(table, it.id, it.updatedAt, it.deletedAt != null, store.seedKey(it)) }
+        }
+        val plan = InitialUpload.plan(store.uploadItems(), remoteItems)
+        val take = plan.take.toSet()
+        for (table in TABLES) {
+            val rows = rowsByTable[table].orEmpty()
+            for (row in rows) {
+                if (InitialUpload.Ref(table, row.id.lowercase()) in take) { store.apply(row); report.pulled++ } else report.skipped++
+            }
+            rows.maxOfOrNull { it.serverUpdatedAt ?: it.updatedAt }?.let { store.setCursor(it, table) }
+        }
+        store.resolveDuplicates(plan.remap)
+        store.queue(plan.push)
+        val (pushed, failed) = pushPending(progress)
+        report.pushed = pushed
+        report.failed = failed
+        return report
+    }
+
     companion object {
         const val MAX_ATTEMPTS = 3
         /** Orden de las tablas: primero lo que otras filas referencian. */
         val TABLES = listOf("spaces", "categories", "institutions", "reward_programs", "products", "recurring", "entries", "splits",
-            "transfers", "reminders", "budgets", "savings_goals", "goal_contributions", "merchant_alias")
+            "transfers", "reminders", "budgets", "savings_goals", "goal_contributions", "merchant_alias", "debts", "debt_payments")
 
         /** Gana el `updatedAt` más reciente; si empatan, gana el servidor para que todos los teléfonos terminen igual. */
         fun remoteWins(remote: SyncRecord, local: SyncRecord) = remote.updatedAt >= local.updatedAt

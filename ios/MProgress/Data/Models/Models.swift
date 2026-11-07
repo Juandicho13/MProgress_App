@@ -172,6 +172,9 @@ final class Recurring: SyncTracked {
     var intervalDays: Int?
     /// Meses entre cobros de un pago mensual: 1 es cada mes, 3 trimestral (1 a 24). Los de antes quedan en 1.
     var intervalMonths: Int = 1
+    /// Días de un pago quincenal (31 es el último día). Nil en los demás ciclos y en los datos de antes.
+    var firstDay: Int?
+    var secondDay: Int?
     var nextDate: Date = Date.now
     var anchorDay: Int = 1
     var anchorMonth: Int = 1
@@ -199,11 +202,13 @@ final class Recurring: SyncTracked {
     }
 
     var cycle: Cycle {
-        get { Cycle(rawValue: cycleRaw, intervalDays: intervalDays, intervalMonths: intervalMonths) }
+        get { Cycle(rawValue: cycleRaw, intervalDays: intervalDays, intervalMonths: intervalMonths, firstDay: firstDay, secondDay: secondDay) }
         set {
             cycleRaw = newValue.rawValue
             intervalDays = newValue.intervalDays
             intervalMonths = newValue.intervalMonths
+            firstDay = newValue.firstDay
+            secondDay = newValue.secondDay
         }
     }
 
@@ -231,6 +236,8 @@ final class Recurring: SyncTracked {
         self.cycleRaw = cycle.rawValue
         self.intervalDays = cycle.intervalDays
         self.intervalMonths = cycle.intervalMonths
+        self.firstDay = cycle.firstDay
+        self.secondDay = cycle.secondDay
         self.nextDate = nextDate
         let anchor = CycleAnchor(date: nextDate, calendar: calendar)
         self.anchorDay = anchor.day

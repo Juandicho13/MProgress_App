@@ -2,7 +2,8 @@ import Foundation
 
 /// Cuentas de la zona de pagos fijos.
 enum FixedMath {
-    /// Cuánto pesa un pago fijo en un mes: semanal × 52 / 12, anual / 12, cada N días × 365 / (12 × N), cada N meses / N.
+    /// Cuánto pesa un pago fijo en un mes: semanal × 52 / 12, anual / 12, cada N días × 365 / (12 × N), cada N meses / N,
+    /// quincenal × 2.
     /// Puntual no cuenta. Es solo el promedio de Pagos fijos: el mes, el calendario y el Resumen cuentan las fechas reales.
     static func monthlyEquivalent(amountMinor: Int64, cycle: Cycle) -> Int64 {
         switch cycle {
@@ -12,6 +13,7 @@ enum FixedMath {
         case .anual: amountMinor / 12
         case .cadaDias(let days): amountMinor * 365 / (12 * Int64(max(1, days)))
         case .cadaMeses(let months): amountMinor / Int64(max(1, months))
+        case .quincenal: amountMinor * 2
         }
     }
 
@@ -37,13 +39,14 @@ enum FixedMath {
         return totals
     }
 
-    /// "Mensual · el 5", "Trimestral · el 5", "Semanal", "Anual · 12 de mar", "Sin fecha".
+    /// "Mensual · el 5", "Trimestral · el 5", "Quincenal · 15 y último día", "Semanal", "Anual · 12 de mar", "Sin fecha".
     static func scheduleText(cycle: Cycle, nextDate: Date, dateUnset: Bool, calendar: Calendar) -> String {
         if dateUnset { return "\(cycle.title) · sin fecha" }
         let day = calendar.component(.day, from: nextDate)
         switch cycle {
         case .mensual, .cadaMeses: return "\(cycle.title) · el \(day)"
         case .anual: return "Anual · \(DueText.shortDate(nextDate, calendar: calendar))"
+        case .quincenal(let days): return "Quincenal · \(days.title)"
         default: return cycle.title
         }
     }

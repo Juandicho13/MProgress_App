@@ -266,4 +266,50 @@ class CloudSyncTest {
         assertFalse(s.needsRefresh(Instant.ofEpochSecond(1893456000 - 3600)))
         assertTrue(s.needsRefresh(Instant.ofEpochSecond(1893456000 - 30)))
     }
+
+    private fun learnPepepollo(store: Store, name: String) {
+        val e = store.add(EntryKind.GASTO, "Pepepollo Sas 123", 32_000_00, Cycle.Puntual, LocalDate.of(2026, 11, 2), null, source = "notificacion",
+            merchant = "Pepepollo Sas 123")!!
+        store.updateEntry(store.ledger.value.entries.first { it.id == e.id }.copy(name = name))
+    }
+
+    private fun firstUpload(store: Store): Pair<SyncEngine.Report, LedgerSyncStore> = runBlocking {
+        val local = LedgerSyncStore(store, space, owner)
+        val report = SyncEngine(local, EncryptedRemote(server, crypto, space) { if (it == space) key else null }, InitialUpload.BATCH_SIZE).initialUpload()
+        report to local
+    }
+
+    @Test fun firstUploadOnTheSecondPhoneJoinsTheRepeatedMerchantRule() {
+        val a = newStore("a"); seed(a); learnPepepollo(a, "El Corral")
+        val (first, _) = firstUpload(a)
+        assertEquals(12, first.pushed) // lo de seed, el movimiento del comercio y su regla
+
+        val b = newStore("b"); learnPepepollo(b, "Corral")
+        val (report, local) = firstUpload(b)
+        // B solo sube su movimiento: su regla repetida se une con la de la nube y no se sube.
+        assertEquals(1, report.pushed)
+        assertEquals(1, server.rows.values.count { it.entity == "merchant_alias" })
+        assertEquals(listOf("El Corral"), b.ledger.value.merchantAliases.map { it.name })
+        assertEquals(a.ledger.value.merchantAliases.single().id, b.ledger.value.merchantAliases.single().id)
+        assertEquals(0, local.pendingCount())
+        assertTrue(local.pendingCounts().isEmpty())
+        assertTrue(local.pendingEntryIds().isEmpty())
+        // Otra vez no sube nada.
+        assertEquals(0, run(b).first.pushed)
+        assertEquals(0, firstUpload(a).first.pushed)
+    }
+
+    @Test fun pendingCountsAndMarksComeFromTheJournal() {
+        val a = newStore("a"); seed(a)
+        val local = LedgerSyncStore(a, space, owner)
+        assertEquals(1, local.pendingCounts()["entries"])
+        assertEquals(1, local.pendingCounts()["recurring"])
+        assertEquals(a.ledger.value.entries.map { it.id }.toSet(), local.pendingEntryIds())
+        run(a)
+        assertTrue(LedgerSyncStore(a, space, owner).pendingEntryIds().isEmpty())
+        val e = a.ledger.value.entries.first()
+        a.updateEntry(e.copy(name = "Cambiado"))
+        assertEquals(setOf(e.id), LedgerSyncStore(a, space, owner).pendingEntryIds())
+        assertEquals(mapOf("entries" to 1), LedgerSyncStore(a, space, owner).pendingCounts())
+    }
 }

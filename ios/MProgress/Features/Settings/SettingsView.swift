@@ -60,6 +60,8 @@ struct SettingsView: View {
     @AppStorage(BackupService.lastBackupKey) private var lastBackup: Double = 0
     @AppStorage(AppIconChoice.storageKey) private var iconRaw = AppIconChoice.trazo.rawValue
     @AppStorage(OnboardingModel.doneKey) private var onboardingDone = true
+    @AppStorage(Guide.dismissedKey) private var guideHidden = false
+    @Environment(UndoCenter.self) private var undo: UndoCenter?
     @State private var showsBackTap = false
     @State private var confirmsErase = false
     @State private var eraseError: String?
@@ -95,6 +97,10 @@ struct SettingsView: View {
                         .tint(Palette.brasa)
                         .padding(.horizontal, Spacing.s2)
                         .frame(minHeight: 56)
+                        if faceID {
+                            divider
+                            LockDelayRow()
+                        }
                         divider
                         link("Moneda", value: space.map { "\($0.currency.code) \($0.currency.symbol)" } ?? "COP $", route: .moneda)
                         divider
@@ -123,6 +129,15 @@ struct SettingsView: View {
                         divider
                         // Falta el correo de soporte: Juan lo define antes de publicar.
                         row("Escríbeme", value: "Pronto")
+                        // Primeros pasos ocultos con la X en Inicio: aquí se vuelven a mostrar.
+                        if guideHidden {
+                            divider
+                            Button {
+                                guideHidden = false
+                                undo?.show("Los primeros pasos vuelven a Inicio")
+                            } label: { rowContent(Guide.settingsTitle, value: Guide.settingsValue) }
+                                .buttonStyle(.plain)
+                        }
                     }
 
                     SectionLabel(text: "Cuenta")

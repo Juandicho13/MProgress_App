@@ -120,7 +120,7 @@ fun BudgetsScreen(store: Store, onBack: () -> Unit) {
             }
             SecondaryButton("Nuevo límite") {
                 val used = ledger.budgets.mapNotNull { it.categoryId }.toSet()
-                editing = BudgetRecord(categoryId = Categories.all.firstOrNull { it.id !in used }?.id, limitMinor = 0); isNew = true
+                editing = BudgetRecord(categoryId = Categories.available().firstOrNull { it.id !in used }?.id, limitMinor = 0); isNew = true
             }
         }
         editing?.let { b -> BudgetForm(store, b, isNew) { editing = null } }
@@ -164,7 +164,7 @@ private fun BudgetForm(store: Store, budget: BudgetRecord, isNew: Boolean, onDon
                 FormRow("Categoría", Categories.byId(categoryId)?.name ?: "Total del mes", onClick = { menu = true })
                 DropdownMenu(menu, { menu = false }, containerColor = Palette.superficie2) {
                     DropdownMenuItem({ T("Total del mes", Type.cuerpo) }, { categoryId = null; menu = false })
-                    Categories.all.forEach { c -> DropdownMenuItem({ T(c.name, Type.cuerpo) }, { categoryId = c.id; menu = false }) }
+                    Categories.available().forEach { c -> DropdownMenuItem({ T(c.name, Type.cuerpo) }, { categoryId = c.id; menu = false }) }
                 }
             }
         }
@@ -248,7 +248,7 @@ private fun GoalForm(store: Store, goal: GoalRecord?, onDone: () -> Unit) {
                 FormRow("Ligada a una cajita", ledger.product(productId)?.name ?: "No, sumo aportes", onClick = { menu = true })
                 DropdownMenu(menu, { menu = false }, containerColor = Palette.superficie2) {
                     DropdownMenuItem({ T("No, sumo aportes", Type.cuerpo) }, { productId = null; menu = false })
-                    ledger.products.filter { it.kind == ProductKind.BOLSILLO || it.kind == ProductKind.CUENTA }.forEach { p ->
+                    ledger.products.filter { it.kind.earnsYield || it.kind == ProductKind.CUENTA }.forEach { p ->
                         DropdownMenuItem({ T(p.name, Type.cuerpo) }, { productId = p.id; menu = false })
                     }
                 }
